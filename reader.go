@@ -28,10 +28,20 @@ func newErrTooManyFields() error {
 	return ErrTooManyFields{}
 }
 
+type ErrInvalidQuotedFieldEnding struct{}
+
+func (e ErrInvalidQuotedFieldEnding) Error() string {
+	return "invalid char when expecting field separator, record separator, quote char, or end of file"
+}
+
+func newErrInvalidQuotedFieldEnding() error {
+	return ErrInvalidQuotedFieldEnding{}
+}
+
 type rState uint8
 
 const (
-	rStateStartOfRecord rState = iota
+	rStateStartOfRecord rState = iota + 1
 	rStateInQuotedField
 	rStateEndOfQuotedField
 	rStateStartOfField
@@ -122,6 +132,7 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 	// TODO: max record length option? ( defensive programming )
 	// TODO: reuse row option? ( borrow checking )
 	// TODO: support custom recordSep
+	// TODO: must handle zero columns case in some fashion
 
 	if cfg.recordSep == "" && !cfg.expectHeaders {
 		// letting any valid utf8 end of line act as the record separator
@@ -135,33 +146,58 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 			var lastCWasCR bool
 
 			for !done {
-				c, size, err := in.ReadRune()
+				c, size, rErr := in.ReadRune()
 				if size == 1 && c == 0xFFFD {
 					if err := in.UnreadRune(); err != nil {
 						panic(err)
 					}
-					b, err := in.ReadByte()
-					if err != nil {
+					var b byte
+					if v, err := in.ReadByte(); err != nil {
 						panic(err)
+					} else {
+						b = v
 					}
-					field = append(field, b)
-					if len(row) == numFields {
-						done = true
-						*errPtr = newErrTooManyFields() // TODO: cleanup
-						return false
+					// TODO: Note: all separators, comment indicators, and quote chars are guaranteed not to be invalid rune byte sequences
+					// We should panic on initialization
+					switch state {
+					case rStateStartOfRecord, rStateStartOfField:
+						if len(field) == 0 && len(row) == numFields {
+							done = true
+							*errPtr = newErrTooManyFields() // TODO: cleanup
+							return false
+						}
+						field = append(field, b)
+						state = rStateInField
+					case rStateInField, rStateInQuotedField:
+						field = append(field, b)
+						// state = rStateInField
+					// case rStateInQuotedField:
+					// 	field = append(field, b)
+					// 	// state = rStateInQuotedField
+					case rStateEndOfQuotedField:
+						if rErr == nil {
+							done = true
+							*errPtr = newErrInvalidQuotedFieldEnding()
+							return false
+						}
+					case rStateInLineComment:
+						// state = rStateInLineComment
+					default:
+						panic("csv reader not initialized properly")
 					}
-					if err == nil {
+					if rErr == nil {
 						continue
 					}
 				}
-				if err != nil {
+				if rErr != nil {
 					done = true
-					if !errors.Is(err, io.EOF) {
-						*errPtr = err
+					if !errors.Is(rErr, io.EOF) {
+						*errPtr = rErr
 						return false
 					}
 					if size == 0 {
 						// check if we're in a terminal state otherwise error
+						// there is no new character to process
 						switch state {
 						case rStateInQuotedField:
 							*errPtr = errors.New("unexpected end of record") // TODO: extract into var or struct
@@ -172,9 +208,12 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 							row = append(row, string(field))
 							field = nil
 							return checkNumFields()
+						default:
+							panic("csv reader not initialized properly")
 						}
-						return false
 					}
+					// right here in the code is the only place where the runtime could loop back around where done = true and the last character
+					// has been processed
 				}
 
 				switch state {
@@ -246,6 +285,11 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 					switch c {
 					case cfg.delimiter:
 						row = append(row, string(field))
+						if len(row) == numFields {
+							done = true
+							*errPtr = newErrTooManyFields() // TODO: cleanup
+							return false
+						}
 						field = nil
 						state = rStateStartOfField
 					case cfg.quote:
@@ -264,7 +308,7 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 						return checkNumFields()
 					default:
 						done = true
-						*errPtr = errors.New("close of field not followed by delimiter, quote, or newline") // TODO: extract into var or struct
+						*errPtr = newErrInvalidQuotedFieldEnding()
 						return false
 					}
 				case rStateStartOfField:
@@ -294,6 +338,11 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 					switch c {
 					case cfg.delimiter:
 						row = append(row, string(field))
+						if len(row) == numFields {
+							done = true
+							*errPtr = newErrTooManyFields() // TODO: cleanup
+							return false
+						}
 						field = nil
 						state = rStateStartOfField
 						// case cfg.quote:
@@ -320,6 +369,8 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 						return checkNumFields()
 					default:
 					}
+				default:
+					panic("csv reader not initialized properly")
 				}
 			}
 
