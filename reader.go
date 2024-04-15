@@ -6,6 +6,8 @@ import (
 	"io"
 )
 
+// TODO: add an option to strip a starting utf8 byte order marker
+
 const (
 	_asciiCarriageReturn    = 0x0D
 	_asciiLineFeed          = 0x0A
