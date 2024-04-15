@@ -14,7 +14,14 @@ var data []byte
 func main() {
 	r := bytes.NewReader(data)
 
-	cr := csv.NewReader(r)
+	op := csv.ReaderOpts()
+	cr, err := csv.NewReader(
+		op.Reader(r),
+	)
+	if err != nil {
+		panic(err)
+	}
+
 	for cr.Scan() {
 		row := cr.Row()
 		println(strings.Join(row, ","))

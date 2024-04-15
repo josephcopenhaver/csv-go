@@ -6,6 +6,16 @@ import (
 	"io"
 )
 
+const (
+	_asciiCarriageReturn    = 0x0D
+	_asciiLineFeed          = 0x0A
+	_unicodeReplacementChar = 0xFFFD
+	_unicodeNextLine        = 0x85
+	_unicodeLineSeparator   = 0x2028
+	// _asciiVerticalTab = 0x0B
+	// _asciiFormFeed = 0x0C
+)
+
 // TODO: errors should report line numbers and character index
 
 type ErrFieldCountMismatch struct{}
@@ -50,46 +60,136 @@ const (
 )
 
 type Reader struct {
-	Scan func() bool
-	Row  func() []string
+	scan func() bool
+	row  func() []string
 	err  error
 }
 
-type rCfg struct {
-	recordSep     string
-	numCols       int
-	delimiter     rune
-	quote         rune
-	comment       rune
-	expectHeaders bool
-	numColsSet    bool
-	commentSet    bool
+type ReaderOption func(*rCfg)
+
+type readerOpts struct{}
+
+func (readerOpts) Reader(r io.Reader) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.reader = r
+	}
 }
 
-func NewReader(r io.Reader) *Reader {
+// ExpectHeaders does nothing at the moment except cause a panic
+func (readerOpts) ExpectHeaders(h []string) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.headers = h
+	}
+}
+
+// StripHeaders does nothing at the moment except cause a panic
+func (readerOpts) StripHeaders(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.stripHeaders = b
+	}
+}
+
+// MaxNumFields does nothing atm
+func (readerOpts) MaxNumFields(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxNumFields = n
+	}
+}
+
+// MaxNumRecordBytes does nothing atm
+func (readerOpts) MaxNumRecordBytes(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxNumRecordBytes = n
+	}
+}
+
+func (readerOpts) Delimiter(r rune) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.delimiter = r
+	}
+}
+
+func (readerOpts) Quote(r rune) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.quote = r
+	}
+}
+
+func (readerOpts) Comment(r rune) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.comment = r
+		cfg.commentSet = true
+	}
+}
+
+// RecordSeparator does nothing at the moment except cause a panic
+func (readerOpts) RecordSeparator(s string) ReaderOption {
+	return func(cfg *rCfg) {
+		n := len(s)
+		if n > 2 || (n == 2 && (s[0] != _asciiCarriageReturn || s[1] != _asciiLineFeed)) {
+			cfg.err = errors.New("record separator can only be one byte long or \"\r\n\"")
+		}
+		cfg.recordSep = s
+	}
+}
+
+func ReaderOpts() readerOpts {
+	return readerOpts{}
+}
+
+type rCfg struct {
+	err               error
+	headers           []string
+	reader            io.Reader
+	recordSep         string
+	numFields         int
+	maxNumFields      int
+	maxNumRecordBytes int
+	delimiter         rune
+	quote             rune
+	comment           rune
+	stripHeaders      bool
+	commentSet        bool
+	//
+	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check
+}
+
+func NewReader(options ...ReaderOption) (*Reader, error) {
 
 	cfg := rCfg{
-		recordSep:     "",
-		numCols:       0,
-		delimiter:     ',',
-		quote:         '"',
-		comment:       0,
-		expectHeaders: false,
-		numColsSet:    false,
-		commentSet:    false,
+		numFields:    -1,
+		maxNumFields: -1,
+		delimiter:    ',',
+		quote:        '"',
+	}
+
+	for _, f := range options {
+		f(&cfg)
+	}
+
+	if err := cfg.err; err != nil {
+		return nil, err
 	}
 
 	cr := &Reader{}
-	cr.Scan, cr.Row = readStrat(cfg, r, &cr.err)
+	cr.scan, cr.row = readStrat(cfg, &cr.err)
 
-	return cr
+	return cr, nil
 }
 
 func (r *Reader) Err() error {
 	return r.err
 }
 
-func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read func() []string) {
+func (r *Reader) Row() []string {
+	return r.row()
+}
+
+func (r *Reader) Scan() bool {
+	return r.scan()
+}
+
+func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string) {
 
 	quoteBytes := runeBytes(cfg.quote)
 
@@ -99,15 +199,12 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 		return row
 	}
 
-	in := bufio.NewReader(r)
+	in := bufio.NewReader(cfg.reader)
 
 	state := rStateStartOfRecord
 	var field []byte
 
-	numFields := -1
-	if cfg.numColsSet {
-		numFields = cfg.numCols
-	}
+	numFields := cfg.numFields
 
 	checkNumFields := func() bool {
 		// TODO: error if file is empty?
@@ -128,13 +225,20 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 		}
 	}
 
+	var lastCWasCR bool
+
 	// TODO: ignore comments after first record line encountered?
-	// TODO: max record length option? ( defensive programming )
 	// TODO: reuse row option? ( borrow checking )
 	// TODO: support custom recordSep
 	// TODO: must handle zero columns case in some fashion
 
-	if cfg.recordSep == "" && !cfg.expectHeaders {
+	//
+	// important state transition logic:
+	//
+	// 1. when moving from record-start to a different state: lastCWasCR = false
+	// 2. when moving to a field-start state from a different state: need to make sure we're not exceeding the expected field count
+
+	if cfg.recordSep == "" && cfg.headers == nil && !cfg.stripHeaders {
 		// letting any valid utf8 end of line act as the record separator
 		scan = func() bool {
 			if done {
@@ -143,11 +247,9 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 
 			row = row[:0]
 
-			var lastCWasCR bool
-
 			for !done {
 				c, size, rErr := in.ReadRune()
-				if size == 1 && c == 0xFFFD {
+				if size == 1 && c == _unicodeReplacementChar {
 					if err := in.UnreadRune(); err != nil {
 						panic(err)
 					}
@@ -230,7 +332,7 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 						state = rStateStartOfField
 					case cfg.quote:
 						state = rStateInQuotedField
-					case '\r':
+					case _asciiCarriageReturn:
 						row = append(row, "")
 						if len(row) == numFields {
 							done = true
@@ -241,7 +343,7 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 						// state = rStateStartOfRecord
 						lastCWasCR = true
 						return checkNumFields()
-					case 0x85, 0x2028:
+					case _unicodeNextLine, _unicodeLineSeparator:
 						row = append(row, "")
 						if len(row) == numFields {
 							done = true
@@ -252,7 +354,7 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 						// state = rStateStartOfRecord
 						lastCWasCR = false
 						return checkNumFields()
-					case '\n':
+					case _asciiLineFeed:
 						if !lastCWasCR {
 							row = append(row, "")
 							if len(row) == numFields {
@@ -295,13 +397,13 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 					case cfg.quote:
 						field = append(field, quoteBytes...)
 						state = rStateInQuotedField
-					case '\r':
+					case _asciiCarriageReturn:
 						row = append(row, string(field))
 						field = nil
 						state = rStateStartOfRecord
 						lastCWasCR = true
 						return checkNumFields()
-					case '\n', 0x85, 0x2028:
+					case _asciiLineFeed, _unicodeNextLine, _unicodeLineSeparator:
 						row = append(row, string(field))
 						field = nil
 						state = rStateStartOfRecord
@@ -319,13 +421,13 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 						// state = rStateStartOfField
 					case cfg.quote:
 						state = rStateInQuotedField
-					case '\r':
+					case _asciiCarriageReturn:
 						row = append(row, string(field))
 						// field = nil
 						state = rStateStartOfRecord
 						lastCWasCR = true
 						return checkNumFields()
-					case '\n', 0x85, 0x2028:
+					case _asciiLineFeed, _unicodeNextLine, _unicodeLineSeparator:
 						row = append(row, string(field))
 						// field = nil
 						state = rStateStartOfRecord
@@ -347,13 +449,13 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 						state = rStateStartOfField
 						// case cfg.quote:
 						// 	state = rStateInField
-					case '\r':
+					case _asciiCarriageReturn:
 						row = append(row, string(field))
 						field = nil
 						state = rStateStartOfRecord
 						lastCWasCR = true
 						return checkNumFields()
-					case '\n', 0x85, 0x2028:
+					case _asciiLineFeed, _unicodeNextLine, _unicodeLineSeparator:
 						row = append(row, string(field))
 						field = nil
 						state = rStateStartOfRecord
@@ -364,7 +466,7 @@ func readStrat(cfg rCfg, r io.Reader, errPtr *error) (scan func() bool, read fun
 					}
 				case rStateInLineComment:
 					switch c {
-					case '\r', '\n', 0x85, 0x2028:
+					case _asciiCarriageReturn, _asciiLineFeed, _unicodeNextLine, _unicodeLineSeparator:
 						state = rStateStartOfRecord
 						return checkNumFields()
 					default:
