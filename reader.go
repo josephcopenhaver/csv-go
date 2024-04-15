@@ -16,6 +16,17 @@ const (
 	// _asciiFormFeed = 0x0C
 )
 
+type rState uint8
+
+const (
+	rStateStartOfRecord rState = iota
+	rStateInQuotedField
+	rStateEndOfQuotedField
+	rStateStartOfField
+	rStateInField
+	rStateInLineComment
+)
+
 // TODO: errors should report line numbers and character index
 
 type ErrFieldCountMismatch struct{}
@@ -47,17 +58,6 @@ func (e ErrInvalidQuotedFieldEnding) Error() string {
 func newErrInvalidQuotedFieldEnding() error {
 	return ErrInvalidQuotedFieldEnding{}
 }
-
-type rState uint8
-
-const (
-	rStateStartOfRecord rState = iota + 1
-	rStateInQuotedField
-	rStateEndOfQuotedField
-	rStateStartOfField
-	rStateInField
-	rStateInLineComment
-)
 
 type Reader struct {
 	scan func() bool
@@ -235,8 +235,9 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 	//
 	// important state transition logic:
 	//
-	// 1. when moving from record-start to a different state: lastCWasCR = false
-	// 2. when moving to a field-start state from a different state: need to make sure we're not exceeding the expected field count
+	// 1. when moving from start-of-record to a different state: lastCWasCR = false
+	// 2. when in start-of-record and not changing then: lastCWasCR must be set accordingly
+	// 3. when moving to a field-start state from a different state: need to make sure we're not exceeding the expected field count
 
 	if cfg.recordSep == "" && cfg.headers == nil && !cfg.stripHeaders {
 		// letting any valid utf8 end of line act as the record separator
@@ -260,9 +261,18 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 						b = v
 					}
 					// TODO: Note: all separators, comment indicators, and quote chars are guaranteed not to be invalid rune byte sequences
-					// We should panic on initialization
+					// We should panic/error on initialization
 					switch state {
-					case rStateStartOfRecord, rStateStartOfField:
+					case rStateStartOfRecord:
+						if len(field) == 0 && len(row) == numFields {
+							done = true
+							*errPtr = newErrTooManyFields() // TODO: cleanup
+							return false
+						}
+						field = append(field, b)
+						lastCWasCR = false
+						state = rStateInField
+					case rStateStartOfField:
 						if len(field) == 0 && len(row) == numFields {
 							done = true
 							*errPtr = newErrTooManyFields() // TODO: cleanup
@@ -284,8 +294,6 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 						}
 					case rStateInLineComment:
 						// state = rStateInLineComment
-					default:
-						panic("csv reader not initialized properly")
 					}
 					if rErr == nil {
 						continue
@@ -310,8 +318,6 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 							row = append(row, string(field))
 							field = nil
 							return checkNumFields()
-						default:
-							panic("csv reader not initialized properly")
 						}
 					}
 					// right here in the code is the only place where the runtime could loop back around where done = true and the last character
@@ -329,8 +335,10 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 							return false
 						}
 						// field = nil
+						lastCWasCR = false
 						state = rStateStartOfField
 					case cfg.quote:
+						lastCWasCR = false
 						state = rStateInQuotedField
 					case _asciiCarriageReturn:
 						row = append(row, "")
@@ -351,8 +359,8 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 							return false
 						}
 						// field = nil
-						// state = rStateStartOfRecord
 						lastCWasCR = false
+						// state = rStateStartOfRecord
 						return checkNumFields()
 					case _asciiLineFeed:
 						if !lastCWasCR {
@@ -368,6 +376,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 						lastCWasCR = false
 						return checkNumFields()
 					default:
+						lastCWasCR = false
 						if cfg.commentSet && c == cfg.comment {
 							state = rStateInLineComment
 						} else {
@@ -471,8 +480,6 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 						return checkNumFields()
 					default:
 					}
-				default:
-					panic("csv reader not initialized properly")
 				}
 			}
 
