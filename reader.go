@@ -89,14 +89,28 @@ func (readerOpts) StripHeaders(b bool) ReaderOption {
 	}
 }
 
-// MaxNumFields does nothing atm
+// StripHeaders does nothing at the moment except cause a panic
 func (readerOpts) MaxNumFields(n int) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.maxNumFields = n
 	}
 }
 
-// MaxNumRecordBytes does nothing atm
+// StripHeaders does nothing at the moment except cause a panic
+func (readerOpts) MaxNumBytes(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxNumBytes = n
+	}
+}
+
+// MaxNumRecords does nothing at the moment except cause a panic
+func (readerOpts) MaxNumRecords(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxNumRecords = n
+	}
+}
+
+// MaxNumRecordBytes does nothing at the moment except cause a panic
 func (readerOpts) MaxNumRecordBytes(n int) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.maxNumRecordBytes = n
@@ -144,7 +158,9 @@ type rCfg struct {
 	recordSep         string
 	numFields         int
 	maxNumFields      int
+	maxNumRecords     int
 	maxNumRecordBytes int
+	maxNumBytes       int
 	delimiter         rune
 	quote             rune
 	comment           rune
@@ -157,10 +173,9 @@ type rCfg struct {
 func NewReader(options ...ReaderOption) (*Reader, error) {
 
 	cfg := rCfg{
-		numFields:    -1,
-		maxNumFields: -1,
-		delimiter:    ',',
-		quote:        '"',
+		numFields: -1,
+		delimiter: ',',
+		quote:     '"',
 	}
 
 	for _, f := range options {
@@ -231,15 +246,28 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 	// TODO: reuse row option? ( borrow checking )
 	// TODO: support custom recordSep
 	// TODO: must handle zero columns case in some fashion
+	// TODO: how about ignoring empty newlines encountered before header or data rows?
+	// TODO: how about ignoring empty newlines in general
+
+	rowOverflow := func() bool {
+		if len(row) == numFields {
+			done = true
+			*errPtr = newErrTooManyFields() // TODO: cleanup
+			return true
+		}
+		return false
+	}
 
 	//
 	// important state transition logic:
 	//
 	// 1. when moving from start-of-record to a different state: lastCWasCR = false
 	// 2. when in start-of-record and not changing then: lastCWasCR must be set accordingly
-	// 3. when moving to a field-start state from a different state: need to make sure we're not exceeding the expected field count
+	// 3. when moving to a field-start state from a non start-of-record start: need to make sure we're not exceeding the expected field count
+	// 4. when moving from a start-of-record state to any other state: need to make sure we have the right count of fields in the row
+	// 5. when the end of a record/row has been found, need to make sure expected number of fields are in the row
 
-	if cfg.recordSep == "" && cfg.headers == nil && !cfg.stripHeaders {
+	if cfg.recordSep == "" && cfg.headers == nil && !cfg.stripHeaders && cfg.maxNumFields == 0 && cfg.maxNumRecordBytes == 0 && cfg.maxNumRecords == 0 && cfg.maxNumBytes == 0 {
 		// letting any valid utf8 end of line act as the record separator
 		scan = func() bool {
 			if done {
@@ -264,20 +292,10 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					// We should panic/error on initialization
 					switch state {
 					case rStateStartOfRecord:
-						if len(field) == 0 && len(row) == numFields {
-							done = true
-							*errPtr = newErrTooManyFields() // TODO: cleanup
-							return false
-						}
 						field = append(field, b)
 						lastCWasCR = false
 						state = rStateInField
 					case rStateStartOfField:
-						if len(field) == 0 && len(row) == numFields {
-							done = true
-							*errPtr = newErrTooManyFields() // TODO: cleanup
-							return false
-						}
 						field = append(field, b)
 						state = rStateInField
 					case rStateInField, rStateInQuotedField:
@@ -313,6 +331,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 							*errPtr = errors.New("unexpected end of record") // TODO: extract into var or struct
 							fallthrough
 						case rStateStartOfRecord, rStateInLineComment:
+							// TODO: what about if zero records or headers of any kind have been parsed?
 							return false
 						case rStateEndOfQuotedField, rStateStartOfField, rStateInField:
 							row = append(row, string(field))
@@ -329,11 +348,6 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					switch c {
 					case cfg.delimiter:
 						row = append(row, "")
-						if len(row) == numFields {
-							done = true
-							*errPtr = newErrTooManyFields() // TODO: cleanup
-							return false
-						}
 						// field = nil
 						lastCWasCR = false
 						state = rStateStartOfField
@@ -342,22 +356,12 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 						state = rStateInQuotedField
 					case _asciiCarriageReturn:
 						row = append(row, "")
-						if len(row) == numFields {
-							done = true
-							*errPtr = newErrTooManyFields() // TODO: cleanup
-							return false
-						}
 						// field = nil
 						// state = rStateStartOfRecord
 						lastCWasCR = true
 						return checkNumFields()
 					case _unicodeNextLine, _unicodeLineSeparator:
 						row = append(row, "")
-						if len(row) == numFields {
-							done = true
-							*errPtr = newErrTooManyFields() // TODO: cleanup
-							return false
-						}
 						// field = nil
 						lastCWasCR = false
 						// state = rStateStartOfRecord
@@ -365,11 +369,6 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					case _asciiLineFeed:
 						if !lastCWasCR {
 							row = append(row, "")
-							if len(row) == numFields {
-								done = true
-								*errPtr = newErrTooManyFields() // TODO: cleanup
-								return false
-							}
 							// field = nil
 							// state = rStateStartOfRecord
 						}
@@ -396,12 +395,10 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					switch c {
 					case cfg.delimiter:
 						row = append(row, string(field))
-						if len(row) == numFields {
-							done = true
-							*errPtr = newErrTooManyFields() // TODO: cleanup
+						field = nil
+						if rowOverflow() {
 							return false
 						}
-						field = nil
 						state = rStateStartOfField
 					case cfg.quote:
 						field = append(field, quoteBytes...)
@@ -427,6 +424,9 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					case cfg.delimiter:
 						row = append(row, string(field))
 						// field = nil
+						if rowOverflow() {
+							return false
+						}
 						// state = rStateStartOfField
 					case cfg.quote:
 						state = rStateInQuotedField
@@ -449,12 +449,10 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					switch c {
 					case cfg.delimiter:
 						row = append(row, string(field))
-						if len(row) == numFields {
-							done = true
-							*errPtr = newErrTooManyFields() // TODO: cleanup
+						field = nil
+						if rowOverflow() {
 							return false
 						}
-						field = nil
 						state = rStateStartOfField
 						// case cfg.quote:
 						// 	state = rStateInField
