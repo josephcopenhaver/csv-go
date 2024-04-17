@@ -14,8 +14,8 @@ const (
 	_unicodeReplacementChar = 0xFFFD
 	_unicodeNextLine        = 0x85
 	_unicodeLineSeparator   = 0x2028
-	// _asciiVerticalTab = 0x0B
-	// _asciiFormFeed = 0x0C
+	// _asciiVerticalTab       = 0x0B
+	// _asciiFormFeed          = 0x0C
 )
 
 type rState uint8
@@ -119,9 +119,9 @@ func (readerOpts) MaxNumRecordBytes(n int) ReaderOption {
 	}
 }
 
-func (readerOpts) Delimiter(r rune) ReaderOption {
+func (readerOpts) FieldSeparator(r rune) ReaderOption {
 	return func(cfg *rCfg) {
-		cfg.delimiter = r
+		cfg.fieldSeparator = r
 	}
 }
 
@@ -163,11 +163,12 @@ type rCfg struct {
 	maxNumRecords     int
 	maxNumRecordBytes int
 	maxNumBytes       int
-	delimiter         rune
+	fieldSeparator    rune
 	quote             rune
 	comment           rune
 	stripHeaders      bool
-	commentSet        bool
+	// trimHeaders       bool
+	commentSet bool
 	//
 	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check
 }
@@ -175,9 +176,10 @@ type rCfg struct {
 func NewReader(options ...ReaderOption) (*Reader, error) {
 
 	cfg := rCfg{
-		numFields: -1,
-		delimiter: ',',
-		quote:     '"',
+		numFields:      -1,
+		fieldSeparator: ',',
+		quote:          '"',
+		// recordSep:      string([]rune{_asciiLineFeed}),
 	}
 
 	for _, f := range options {
@@ -348,7 +350,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 				switch state {
 				case rStateStartOfRecord:
 					switch c {
-					case cfg.delimiter:
+					case cfg.fieldSeparator:
 						row = append(row, "")
 						// field = nil
 						lastCWasCR = false
@@ -395,7 +397,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					}
 				case rStateEndOfQuotedField:
 					switch c {
-					case cfg.delimiter:
+					case cfg.fieldSeparator:
 						row = append(row, string(field))
 						field = nil
 						if rowOverflow() {
@@ -423,7 +425,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					}
 				case rStateStartOfField:
 					switch c {
-					case cfg.delimiter:
+					case cfg.fieldSeparator:
 						row = append(row, string(field))
 						// field = nil
 						if rowOverflow() {
@@ -449,7 +451,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					}
 				case rStateInField:
 					switch c {
-					case cfg.delimiter:
+					case cfg.fieldSeparator:
 						row = append(row, string(field))
 						field = nil
 						if rowOverflow() {
