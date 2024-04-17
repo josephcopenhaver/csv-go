@@ -17,6 +17,7 @@ func main() {
 	op := csv.ReaderOpts()
 	cr, err := csv.NewReader(
 		op.Reader(r),
+		op.Quote('"'),
 	)
 	if err != nil {
 		panic(err)
