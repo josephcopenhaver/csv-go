@@ -6,6 +6,7 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"unicode/utf8"
 )
 
 // TODO: add an option to strip a starting utf8 byte order marker
@@ -33,6 +34,8 @@ const (
 )
 
 // TODO: errors should report line numbers and character index
+
+var ErrBadRecordSeperator = errors.New("record separator can only be one rune long or \"\r\n\"")
 
 type ErrNoHeaderRow struct{}
 
@@ -174,12 +177,25 @@ func (readerOpts) Comment(r rune) ReaderOption {
 
 func (readerOpts) RecordSeparator(s string) ReaderOption {
 	return func(cfg *rCfg) {
-		runeSlice := []rune(s)
-		n := len(runeSlice)
-		if n > 2 || (n == 2 && (runeSlice[0] != _asciiCarriageReturn || runeSlice[1] != _asciiLineFeed)) {
-			cfg.err = errors.New("record separator can only be one rune long or \"\r\n\"")
+		numBytes := len(s)
+		if numBytes == 0 {
+			cfg.err = ErrBadRecordSeperator
+			return
 		}
-		cfg.recordSep = runeSlice
+
+		r1, n1 := utf8.DecodeRuneInString(s)
+		if n1 == numBytes {
+			cfg.recordSep = []rune{r1}
+			return
+		}
+
+		r2, n2 := utf8.DecodeRuneInString(s[n1:])
+		if n1+n2 != numBytes || (r1 != _asciiCarriageReturn || r2 != _asciiLineFeed) {
+			cfg.err = ErrBadRecordSeperator
+			return
+		}
+
+		cfg.recordSep = []rune{r1, r2}
 	}
 }
 
@@ -264,6 +280,18 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 
 	if cfg.quoteSet && cfg.fieldSeparator == cfg.quote {
 		return nil, errors.New("invalid field separator and quote combination")
+	}
+
+	if !validUnicodeRune(cfg.fieldSeparator) {
+		return nil, errors.New("invalid field separator value")
+	}
+
+	if cfg.quoteSet && !validUnicodeRune(cfg.quote) {
+		return nil, errors.New("invalid quote value")
+	}
+
+	if cfg.commentSet && !validUnicodeRune(cfg.comment) {
+		return nil, errors.New("invalid quote value")
 	}
 
 	cr := &Reader{}
@@ -390,8 +418,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 				} else {
 					b = v
 				}
-				// TODO: Note: all separators, comment indicators, and quote chars are guaranteed not to be invalid rune byte sequences
-				// We should panic/error on initialization
+
 				switch state {
 				case rStateExpectLineFeed:
 					if prevState == rStateInQuotedField {
@@ -438,7 +465,6 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 						*errPtr = errors.New("unexpected end of record") // TODO: extract into var or struct
 						return false
 					case rStateStartOfRecord, rStateInLineComment:
-						// TODO: what about if zero records or headers of any kind have been parsed?
 						return false
 					case rStateExpectLineFeed:
 						if prevState == rStateEndOfQuotedField {
@@ -641,8 +667,6 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					} else {
 						b = v
 					}
-					// TODO: Note: all separators, comment indicators, and quote chars are guaranteed not to be invalid rune byte sequences
-					// We should panic/error on initialization
 					switch state {
 					case rStateStartOfRecord, rStateStartOfField:
 						field = append(field, b)
@@ -680,7 +704,6 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 							*errPtr = errors.New("unexpected end of record") // TODO: extract into var or struct
 							return false
 						case rStateStartOfRecord, rStateInLineComment:
-							// TODO: what about if zero records or headers of any kind have been parsed?
 							return false
 						case rStateEndOfQuotedField, rStateStartOfField, rStateInField:
 							row = append(row, string(field))
@@ -850,12 +873,13 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 	}
 
 	// verify that true is returned at least once
+	// using an interceptor/fpointer with a slip closure
 	{
 		next := scan
-		var ptrNext func() bool
-		ptrNext = func() bool {
-			ptrNext = next
-			v := ptrNext()
+		var nextInterceptor func() bool
+		nextInterceptor = func() bool {
+			nextInterceptor = next
+			v := nextInterceptor()
 			if !v && *errPtr == nil {
 				if cfg.errorOnNoRows {
 					*errPtr = newErrNoRows()
@@ -866,7 +890,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 			return v
 		}
 		scan = func() bool {
-			return ptrNext()
+			return nextInterceptor()
 		}
 	}
 	return
@@ -874,4 +898,9 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 
 func runeBytes(r rune) []byte {
 	return []byte(string([]rune{r}))
+}
+
+func validUnicodeRune(r rune) bool {
+	v, n := utf8.DecodeRuneInString(string([]rune{r}))
+	return n != 0 && r == v
 }
