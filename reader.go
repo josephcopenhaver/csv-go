@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"slices"
+	"strings"
 )
 
 // TODO: add an option to strip a starting utf8 byte order marker
@@ -78,17 +80,21 @@ func (readerOpts) Reader(r io.Reader) ReaderOption {
 	}
 }
 
-// ExpectHeaders does nothing at the moment except cause a panic
+func (readerOpts) TrimHeaders(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.trimHeaders = b
+	}
+}
+
 func (readerOpts) ExpectHeaders(h []string) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.headers = h
 	}
 }
 
-// StripHeaders does nothing at the moment except cause a panic
-func (readerOpts) StripHeaders(b bool) ReaderOption {
+func (readerOpts) RemoveHeaderRow(b bool) ReaderOption {
 	return func(cfg *rCfg) {
-		cfg.stripHeaders = b
+		cfg.removeHeaderRow = b
 	}
 }
 
@@ -140,7 +146,6 @@ func (readerOpts) Comment(r rune) ReaderOption {
 	}
 }
 
-// RecordSeparator does nothing at the moment except cause a panic
 func (readerOpts) RecordSeparator(s string) ReaderOption {
 	return func(cfg *rCfg) {
 		runeSlice := []rune(s)
@@ -176,10 +181,10 @@ type rCfg struct {
 	quote                   rune
 	comment                 rune
 	quoteSet                bool
-	stripHeaders            bool
+	removeHeaderRow         bool
 	discoverRecordSeparator bool
-	// trimHeaders             bool
-	commentSet bool
+	trimHeaders             bool
+	commentSet              bool
 	//
 	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check
 }
@@ -202,6 +207,10 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 
 	if cfg.reader == nil {
 		return nil, errors.New("nil reader")
+	}
+
+	if cfg.headers != nil && len(cfg.headers) == 0 {
+		return nil, errors.New("empty set of headers expected")
 	}
 
 	{
@@ -258,6 +267,8 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 		return row
 	}
 
+	var prepareRow func() bool
+
 	in := bufio.NewReader(cfg.reader)
 
 	state := rStateStartOfRecord
@@ -284,12 +295,38 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 		}
 	}
 
+	if !(cfg.headers == nil && !cfg.removeHeaderRow && !cfg.trimHeaders) {
+		next := checkNumFields
+		checkNumFields = func() bool {
+			if cfg.trimHeaders {
+				for i := range row {
+					row[i] = strings.TrimSpace(row[i])
+				}
+			}
+
+			if cfg.headers != nil && !slices.Equal(cfg.headers, row) {
+				done = true
+				*errPtr = errors.New("header row does not match expectations")
+				return false
+			}
+
+			checkNumFields = next
+			if cfg.removeHeaderRow {
+				if !checkNumFields() {
+					return false
+				}
+				return prepareRow()
+			}
+
+			return checkNumFields()
+		}
+	}
+
 	recordSep := []rune(cfg.recordSep)
 	var prevState rState
 
 	// TODO: ignore comments after first record line encountered?
 	// TODO: reuse row option? ( borrow checking )
-	// TODO: support custom recordSep
 	// TODO: must handle zero columns case in some fashion
 	// TODO: how about ignoring empty newlines encountered before header or data rows?
 	// TODO: how about ignoring empty newlines in general
@@ -534,7 +571,6 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 		return checkNumFields()
 	}
 
-	var prepareRow func() bool
 	if cfg.discoverRecordSeparator {
 		nextCharIsLF := func() bool {
 			c, size, err := in.ReadRune()
@@ -766,7 +802,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 		prepareRow = prepareRowWithKnownRecordSeparator
 	}
 
-	if cfg.headers == nil && !cfg.stripHeaders && cfg.maxNumFields == 0 && cfg.maxNumRecordBytes == 0 && cfg.maxNumRecords == 0 && cfg.maxNumBytes == 0 {
+	if cfg.maxNumFields == 0 && cfg.maxNumRecordBytes == 0 && cfg.maxNumRecords == 0 && cfg.maxNumBytes == 0 {
 		// letting any valid utf8 end of line act as the record separator
 		scan = func() bool {
 			if done {
@@ -777,10 +813,11 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 
 			return prepareRow()
 		}
-		return
+	} else {
+		panic("unimplemented config selections")
 	}
 
-	panic("unimplemented config selections")
+	return
 }
 
 func runeBytes(r rune) []byte {
