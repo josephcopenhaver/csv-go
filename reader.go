@@ -34,6 +34,26 @@ const (
 
 // TODO: errors should report line numbers and character index
 
+type ErrNoHeaderRow struct{}
+
+func (e ErrNoHeaderRow) Error() string {
+	return "no header row"
+}
+
+func newErrNoHeaderRow() ErrNoHeaderRow {
+	return ErrNoHeaderRow{}
+}
+
+type ErrNoRows struct{}
+
+func (e ErrNoRows) Error() string {
+	return "no rows"
+}
+
+func newErrNoRows() ErrNoRows {
+	return ErrNoRows{}
+}
+
 type ErrFieldCountMismatch struct{}
 
 func (e ErrFieldCountMismatch) Error() string {
@@ -77,6 +97,12 @@ type readerOpts struct{}
 func (readerOpts) Reader(r io.Reader) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.reader = r
+	}
+}
+
+func (readerOpts) ErrorOnNoRows(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.errorOnNoRows = b
 	}
 }
 
@@ -185,6 +211,7 @@ type rCfg struct {
 	discoverRecordSeparator bool
 	trimHeaders             bool
 	commentSet              bool
+	errorOnNoRows           bool
 	//
 	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check
 }
@@ -277,7 +304,6 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 	numFields := cfg.numFields
 
 	checkNumFields := func() bool {
-		// TODO: error if file is empty?
 		if len(row) == numFields {
 			return true
 		}
@@ -295,6 +321,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 		}
 	}
 
+	var headersVerified bool
 	if !(cfg.headers == nil && !cfg.removeHeaderRow && !cfg.trimHeaders) {
 		next := checkNumFields
 		checkNumFields = func() bool {
@@ -315,6 +342,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 				if !checkNumFields() {
 					return false
 				}
+				headersVerified = true
 				return prepareRow()
 			}
 
@@ -817,6 +845,30 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 		panic("unimplemented config selections")
 	}
 
+	if cfg.headers == nil && !cfg.errorOnNoRows {
+		return
+	}
+
+	// verify that true is returned at least once
+	{
+		next := scan
+		var ptrNext func() bool
+		ptrNext = func() bool {
+			ptrNext = next
+			v := ptrNext()
+			if !v && *errPtr == nil {
+				if cfg.errorOnNoRows {
+					*errPtr = newErrNoRows()
+				} else if cfg.headers != nil && !headersVerified {
+					*errPtr = newErrNoHeaderRow()
+				}
+			}
+			return v
+		}
+		scan = func() bool {
+			return ptrNext()
+		}
+	}
 	return
 }
 
