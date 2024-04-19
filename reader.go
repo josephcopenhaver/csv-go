@@ -9,7 +9,8 @@ import (
 	"unicode/utf8"
 )
 
-// TODO: add an option to strip a starting utf8 byte order marker
+// TODO: add an option to strip a starting utf8/utf16 byte order marker
+// TODO: support utf16?
 
 const (
 	_asciiCarriageReturn    = 0x0D
