@@ -390,13 +390,14 @@ func (r *Reader) init(cfg rCfg) {
 	recordSep := []rune(cfg.recordSep)
 	var prevState rState
 
-	// TODO: ignore comments after first record line encountered?
+	// TODO: turn off allowing comments after first record/header line encountered?
 	// TODO: reuse row option? ( borrow checking )
 	// TODO: must handle zero columns case in some fashion
 	// TODO: how about ignoring empty newlines encountered before header or data rows?
-	// TODO: how about ignoring empty newlines in general
+	// TODO: how about ignoring empty newlines at the end of the document? (probably
+	// okay to do if expected field count is greater than 1, field content overlapping with a record separator should be quoted)
 
-	rowOverflow := func() bool {
+	fieldNumOverflow := func() bool {
 		if len(row) == numFields {
 			done = true
 			r.err = newErrTooManyFields() // TODO: cleanup
@@ -552,7 +553,7 @@ func (r *Reader) init(cfg rCfg) {
 				case cfg.fieldSeparator:
 					row = append(row, string(field))
 					field = nil
-					if rowOverflow() {
+					if fieldNumOverflow() {
 						return false
 					}
 					state = rStateStartOfField
@@ -578,7 +579,7 @@ func (r *Reader) init(cfg rCfg) {
 				case cfg.fieldSeparator:
 					row = append(row, string(field))
 					// field = nil
-					if rowOverflow() {
+					if fieldNumOverflow() {
 						return false
 					}
 					// state = rStateStartOfField
@@ -604,7 +605,7 @@ func (r *Reader) init(cfg rCfg) {
 				case cfg.fieldSeparator:
 					row = append(row, string(field))
 					field = nil
-					if rowOverflow() {
+					if fieldNumOverflow() {
 						return false
 					}
 					state = rStateStartOfField
@@ -765,7 +766,7 @@ func (r *Reader) init(cfg rCfg) {
 					case cfg.fieldSeparator:
 						row = append(row, string(field))
 						field = nil
-						if rowOverflow() {
+						if fieldNumOverflow() {
 							return false
 						}
 						state = rStateStartOfField
@@ -793,7 +794,7 @@ func (r *Reader) init(cfg rCfg) {
 					case cfg.fieldSeparator:
 						row = append(row, string(field))
 						// field = nil
-						if rowOverflow() {
+						if fieldNumOverflow() {
 							return false
 						}
 						// state = rStateStartOfField
@@ -821,7 +822,7 @@ func (r *Reader) init(cfg rCfg) {
 					case cfg.fieldSeparator:
 						row = append(row, string(field))
 						field = nil
-						if rowOverflow() {
+						if fieldNumOverflow() {
 							return false
 						}
 						state = rStateStartOfField
