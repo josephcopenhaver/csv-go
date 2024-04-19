@@ -426,7 +426,7 @@ func (r *Reader) init(cfg rCfg) {
 	// TODO: turn off allowing comments after first record/header line encountered?
 	// TODO: must handle zero columns case in some fashion
 	// TODO: how about ignoring empty newlines encountered before header or data rows?
-	// TODO: how about ignoring empty newlines at the end of the document? (probably
+	// TODO: how about ignoring multiple empty newlines at the end of the document? (probably
 	// okay to do if expected field count is greater than 1, field content overlapping with a record separator should be quoted)
 
 	fieldNumOverflow := func() bool {
