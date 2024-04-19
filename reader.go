@@ -295,6 +295,10 @@ func (cfg *rCfg) validate() error {
 		return errors.New("invalid quote value")
 	}
 
+	if cfg.maxNumFields != 0 || cfg.maxNumRecordBytes != 0 || cfg.maxNumRecords != 0 || cfg.maxNumBytes != 0 {
+		panic("unimplemented config selections")
+	}
+
 	return nil
 }
 
@@ -675,19 +679,15 @@ func (r *Reader) init(cfg rCfg) {
 		return checkNumFields()
 	}
 
-	if cfg.maxNumFields == 0 && cfg.maxNumRecordBytes == 0 && cfg.maxNumRecords == 0 && cfg.maxNumBytes == 0 {
-		// letting any valid utf8 end of line act as the record separator
-		r.scan = func() bool {
-			if done {
-				return false
-			}
-
-			row = row[:0]
-
-			return prepareRow()
+	// letting any valid utf8 end of line act as the record separator
+	r.scan = func() bool {
+		if done {
+			return false
 		}
-	} else {
-		panic("unimplemented config selections")
+
+		row = row[:0]
+
+		return prepareRow()
 	}
 
 	if cfg.headers == nil && !cfg.errorOnNoRows {
