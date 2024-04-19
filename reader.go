@@ -702,10 +702,10 @@ func (r *Reader) init(cfg rCfg) {
 			r.scan = next
 			v := r.scan()
 			if !v && r.err == nil {
-				if cfg.errorOnNoRows {
-					r.err = newErrNoRows()
-				} else if cfg.headers != nil && !headersVerified {
+				if cfg.headers != nil && !headersVerified {
 					r.err = newErrNoHeaderRow()
+				} else if cfg.errorOnNoRows {
+					r.err = newErrNoRows()
 				}
 			}
 			return v
