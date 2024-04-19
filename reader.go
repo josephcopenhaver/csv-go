@@ -232,6 +232,60 @@ type rCfg struct {
 	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check
 }
 
+func (cfg *rCfg) validate() error {
+	if err := cfg.err; err != nil {
+		return err
+	}
+
+	if cfg.reader == nil {
+		return errors.New("nil reader")
+	}
+
+	if cfg.headers != nil && len(cfg.headers) == 0 {
+		return errors.New("empty set of headers expected")
+	}
+
+	{
+		n := len(cfg.recordSep)
+		if (n == 0) == (!cfg.discoverRecordSeparator) {
+			return errors.New("must specify one and only one of automatic record separator discovery or a specific recordSeparator")
+		}
+
+		if n < 1 || n > 2 || n == 2 && (cfg.recordSep[0] != _asciiCarriageReturn || cfg.recordSep[1] != _asciiLineFeed) {
+			return errors.New("invalid record separator value")
+		}
+		if n == 1 {
+			if cfg.quoteSet && cfg.recordSep[0] == cfg.quote {
+				return errors.New("invalid record separator and quote combination")
+			}
+			if cfg.recordSep[0] == cfg.fieldSeparator {
+				return errors.New("invalid record separator and field separator combination")
+			}
+			if cfg.recordSep[0] == _unicodeReplacementChar {
+				return errors.New("invalid record separator value: unicode replacement character")
+			}
+		}
+	}
+
+	if cfg.quoteSet && cfg.fieldSeparator == cfg.quote {
+		return errors.New("invalid field separator and quote combination")
+	}
+
+	if !validUnicodeRune(cfg.fieldSeparator) {
+		return errors.New("invalid field separator value")
+	}
+
+	if cfg.quoteSet && !validUnicodeRune(cfg.quote) {
+		return errors.New("invalid quote value")
+	}
+
+	if cfg.commentSet && !validUnicodeRune(cfg.comment) {
+		return errors.New("invalid quote value")
+	}
+
+	return nil
+}
+
 func NewReader(options ...ReaderOption) (*Reader, error) {
 
 	cfg := rCfg{
@@ -244,58 +298,12 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		f(&cfg)
 	}
 
-	if err := cfg.err; err != nil {
+	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
 
-	if cfg.reader == nil {
-		return nil, errors.New("nil reader")
-	}
-
-	if cfg.headers != nil && len(cfg.headers) == 0 {
-		return nil, errors.New("empty set of headers expected")
-	}
-
-	{
-		n := len(cfg.recordSep)
-		if (n == 0) == (!cfg.discoverRecordSeparator) {
-			return nil, errors.New("must specify one and only one of automatic record separator discovery or a specific recordSeparator")
-		}
-
-		if n < 1 || n > 2 || n == 2 && (cfg.recordSep[0] != _asciiCarriageReturn || cfg.recordSep[1] != _asciiLineFeed) {
-			return nil, errors.New("invalid record separator value")
-		}
-		if n == 1 {
-			if cfg.quoteSet && cfg.recordSep[0] == cfg.quote {
-				return nil, errors.New("invalid record separator and quote combination")
-			}
-			if cfg.recordSep[0] == cfg.fieldSeparator {
-				return nil, errors.New("invalid record separator and field separator combination")
-			}
-			if cfg.recordSep[0] == _unicodeReplacementChar {
-				return nil, errors.New("invalid record separator value: unicode replacement character")
-			}
-		}
-	}
-
-	if cfg.quoteSet && cfg.fieldSeparator == cfg.quote {
-		return nil, errors.New("invalid field separator and quote combination")
-	}
-
-	if !validUnicodeRune(cfg.fieldSeparator) {
-		return nil, errors.New("invalid field separator value")
-	}
-
-	if cfg.quoteSet && !validUnicodeRune(cfg.quote) {
-		return nil, errors.New("invalid quote value")
-	}
-
-	if cfg.commentSet && !validUnicodeRune(cfg.comment) {
-		return nil, errors.New("invalid quote value")
-	}
-
 	cr := &Reader{}
-	cr.scan, cr.row = readStrat(cfg, &cr.err)
+	cr.init(cfg)
 
 	return cr, nil
 }
@@ -312,13 +320,13 @@ func (r *Reader) Scan() bool {
 	return r.scan()
 }
 
-func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string) {
+func (r *Reader) init(cfg rCfg) {
 
 	quoteBytes := runeBytes(cfg.quote)
 
 	var done bool
 	var row []string
-	read = func() []string {
+	r.row = func() []string {
 		return row
 	}
 
@@ -337,7 +345,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 		}
 
 		done = true
-		*errPtr = newErrFieldCountMismatch()
+		r.err = newErrFieldCountMismatch()
 		return false
 	}
 	if numFields == -1 {
@@ -361,7 +369,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 
 			if cfg.headers != nil && !slices.Equal(cfg.headers, row) {
 				done = true
-				*errPtr = errors.New("header row does not match expectations")
+				r.err = errors.New("header row does not match expectations")
 				return false
 			}
 
@@ -390,7 +398,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 	rowOverflow := func() bool {
 		if len(row) == numFields {
 			done = true
-			*errPtr = newErrTooManyFields() // TODO: cleanup
+			r.err = newErrTooManyFields() // TODO: cleanup
 			return true
 		}
 		return false
@@ -423,7 +431,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 				case rStateExpectLineFeed:
 					if prevState == rStateInQuotedField {
 						done = true
-						*errPtr = errors.New("found an awkward byte instead of a newline character after carriage return at the end of a quoted field")
+						r.err = errors.New("found an awkward byte instead of a newline character after carriage return at the end of a quoted field")
 						return false
 					}
 					// start of record, in field, start of field
@@ -441,7 +449,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 				case rStateEndOfQuotedField:
 					if rErr == nil {
 						done = true
-						*errPtr = newErrInvalidQuotedFieldEnding()
+						r.err = newErrInvalidQuotedFieldEnding()
 						return false
 					}
 				case rStateInLineComment:
@@ -454,7 +462,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 			if rErr != nil {
 				done = true
 				if !errors.Is(rErr, io.EOF) {
-					*errPtr = rErr
+					r.err = rErr
 					return false
 				}
 				if size == 0 {
@@ -462,13 +470,13 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					// there is no new character to process
 					switch state {
 					case rStateInQuotedField:
-						*errPtr = errors.New("unexpected end of record") // TODO: extract into var or struct
+						r.err = errors.New("unexpected end of record") // TODO: extract into var or struct
 						return false
 					case rStateStartOfRecord, rStateInLineComment:
 						return false
 					case rStateExpectLineFeed:
 						if prevState == rStateEndOfQuotedField {
-							*errPtr = errors.New("reached EOF after a quoted field followed by a carriage return: expected newline character")
+							r.err = errors.New("reached EOF after a quoted field followed by a carriage return: expected newline character")
 							return false
 						}
 						field = append(field, runeBytes(recordSep[0])...)
@@ -519,7 +527,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 
 				if prevState == rStateEndOfQuotedField {
 					done = true
-					*errPtr = errors.New("reached unexpected character after a quoted field followed by a carriage return: expected newline character")
+					r.err = errors.New("reached unexpected character after a quoted field followed by a carriage return: expected newline character")
 					return false
 				}
 
@@ -561,7 +569,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					state = rStateExpectLineFeed
 				default:
 					done = true
-					*errPtr = newErrInvalidQuotedFieldEnding()
+					r.err = newErrInvalidQuotedFieldEnding()
 					return false
 				}
 			case rStateStartOfField:
@@ -632,7 +640,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 				if err != nil {
 					done = true
 					if !errors.Is(err, io.EOF) {
-						*errPtr = err
+						r.err = err
 					}
 				}
 				return false
@@ -642,7 +650,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 				if err != nil {
 					done = true
 					if !errors.Is(err, io.EOF) {
-						*errPtr = err
+						r.err = err
 					}
 				}
 				return true
@@ -680,7 +688,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 					case rStateEndOfQuotedField:
 						if rErr == nil {
 							done = true
-							*errPtr = newErrInvalidQuotedFieldEnding()
+							r.err = newErrInvalidQuotedFieldEnding()
 							return false
 						}
 					case rStateInLineComment:
@@ -693,7 +701,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 				if rErr != nil {
 					done = true
 					if !errors.Is(rErr, io.EOF) {
-						*errPtr = rErr
+						r.err = rErr
 						return false
 					}
 					if size == 0 {
@@ -701,7 +709,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 						// there is no new character to process
 						switch state {
 						case rStateInQuotedField:
-							*errPtr = errors.New("unexpected end of record") // TODO: extract into var or struct
+							r.err = errors.New("unexpected end of record") // TODO: extract into var or struct
 							return false
 						case rStateStartOfRecord, rStateInLineComment:
 							return false
@@ -776,7 +784,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 						return checkNumFields()
 					default:
 						done = true
-						*errPtr = newErrInvalidQuotedFieldEnding()
+						r.err = newErrInvalidQuotedFieldEnding()
 						return false
 					}
 				case rStateStartOfField:
@@ -855,7 +863,7 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 
 	if cfg.maxNumFields == 0 && cfg.maxNumRecordBytes == 0 && cfg.maxNumRecords == 0 && cfg.maxNumBytes == 0 {
 		// letting any valid utf8 end of line act as the record separator
-		scan = func() bool {
+		r.scan = func() bool {
 			if done {
 				return false
 			}
@@ -875,25 +883,20 @@ func readStrat(cfg rCfg, errPtr *error) (scan func() bool, read func() []string)
 	// verify that true is returned at least once
 	// using an interceptor/fpointer with a slip closure
 	{
-		next := scan
-		var nextInterceptor func() bool
-		nextInterceptor = func() bool {
-			nextInterceptor = next
-			v := nextInterceptor()
-			if !v && *errPtr == nil {
+		next := r.scan
+		r.scan = func() bool {
+			r.scan = next
+			v := r.scan()
+			if !v && r.err == nil {
 				if cfg.errorOnNoRows {
-					*errPtr = newErrNoRows()
+					r.err = newErrNoRows()
 				} else if cfg.headers != nil && !headersVerified {
-					*errPtr = newErrNoHeaderRow()
+					r.err = newErrNoHeaderRow()
 				}
 			}
 			return v
 		}
-		scan = func() bool {
-			return nextInterceptor()
-		}
 	}
-	return
 }
 
 func runeBytes(r rune) []byte {
