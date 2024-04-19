@@ -429,7 +429,7 @@ func (r *Reader) init(cfg rCfg) {
 
 				switch state {
 				case rStateExpectLineFeed:
-					if prevState == rStateInQuotedField {
+					if prevState == rStateEndOfQuotedField {
 						done = true
 						r.err = errors.New("found an awkward byte instead of a newline character after carriage return at the end of a quoted field")
 						return false
