@@ -176,6 +176,17 @@ func (readerOpts) Comment(r rune) ReaderOption {
 	}
 }
 
+// BorrowRow alters the row function to return the underlying string slice every time it is called rather than a copy.
+//
+// Only set to true if the returned row is never used after the next call to Scan.
+//
+// Please consider this to be a micro optimization in most circumstances.
+func (readerOpts) BorrowRow(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.borrowRow = b
+	}
+}
+
 func (readerOpts) RecordSeparator(s string) ReaderOption {
 	return func(cfg *rCfg) {
 		numBytes := len(s)
@@ -229,6 +240,7 @@ type rCfg struct {
 	trimHeaders             bool
 	commentSet              bool
 	errorOnNoRows           bool
+	borrowRow               bool
 	//
 	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check
 }
@@ -313,6 +325,15 @@ func (r *Reader) Err() error {
 	return r.err
 }
 
+// Row returns a slice of strings that represents a row of a dataset.
+//
+// Row only returns valid results after a call to Scan() return true.
+// For efficiency reasons this method should not be called more than once between
+// calls to Scan().
+//
+// If the reader is configured with BorrowRow(true) then the resulting slice
+// is only valid to use up until the next call to Scan and should not be saved to
+// persistent memory.
 func (r *Reader) Row() []string {
 	return r.row()
 }
@@ -327,8 +348,18 @@ func (r *Reader) init(cfg rCfg) {
 
 	var done bool
 	var row []string
-	r.row = func() []string {
-		return row
+	if cfg.borrowRow {
+		r.row = func() []string {
+			n := len(row)
+			return row[:n:n]
+		}
+	} else {
+		r.row = func() []string {
+			n := len(row)
+			c := make([]string, n)
+			copy(c, row)
+			return c
+		}
 	}
 
 	var prepareRow func() bool
@@ -391,7 +422,6 @@ func (r *Reader) init(cfg rCfg) {
 	var prevState rState
 
 	// TODO: turn off allowing comments after first record/header line encountered?
-	// TODO: reuse row option? ( borrow checking )
 	// TODO: must handle zero columns case in some fashion
 	// TODO: how about ignoring empty newlines encountered before header or data rows?
 	// TODO: how about ignoring empty newlines at the end of the document? (probably
