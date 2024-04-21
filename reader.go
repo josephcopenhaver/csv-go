@@ -175,9 +175,43 @@ func (readerOpts) Comment(r rune) ReaderOption {
 	}
 }
 
+func (readerOpts) NumFields(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.numFields = n
+		cfg.numFieldsSet = true
+	}
+}
+
+// TODO: what should be done if the file is empty and numFields == -1 (field count discovery mode)?
+//
+// how often are we expecting a file to have no headers, no predetermined field count expectation, and no
+// record separator yet still expect an empty string to be yielded in a single element row because the
+// writer did not end the single column value (which happens to serialize to an empty string rather
+// than a quoted empty string) with a record separator/terminator?
+//
+// Feels like this should probably be an error explicitly returned that the calling layers can handle
+// as they choose. Perhaps State() should be exposed as well as the relevant terminal state values?
+// But that feels like exposing plumbing rather than offer porcelain.
+
+// TerminalRecordSeparatorEmitsRecord only exists to acknowledge an edge case
+// when processing csv documents that contain one column. If the file contents end
+// in a record separator it's impossible to determine if that should indicate that
+// a new record with an empty field should be emitted unless that record is enclosed
+// in quotes or a config option like this exists.
+//
+// In most cases this should not be an issue, unless the dataset is a single column
+// list that allows empty strings for some use case and the writer used to create the
+// file chooses to not always write the last record followed by a record separator.
+// (treating the record separator like a record terminator)
+func (readerOpts) TerminalRecordSeparatorEmitsRecord(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.trsEmitsRecord = b
+	}
+}
+
 // BorrowRow alters the row function to return the underlying string slice every time it is called rather than a copy.
 //
-// Only set to true if the returned row is never used after the next call to Scan.
+// Only set to true if the returned row and field strings within it are never used after the next call to Scan.
 //
 // Please consider this to be a micro optimization in most circumstances.
 func (readerOpts) BorrowRow(b bool) ReaderOption {
@@ -224,6 +258,8 @@ type rCfg struct {
 	errorOnNoRows           bool
 	borrowRow               bool
 	recordSepStrSet         bool
+	trsEmitsRecord          bool
+	numFieldsSet            bool
 	//
 	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check?
 }
@@ -299,6 +335,10 @@ func (cfg *rCfg) validate() error {
 		return errors.New("invalid quote value")
 	}
 
+	if cfg.numFieldsSet && cfg.numFields <= 0 {
+		return errors.New("num fields must be greater than zero or not specified")
+	}
+
 	if cfg.maxNumFields != 0 || cfg.maxNumRecordBytes != 0 || cfg.maxNumRecords != 0 || cfg.maxNumBytes != 0 {
 		panic("unimplemented config selections")
 	}
@@ -338,9 +378,9 @@ func (r *Reader) Err() error {
 // For efficiency reasons this method should not be called more than once between
 // calls to Scan().
 //
-// If the reader is configured with BorrowRow(true) then the resulting slice
-// is only valid to use up until the next call to Scan and should not be saved to
-// persistent memory.
+// If the reader is configured with BorrowRow(true) then the resulting slice and
+// field strings are only valid to use up until the next call to Scan and
+// should not be saved to persistent memory.
 func (r *Reader) Row() []string {
 	return r.row()
 }
@@ -555,7 +595,13 @@ func (r *Reader) init(cfg rCfg) {
 					case rStateInQuotedField:
 						r.err = errors.New("unexpected end of record") // TODO: extract into var or struct
 						return false
-					case rStateStartOfRecord, rStateInLineComment:
+					case rStateStartOfRecord:
+						if cfg.trsEmitsRecord && numFields == 1 {
+							row = append(row, "")
+							return checkNumFields()
+						}
+						return false
+					case rStateInLineComment:
 						return false
 					case rStateEndOfQuotedField, rStateStartOfField, rStateInField:
 						row = append(row, string(field))
