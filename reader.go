@@ -13,13 +13,13 @@ import (
 // TODO: support utf16?
 
 const (
-	_asciiCarriageReturn    = 0x0D
-	_asciiLineFeed          = 0x0A
-	_asciiVerticalTab       = 0x0B
-	_asciiFormFeed          = 0x0C
-	_unicodeReplacementChar = 0xFFFD
-	_unicodeNextLine        = 0x85
-	_unicodeLineSeparator   = 0x2028
+	asciiCarriageReturn = 0x0D
+	asciiLineFeed       = 0x0A
+	asciiVerticalTab    = 0x0B
+	asciiFormFeed       = 0x0C
+	utf8ReplacementChar = 0xFFFD
+	utf8NextLine        = 0x85
+	utf8LineSeparator   = 0x2028
 )
 
 type rState uint8
@@ -35,7 +35,7 @@ const (
 
 // TODO: errors should report line numbers and character index
 
-var ErrBadRecordSeperator = errors.New("record separator can only be one rune long or \"\r\n\"")
+var ErrBadRecordSeparator = errors.New("record separator can only be one rune long or \"\r\n\"")
 
 type ErrNoHeaderRow struct{}
 
@@ -127,33 +127,33 @@ func (readerOpts) RemoveHeaderRow(b bool) ReaderOption {
 	}
 }
 
-// StripHeaders does nothing at the moment except cause a panic
-func (readerOpts) MaxNumFields(n int) ReaderOption {
-	return func(cfg *rCfg) {
-		cfg.maxNumFields = n
-	}
-}
+// // MaxNumFields does nothing at the moment except cause a panic
+// func (readerOpts) MaxNumFields(n int) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.maxNumFields = n
+// 	}
+// }
 
-// StripHeaders does nothing at the moment except cause a panic
-func (readerOpts) MaxNumBytes(n int) ReaderOption {
-	return func(cfg *rCfg) {
-		cfg.maxNumBytes = n
-	}
-}
+// // MaxNumBytes does nothing at the moment except cause a panic
+// func (readerOpts) MaxNumBytes(n int) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.maxNumBytes = n
+// 	}
+// }
 
-// MaxNumRecords does nothing at the moment except cause a panic
-func (readerOpts) MaxNumRecords(n int) ReaderOption {
-	return func(cfg *rCfg) {
-		cfg.maxNumRecords = n
-	}
-}
+// // MaxNumRecords does nothing at the moment except cause a panic
+// func (readerOpts) MaxNumRecords(n int) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.maxNumRecords = n
+// 	}
+// }
 
-// MaxNumRecordBytes does nothing at the moment except cause a panic
-func (readerOpts) MaxNumRecordBytes(n int) ReaderOption {
-	return func(cfg *rCfg) {
-		cfg.maxNumRecordBytes = n
-	}
-}
+// // MaxNumRecordBytes does nothing at the moment except cause a panic
+// func (readerOpts) MaxNumRecordBytes(n int) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.maxNumRecordBytes = n
+// 	}
+// }
 
 func (readerOpts) FieldSeparator(r rune) ReaderOption {
 	return func(cfg *rCfg) {
@@ -188,25 +188,8 @@ func (readerOpts) BorrowRow(b bool) ReaderOption {
 
 func (readerOpts) RecordSeparator(s string) ReaderOption {
 	return func(cfg *rCfg) {
-		numBytes := len(s)
-		if numBytes == 0 {
-			cfg.err = ErrBadRecordSeperator
-			return
-		}
-
-		r1, n1 := utf8.DecodeRuneInString(s)
-		if n1 == numBytes {
-			cfg.recordSep = []rune{r1}
-			return
-		}
-
-		r2, n2 := utf8.DecodeRuneInString(s[n1:])
-		if n1+n2 != numBytes || (r1 != _asciiCarriageReturn || r2 != _asciiLineFeed) {
-			cfg.err = ErrBadRecordSeperator
-			return
-		}
-
-		cfg.recordSep = []rune{r1, r2}
+		cfg.recordSepStr = s
+		cfg.recordSepStrSet = true
 	}
 }
 
@@ -221,9 +204,9 @@ func ReaderOpts() readerOpts {
 }
 
 type rCfg struct {
-	err                     error
 	headers                 []string
 	reader                  io.Reader
+	recordSepStr            string
 	recordSep               []rune
 	numFields               int
 	maxNumFields            int
@@ -240,14 +223,12 @@ type rCfg struct {
 	commentSet              bool
 	errorOnNoRows           bool
 	borrowRow               bool
+	recordSepStrSet         bool
 	//
-	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check
+	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check?
 }
 
 func (cfg *rCfg) validate() error {
-	if err := cfg.err; err != nil {
-		return err
-	}
 
 	if cfg.reader == nil {
 		return errors.New("nil reader")
@@ -257,13 +238,36 @@ func (cfg *rCfg) validate() error {
 		return errors.New("empty set of headers expected")
 	}
 
+	if cfg.recordSepStrSet {
+		s := cfg.recordSepStr
+		cfg.recordSepStr = ""
+
+		numBytes := len(s)
+		if numBytes == 0 {
+			return ErrBadRecordSeparator
+		}
+
+		r1, n1 := utf8.DecodeRuneInString(s)
+		if n1 == numBytes {
+			cfg.recordSep = []rune{r1}
+		} else {
+
+			r2, n2 := utf8.DecodeRuneInString(s[n1:])
+			if n1+n2 != numBytes || (r1 != asciiCarriageReturn || r2 != asciiLineFeed) {
+				return ErrBadRecordSeparator
+			}
+
+			cfg.recordSep = []rune{r1, r2}
+		}
+	}
+
 	{
 		n := len(cfg.recordSep)
 		if (n == 0) == (!cfg.discoverRecordSeparator) {
 			return errors.New("must specify one and only one of automatic record separator discovery or a specific recordSeparator")
 		}
 
-		if n < 1 || n > 2 || n == 2 && (cfg.recordSep[0] != _asciiCarriageReturn || cfg.recordSep[1] != _asciiLineFeed) {
+		if n < 1 || n > 2 || n == 2 && (cfg.recordSep[0] != asciiCarriageReturn || cfg.recordSep[1] != asciiLineFeed) {
 			return errors.New("invalid record separator value")
 		}
 		if n == 1 {
@@ -273,8 +277,8 @@ func (cfg *rCfg) validate() error {
 			if cfg.recordSep[0] == cfg.fieldSeparator {
 				return errors.New("invalid record separator and field separator combination")
 			}
-			if cfg.recordSep[0] == _unicodeReplacementChar {
-				return errors.New("invalid record separator value: unicode replacement character")
+			if cfg.recordSep[0] == utf8ReplacementChar {
+				return errors.New("invalid record separator value: utf8 replacement character")
 			}
 		}
 	}
@@ -283,15 +287,15 @@ func (cfg *rCfg) validate() error {
 		return errors.New("invalid field separator and quote combination")
 	}
 
-	if !validUnicodeRune(cfg.fieldSeparator) {
+	if !validUtf8Rune(cfg.fieldSeparator) {
 		return errors.New("invalid field separator value")
 	}
 
-	if cfg.quoteSet && !validUnicodeRune(cfg.quote) {
+	if cfg.quoteSet && !validUtf8Rune(cfg.quote) {
 		return errors.New("invalid quote value")
 	}
 
-	if cfg.commentSet && !validUnicodeRune(cfg.comment) {
+	if cfg.commentSet && !validUtf8Rune(cfg.comment) {
 		return errors.New("invalid quote value")
 	}
 
@@ -307,7 +311,7 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	cfg := rCfg{
 		numFields:      -1,
 		fieldSeparator: ',',
-		recordSep:      []rune{_asciiLineFeed},
+		recordSep:      []rune{asciiLineFeed},
 	}
 
 	for _, f := range options {
@@ -450,7 +454,7 @@ func (r *Reader) init(cfg rCfg) {
 			return false
 		}
 
-		if size == 1 && (c == _asciiLineFeed) {
+		if size == 1 && (c == asciiLineFeed) {
 			if err != nil {
 				done = true
 				if !errors.Is(err, io.EOF) {
@@ -476,21 +480,12 @@ func (r *Reader) init(cfg rCfg) {
 		}
 
 		return func(c rune) bool {
-			return (c == _asciiCarriageReturn && nextCharIsLF())
+			return (c == asciiCarriageReturn && nextCharIsLF())
 		}
 	}
 
 	var isRecordSeparator func(rune) bool
 	if cfg.discoverRecordSeparator {
-		isNewlineRune := func(c rune) (isCarriageReturn bool, ok bool) {
-			switch c {
-			case _asciiCarriageReturn:
-				return true, true
-			case _asciiLineFeed, _asciiVerticalTab, _asciiFormFeed, _unicodeNextLine, _unicodeLineSeparator:
-				return false, true
-			}
-			return false, false
-		}
 		isRecordSeparator = func(c rune) bool {
 			isCarriageReturn, ok := isNewlineRune(c)
 			if !ok {
@@ -498,7 +493,7 @@ func (r *Reader) init(cfg rCfg) {
 			}
 
 			if isCarriageReturn && nextCharIsLF() {
-				recordSep = []rune{_asciiCarriageReturn, _asciiLineFeed}
+				recordSep = []rune{asciiCarriageReturn, asciiLineFeed}
 			} else {
 				recordSep = []rune{c}
 			}
@@ -514,7 +509,7 @@ func (r *Reader) init(cfg rCfg) {
 	prepareRow = func() bool {
 		for !done {
 			c, size, rErr := in.ReadRune()
-			if size == 1 && c == _unicodeReplacementChar {
+			if size == 1 && c == utf8ReplacementChar {
 				if err := in.UnreadRune(); err != nil {
 					panic(err)
 				}
@@ -713,11 +708,21 @@ func (r *Reader) init(cfg rCfg) {
 	}
 }
 
+func isNewlineRune(c rune) (isCarriageReturn bool, ok bool) {
+	switch c {
+	case asciiCarriageReturn:
+		return true, true
+	case asciiLineFeed, asciiVerticalTab, asciiFormFeed, utf8NextLine, utf8LineSeparator:
+		return false, true
+	}
+	return false, false
+}
+
 func runeBytes(r rune) []byte {
 	return []byte(string([]rune{r}))
 }
 
-func validUnicodeRune(r rune) bool {
+func validUtf8Rune(r rune) bool {
 	v, n := utf8.DecodeRuneInString(string([]rune{r}))
 	return n != 0 && r == v
 }
