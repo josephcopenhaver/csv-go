@@ -109,18 +109,25 @@ func (readerOpts) ErrorOnNoRows(b bool) ReaderOption {
 	}
 }
 
+// TrimHeaders causes the first row to be recognized as a header row and all values are returned with whitespace trimmed.
 func (readerOpts) TrimHeaders(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.trimHeaders = b
 	}
 }
 
+// ExpectHeaders causes the first row to be recognized as a header row.
+//
+// If the slice of header values does not match then the reader will error.
 func (readerOpts) ExpectHeaders(h []string) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.headers = h
 	}
 }
 
+// RemoveHeaderRow causes the first row to be recognized as a header row.
+//
+// The row will be skipped over by Scan() and will not be returned by Row().
 func (readerOpts) RemoveHeaderRow(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.removeHeaderRow = b
@@ -436,10 +443,18 @@ func (r *Reader) init(cfg rCfg) {
 		}
 	}
 
-	var headersVerified bool
-	if !(cfg.headers == nil && !cfg.removeHeaderRow && !cfg.trimHeaders) {
+	headersHandled := true
+	if cfg.headers != nil || cfg.removeHeaderRow || cfg.trimHeaders {
+		headersHandled = false
 		next := checkNumFields
 		checkNumFields = func() bool {
+
+			checkNumFields = next
+
+			if !checkNumFields() {
+				return false
+			}
+
 			if cfg.trimHeaders {
 				for i := range row {
 					row[i] = strings.TrimSpace(row[i])
@@ -452,16 +467,13 @@ func (r *Reader) init(cfg rCfg) {
 				return false
 			}
 
-			checkNumFields = next
-			if cfg.removeHeaderRow {
-				if !checkNumFields() {
-					return false
-				}
-				headersVerified = true
-				return prepareRow()
+			headersHandled = true
+
+			if !cfg.removeHeaderRow {
+				return true
 			}
 
-			return checkNumFields()
+			return prepareRow()
 		}
 	}
 
@@ -747,7 +759,7 @@ func (r *Reader) init(cfg rCfg) {
 			r.scan = next
 			v := r.scan()
 			if !v && r.err == nil {
-				if cfg.headers != nil && !headersVerified {
+				if !headersHandled {
 					r.err = newErrNoHeaderRow()
 				} else if cfg.errorOnNoRows {
 					r.err = newErrNoRows()
