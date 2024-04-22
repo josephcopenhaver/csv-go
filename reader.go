@@ -603,7 +603,11 @@ func (r *Reader) init(cfg rCfg) {
 						return false
 					case rStateInLineComment:
 						return false
-					case rStateEndOfQuotedField, rStateStartOfField, rStateInField:
+					case rStateStartOfField:
+						row = append(row, "")
+						// field = nil
+						return checkNumFields()
+					case rStateEndOfQuotedField, rStateInField:
 						row = append(row, string(field))
 						field = nil
 						return checkNumFields()
@@ -670,7 +674,7 @@ func (r *Reader) init(cfg rCfg) {
 			case rStateStartOfField:
 				switch c {
 				case cfg.fieldSeparator:
-					row = append(row, string(field))
+					row = append(row, "")
 					// field = nil
 					if fieldNumOverflow() {
 						return false
@@ -678,7 +682,7 @@ func (r *Reader) init(cfg rCfg) {
 					// state = rStateStartOfField
 				default:
 					if isRecordSeparator(c) {
-						row = append(row, string(field))
+						row = append(row, "")
 						// field = nil
 						state = rStateStartOfRecord
 						return checkNumFields()
