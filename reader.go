@@ -31,6 +31,7 @@ const (
 	rStateStartOfField
 	rStateInField
 	rStateInLineComment
+	rStateUnusedUpperBound
 )
 
 // TODO: errors should report line numbers and character index
@@ -175,6 +176,13 @@ func (readerOpts) Quote(r rune) ReaderOption {
 	}
 }
 
+func (readerOpts) Escape(r rune) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.escape = r
+		cfg.escapeSet = true
+	}
+}
+
 func (readerOpts) Comment(r rune) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.comment = r
@@ -257,6 +265,7 @@ type rCfg struct {
 	fieldSeparator          rune
 	quote                   rune
 	comment                 rune
+	escape                  rune
 	quoteSet                bool
 	removeHeaderRow         bool
 	discoverRecordSeparator bool
@@ -267,6 +276,7 @@ type rCfg struct {
 	recordSepStrSet         bool
 	trsEmitsRecord          bool
 	numFieldsSet            bool
+	escapeSet               bool
 	//
 	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check?
 }
@@ -314,32 +324,70 @@ func (cfg *rCfg) validate() error {
 			return errors.New("invalid record separator value")
 		}
 		if n == 1 {
+			if !validUtf8Rune(cfg.recordSep[0]) {
+				return errors.New("invalid record separator value")
+			}
 			if cfg.quoteSet && cfg.recordSep[0] == cfg.quote {
 				return errors.New("invalid record separator and quote combination")
 			}
 			if cfg.recordSep[0] == cfg.fieldSeparator {
 				return errors.New("invalid record separator and field separator combination")
 			}
-			if cfg.recordSep[0] == utf8ReplacementChar {
-				return errors.New("invalid record separator value: utf8 replacement character")
+			if cfg.commentSet && cfg.recordSep[0] == cfg.comment {
+				return errors.New("invalid record separator and quote combination")
 			}
 		}
-	}
-
-	if cfg.quoteSet && cfg.fieldSeparator == cfg.quote {
-		return errors.New("invalid field separator and quote combination")
 	}
 
 	if !validUtf8Rune(cfg.fieldSeparator) {
 		return errors.New("invalid field separator value")
 	}
 
-	if cfg.quoteSet && !validUtf8Rune(cfg.quote) {
-		return errors.New("invalid quote value")
+	if cfg.quoteSet {
+		if !validUtf8Rune(cfg.quote) {
+			return errors.New("invalid quote value")
+		}
+		// if escape would behave just like quote alone
+		// then just have quote set
+		if cfg.escapeSet && cfg.escape == cfg.quote {
+			cfg.escapeSet = false
+		}
+
+		if cfg.commentSet && cfg.quote == cfg.comment {
+			return errors.New("invalid comment and quote combination")
+		}
+
+		if cfg.fieldSeparator == cfg.quote {
+			return errors.New("invalid field separator and quote combination")
+		}
 	}
 
-	if cfg.commentSet && !validUtf8Rune(cfg.comment) {
-		return errors.New("invalid quote value")
+	if cfg.escapeSet {
+		if !validUtf8Rune(cfg.escape) {
+			return errors.New("invalid escape value")
+		}
+
+		if cfg.commentSet && cfg.escape == cfg.comment {
+			return errors.New("invalid comment and escape combination")
+		}
+
+		if cfg.fieldSeparator == cfg.escape {
+			return errors.New("invalid field separator and escape combination")
+		}
+
+		if !cfg.quoteSet {
+			return errors.New("escape can only be specified when quote is also specified")
+		}
+	}
+
+	if cfg.commentSet {
+		if !validUtf8Rune(cfg.comment) {
+			return errors.New("invalid escape value")
+		}
+
+		if cfg.fieldSeparator == cfg.escape {
+			return errors.New("invalid field separator and escape combination")
+		}
 	}
 
 	if cfg.numFieldsSet && cfg.numFields <= 0 {
@@ -494,14 +542,12 @@ func (r *Reader) init(cfg rCfg) {
 		return false
 	}
 
-	nextCharIsLF := func() bool {
+	nextRuneIsLF := func() bool {
 		c, size, err := in.ReadRune()
 		if size <= 0 {
-			if err != nil {
-				done = true
-				if !errors.Is(err, io.EOF) {
-					r.err = err
-				}
+			done = true
+			if !errors.Is(err, io.EOF) {
+				r.err = err
 			}
 			return false
 		}
@@ -523,6 +569,43 @@ func (r *Reader) init(cfg rCfg) {
 		return false
 	}
 
+	nextRuneIsEscapeOrQuote := func() int {
+		c, size, err := in.ReadRune()
+		if size <= 0 {
+			done = true
+			if !errors.Is(err, io.EOF) {
+				r.err = err
+			}
+			return -1
+		}
+
+		if c == cfg.escape {
+			if err != nil {
+				done = true
+				if !errors.Is(err, io.EOF) {
+					r.err = err
+				}
+			}
+			return 0
+		}
+
+		if c == cfg.quote {
+			if err != nil {
+				done = true
+				if !errors.Is(err, io.EOF) {
+					r.err = err
+				}
+			}
+			return 1
+		}
+
+		if err := in.UnreadRune(); err != nil {
+			panic(err)
+		}
+
+		return -1
+	}
+
 	isRecordSeparatorImplForRunes := func(sep []rune) func(rune) bool {
 		if len(sep) == 1 {
 			v := sep[0]
@@ -532,7 +615,7 @@ func (r *Reader) init(cfg rCfg) {
 		}
 
 		return func(c rune) bool {
-			return (c == asciiCarriageReturn && nextCharIsLF())
+			return (c == asciiCarriageReturn && nextRuneIsLF())
 		}
 	}
 
@@ -544,7 +627,7 @@ func (r *Reader) init(cfg rCfg) {
 				return false
 			}
 
-			if isCarriageReturn && nextCharIsLF() {
+			if isCarriageReturn && nextRuneIsLF() {
 				recordSep = []rune{asciiCarriageReturn, asciiLineFeed}
 			} else {
 				recordSep = []rune{c}
@@ -643,7 +726,11 @@ func (r *Reader) init(cfg rCfg) {
 						// state = rStateStartOfRecord
 						return checkNumFields()
 					}
-					if cfg.quoteSet && c == cfg.quote {
+					if cfg.escapeSet && c == cfg.escape {
+						done = true
+						r.err = errors.New("escape character found outside the context of a quoted field when expecting the start of a record")
+						return false
+					} else if cfg.quoteSet && c == cfg.quote {
 						state = rStateInQuotedField
 					} else if cfg.commentSet && c == cfg.comment {
 						state = rStateInLineComment
@@ -657,6 +744,24 @@ func (r *Reader) init(cfg rCfg) {
 				case cfg.quote:
 					state = rStateEndOfQuotedField
 				default:
+					if cfg.escapeSet && c == cfg.escape {
+						if iresp := nextRuneIsEscapeOrQuote(); iresp != -1 {
+							if iresp == 1 {
+								field = append(field, quoteBytes...)
+								continue
+							}
+							// otherwise append escape char
+						} else if done {
+							if r.err == nil {
+								r.err = errors.New("EOF reached when expecting an escaped character in a quoted field")
+							}
+							return false
+						} else {
+							done = true
+							r.err = errors.New("found escape character not followed by a quote or another escape character")
+							return false
+						}
+					}
 					field = append(field, runeBytes(c)...)
 					// state = rStateInQuotedField
 				}
@@ -670,6 +775,11 @@ func (r *Reader) init(cfg rCfg) {
 					}
 					state = rStateStartOfField
 				case cfg.quote:
+					if cfg.escapeSet {
+						done = true
+						r.err = errors.New("with escape character enabled: found quote character when expecting field separator or record separator at end of quoted field")
+						return false
+					}
 					field = append(field, quoteBytes...)
 					state = rStateInQuotedField
 				default:
@@ -699,7 +809,11 @@ func (r *Reader) init(cfg rCfg) {
 						state = rStateStartOfRecord
 						return checkNumFields()
 					}
-					if cfg.quoteSet && c == cfg.quote {
+					if cfg.escapeSet && c == cfg.escape {
+						done = true
+						r.err = errors.New("escape character found outside the context of a quoted field when expecting the start of a field")
+						return false
+					} else if cfg.quoteSet && c == cfg.quote {
 						state = rStateInQuotedField
 					} else {
 						field = append(field, runeBytes(c)...)
@@ -721,6 +835,11 @@ func (r *Reader) init(cfg rCfg) {
 						field = nil
 						state = rStateStartOfRecord
 						return checkNumFields()
+					}
+					if cfg.escapeSet && cfg.escape == c {
+						done = true
+						r.err = errors.New("escape character found outside the context of a quoted field when processing a field")
+						return false
 					}
 					field = append(field, runeBytes(c)...)
 					// state = rStateInField
@@ -785,6 +904,9 @@ func runeBytes(r rune) []byte {
 }
 
 func validUtf8Rune(r rune) bool {
+	if r == utf8ReplacementChar {
+		return false
+	}
 	v, n := utf8.DecodeRuneInString(string([]rune{r}))
 	return n != 0 && r == v
 }
