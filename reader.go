@@ -3,6 +3,7 @@ package csv
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"slices"
 	"strings"
@@ -34,58 +35,104 @@ const (
 	rStateUnusedUpperBound
 )
 
-// TODO: errors should report line numbers and character index
+var (
+	ErrUnexpectedHeaderRowContents   = errors.New("header row values do not match expectations")
+	ErrBadRecordSeparator            = errors.New("record separator can only be one rune long or \"\r\n\"")
+	ErrIncompleteQuotedField         = fmt.Errorf("incomplete quoted field: %w", UnexpectedEOFError{})
+	ErrUnexpectedEndOfEscapeSequence = fmt.Errorf("expecting an escaped character in a quoted field: %w", UnexpectedEOFError{})
+	ErrBadEscapeSequence             = errors.New("found escape character not followed by a quote or another escape character")
+	ErrBadEscapeAtStartOfRecord      = errors.New("escape character found outside the context of a quoted field when expecting the start of a record")
+	ErrBadEscapeAtStartOfField       = errors.New("escape character found outside the context of a quoted field when expecting the start of a field")
+	ErrBadEscapeInUnquotedField      = errors.New("escape character found outside the context of a quoted field when processing an unquoted field")
+	ErrInvalidQuotedFieldEnding      = errors.New("unexpected character found after end of quoted field") // expecting field separator, record separator, quote char, or end of file if field count matches expectations
+	ErrNoHeaderRow                   = fmt.Errorf("no header row: %w", UnexpectedEOFError{})
+	ErrNoRows                        = fmt.Errorf("no rows: %w", UnexpectedEOFError{})
+	// config errors
+	ErrNilReader = errors.New("nil reader")
+)
 
-var ErrBadRecordSeparator = errors.New("record separator can only be one rune long or \"\r\n\"")
+type UnexpectedEOFError struct{}
 
-type ErrNoHeaderRow struct{}
-
-func (e ErrNoHeaderRow) Error() string {
-	return "no header row"
+func (e UnexpectedEOFError) Error() string {
+	return io.ErrUnexpectedEOF.Error()
 }
 
-func newErrNoHeaderRow() ErrNoHeaderRow {
-	return ErrNoHeaderRow{}
+type posTracedErr struct {
+	err                                error
+	errType                            string
+	byteIndex, recordIndex, fieldIndex uint
 }
 
-type ErrNoRows struct{}
-
-func (e ErrNoRows) Error() string {
-	return "no rows"
+func (e posTracedErr) Error() string {
+	return fmt.Sprintf("%s error at byte %d, record %d, field %d: %s", e.errType, e.byteIndex+1, e.recordIndex+1, e.fieldIndex+1, e.err.Error())
 }
 
-func newErrNoRows() ErrNoRows {
-	return ErrNoRows{}
+func (e posTracedErr) Unwrap() error {
+	return e.err
 }
 
-type ErrFieldCountMismatch struct{}
+type IOError struct {
+	posTracedErr
+}
+
+func newIOError(byteIndex, recordIndex, fieldIndex uint, err error) IOError {
+	return IOError{posTracedErr{
+		errType:     "io",
+		err:         err,
+		byteIndex:   byteIndex,
+		recordIndex: recordIndex,
+		fieldIndex:  fieldIndex,
+	}}
+}
+
+type ParsingError struct {
+	posTracedErr
+}
+
+func newParsingError(byteIndex, recordIndex, fieldIndex uint, err error) ParsingError {
+	return ParsingError{posTracedErr{
+		errType:     "parsing",
+		err:         err,
+		byteIndex:   byteIndex,
+		recordIndex: recordIndex,
+		fieldIndex:  fieldIndex,
+	}}
+}
+
+type ConfigurationError struct {
+	err error
+}
+
+func (e ConfigurationError) Error() string {
+	return e.err.Error()
+}
+
+func (e ConfigurationError) Unwrap() error {
+	return e.err
+}
+
+type ErrFieldCountMismatch struct {
+	exp, act int
+}
 
 func (e ErrFieldCountMismatch) Error() string {
-	return "field counts do not match between rows/config"
+	return fmt.Sprintf("expected %d fields but found %d instead", e.exp, e.act)
 }
 
-func newErrFieldCountMismatch() error {
-	return ErrFieldCountMismatch{}
+func fieldCountMismatchErr(exp, act int) ErrFieldCountMismatch {
+	return ErrFieldCountMismatch{exp, act}
 }
 
-type ErrTooManyFields struct{}
+type ErrTooManyFields struct {
+	exp int
+}
 
 func (e ErrTooManyFields) Error() string {
-	return "too many fields"
+	return fmt.Sprintf("more than %d fields found in record", e.exp)
 }
 
-func newErrTooManyFields() error {
-	return ErrTooManyFields{}
-}
-
-type ErrInvalidQuotedFieldEnding struct{}
-
-func (e ErrInvalidQuotedFieldEnding) Error() string {
-	return "invalid char when expecting field separator, record separator, quote char, or end of file"
-}
-
-func newErrInvalidQuotedFieldEnding() error {
-	return ErrInvalidQuotedFieldEnding{}
+func tooManyFieldsErr(exp int) ErrTooManyFields {
+	return ErrTooManyFields{exp}
 }
 
 type Reader struct {
@@ -134,6 +181,18 @@ func (readerOpts) RemoveHeaderRow(b bool) ReaderOption {
 		cfg.removeHeaderRow = b
 	}
 }
+
+// func (readerOpts) RemoveByteOrderMarker(b bool) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.removeByteOrderMarker = b
+// 	}
+// }
+
+// func (readerOpts) ErrOnNoByteOrderMarker(b bool) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.errOnNoByteOrderMarker = b
+// 	}
+// }
 
 // // MaxNumFields does nothing at the moment except cause a panic
 // func (readerOpts) MaxNumFields(n int) ReaderOption {
@@ -206,7 +265,7 @@ func (readerOpts) NumFields(n int) ReaderOption {
 //
 // Feels like this should probably be an error explicitly returned that the calling layers can handle
 // as they choose. Perhaps State() should be exposed as well as the relevant terminal state values?
-// But that feels like exposing plumbing rather than offer porcelain.
+// But that feels like exposing plumbing rather than offering porcelain.
 
 // TerminalRecordSeparatorEmitsRecord only exists to acknowledge an edge case
 // when processing csv documents that contain one column. If the file contents end
@@ -277,6 +336,8 @@ type rCfg struct {
 	trsEmitsRecord          bool
 	numFieldsSet            bool
 	escapeSet               bool
+	// removeByteOrderMarker   bool
+	// errOnNoByteOrderMarker  bool
 	//
 	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check?
 }
@@ -284,7 +345,7 @@ type rCfg struct {
 func (cfg *rCfg) validate() error {
 
 	if cfg.reader == nil {
-		return errors.New("nil reader")
+		return ErrNilReader
 	}
 
 	if cfg.headers != nil && len(cfg.headers) == 0 {
@@ -414,7 +475,7 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, err
+		return nil, ConfigurationError{err}
 	}
 
 	cr := &Reader{}
@@ -448,6 +509,16 @@ func (r *Reader) init(cfg rCfg) {
 
 	quoteBytes := runeBytes(cfg.quote)
 
+	var recordIndex, fieldIndex, byteIndex uint
+
+	parsingErr := func(err error) ParsingError {
+		return newParsingError(byteIndex, recordIndex, fieldIndex, err)
+	}
+
+	ioErr := func(err error) IOError {
+		return newIOError(byteIndex, recordIndex, fieldIndex, err)
+	}
+
 	var done bool
 	var row []string
 	if cfg.borrowRow {
@@ -479,7 +550,7 @@ func (r *Reader) init(cfg rCfg) {
 		}
 
 		done = true
-		r.err = newErrFieldCountMismatch()
+		r.err = parsingErr(fieldCountMismatchErr(numFields, len(row)))
 		return false
 	}
 	if numFields == -1 {
@@ -511,7 +582,7 @@ func (r *Reader) init(cfg rCfg) {
 
 			if cfg.headers != nil && !slices.Equal(cfg.headers, row) {
 				done = true
-				r.err = errors.New("header row does not match expectations")
+				r.err = parsingErr(ErrUnexpectedHeaderRowContents)
 				return false
 			}
 
@@ -536,7 +607,7 @@ func (r *Reader) init(cfg rCfg) {
 	fieldNumOverflow := func() bool {
 		if len(row) == numFields {
 			done = true
-			r.err = newErrTooManyFields() // TODO: cleanup
+			r.err = parsingErr(tooManyFieldsErr(numFields))
 			return true
 		}
 		return false
@@ -547,16 +618,19 @@ func (r *Reader) init(cfg rCfg) {
 		if size <= 0 {
 			done = true
 			if !errors.Is(err, io.EOF) {
-				r.err = err
+				r.err = ioErr(err)
 			}
 			return false
 		}
 
 		if size == 1 && (c == asciiLineFeed) {
+			// advance the position indicator
+			byteIndex += uint(size)
+
 			if err != nil {
 				done = true
 				if !errors.Is(err, io.EOF) {
-					r.err = err
+					r.err = ioErr(err)
 				}
 			}
 			return true
@@ -574,26 +648,32 @@ func (r *Reader) init(cfg rCfg) {
 		if size <= 0 {
 			done = true
 			if !errors.Is(err, io.EOF) {
-				r.err = err
+				r.err = ioErr(err)
 			}
 			return -1
 		}
 
 		if c == cfg.escape {
+			// advance the position indicator
+			byteIndex += uint(size)
+
 			if err != nil {
 				done = true
 				if !errors.Is(err, io.EOF) {
-					r.err = err
+					r.err = ioErr(err)
 				}
 			}
 			return 0
 		}
 
 		if c == cfg.quote {
+			// advance the position indicator
+			byteIndex += uint(size)
+
 			if err != nil {
 				done = true
 				if !errors.Is(err, io.EOF) {
-					r.err = err
+					r.err = ioErr(err)
 				}
 			}
 			return 1
@@ -644,6 +724,10 @@ func (r *Reader) init(cfg rCfg) {
 	prepareRow = func() bool {
 		for !done {
 			c, size, rErr := in.ReadRune()
+
+			// advance the position indicator
+			byteIndex += uint(size)
+
 			if size == 1 && c == utf8ReplacementChar {
 				if err := in.UnreadRune(); err != nil {
 					panic(err)
@@ -654,6 +738,7 @@ func (r *Reader) init(cfg rCfg) {
 				} else {
 					b = v
 				}
+
 				switch state {
 				case rStateStartOfRecord, rStateStartOfField:
 					field = append(field, b)
@@ -667,12 +752,13 @@ func (r *Reader) init(cfg rCfg) {
 				case rStateEndOfQuotedField:
 					if rErr == nil {
 						done = true
-						r.err = newErrInvalidQuotedFieldEnding()
+						r.err = parsingErr(ErrInvalidQuotedFieldEnding)
 						return false
 					}
 				case rStateInLineComment:
 					// state = rStateInLineComment
 				}
+
 				if rErr == nil {
 					continue
 				}
@@ -680,7 +766,7 @@ func (r *Reader) init(cfg rCfg) {
 			if rErr != nil {
 				done = true
 				if !errors.Is(rErr, io.EOF) {
-					r.err = rErr
+					r.err = ioErr(rErr)
 					return false
 				}
 				if size == 0 {
@@ -688,12 +774,18 @@ func (r *Reader) init(cfg rCfg) {
 					// there is no new character to process
 					switch state {
 					case rStateInQuotedField:
-						r.err = errors.New("unexpected end of record") // TODO: extract into var or struct
+						r.err = parsingErr(ErrIncompleteQuotedField)
 						return false
 					case rStateStartOfRecord:
 						if cfg.trsEmitsRecord && numFields == 1 {
 							row = append(row, "")
-							return checkNumFields()
+							if !checkNumFields() {
+								if !errors.Is(r.err, UnexpectedEOFError{}) {
+									r.err = errors.Join(r.err, UnexpectedEOFError{})
+								}
+								return false
+							}
+							return true
 						}
 						return false
 					case rStateInLineComment:
@@ -701,11 +793,23 @@ func (r *Reader) init(cfg rCfg) {
 					case rStateStartOfField:
 						row = append(row, "")
 						// field = nil
-						return checkNumFields()
+						if !checkNumFields() {
+							if !errors.Is(r.err, UnexpectedEOFError{}) {
+								r.err = errors.Join(r.err, UnexpectedEOFError{})
+							}
+							return false
+						}
+						return true
 					case rStateEndOfQuotedField, rStateInField:
 						row = append(row, string(field))
 						field = nil
-						return checkNumFields()
+						if !checkNumFields() {
+							if !errors.Is(r.err, UnexpectedEOFError{}) {
+								r.err = errors.Join(r.err, UnexpectedEOFError{})
+							}
+							return false
+						}
+						return true
 					}
 				}
 				// right here in the code is the only place where the runtime could loop back around where done = true and the last character
@@ -719,16 +823,22 @@ func (r *Reader) init(cfg rCfg) {
 					row = append(row, "")
 					// field = nil
 					state = rStateStartOfField
+					fieldIndex++
 				default:
 					if isRecordSeparator(c) {
 						row = append(row, "")
 						// field = nil
 						// state = rStateStartOfRecord
-						return checkNumFields()
+						if checkNumFields() {
+							fieldIndex = 0
+							recordIndex++
+							return true
+						}
+						return false
 					}
 					if cfg.escapeSet && c == cfg.escape {
 						done = true
-						r.err = errors.New("escape character found outside the context of a quoted field when expecting the start of a record")
+						r.err = parsingErr(ErrBadEscapeAtStartOfRecord)
 						return false
 					} else if cfg.quoteSet && c == cfg.quote {
 						state = rStateInQuotedField
@@ -753,12 +863,12 @@ func (r *Reader) init(cfg rCfg) {
 							// otherwise append escape char
 						} else if done {
 							if r.err == nil {
-								r.err = errors.New("EOF reached when expecting an escaped character in a quoted field")
+								r.err = parsingErr(ErrUnexpectedEndOfEscapeSequence)
 							}
 							return false
 						} else {
 							done = true
-							r.err = errors.New("found escape character not followed by a quote or another escape character")
+							r.err = parsingErr(ErrBadEscapeSequence)
 							return false
 						}
 					}
@@ -774,10 +884,11 @@ func (r *Reader) init(cfg rCfg) {
 						return false
 					}
 					state = rStateStartOfField
+					fieldIndex++
 				case cfg.quote:
 					if cfg.escapeSet {
 						done = true
-						r.err = errors.New("with escape character enabled: found quote character when expecting field separator or record separator at end of quoted field")
+						r.err = parsingErr(ErrInvalidQuotedFieldEnding)
 						return false
 					}
 					field = append(field, quoteBytes...)
@@ -787,10 +898,15 @@ func (r *Reader) init(cfg rCfg) {
 						row = append(row, string(field))
 						field = nil
 						state = rStateStartOfRecord
-						return checkNumFields()
+						if checkNumFields() {
+							fieldIndex = 0
+							recordIndex++
+							return true
+						}
+						return false
 					}
 					done = true
-					r.err = newErrInvalidQuotedFieldEnding()
+					r.err = parsingErr(ErrInvalidQuotedFieldEnding)
 					return false
 				}
 			case rStateStartOfField:
@@ -802,16 +918,22 @@ func (r *Reader) init(cfg rCfg) {
 						return false
 					}
 					// state = rStateStartOfField
+					fieldIndex++
 				default:
 					if isRecordSeparator(c) {
 						row = append(row, "")
 						// field = nil
 						state = rStateStartOfRecord
-						return checkNumFields()
+						if checkNumFields() {
+							fieldIndex = 0
+							recordIndex++
+							return true
+						}
+						return false
 					}
 					if cfg.escapeSet && c == cfg.escape {
 						done = true
-						r.err = errors.New("escape character found outside the context of a quoted field when expecting the start of a field")
+						r.err = parsingErr(ErrBadEscapeAtStartOfField)
 						return false
 					} else if cfg.quoteSet && c == cfg.quote {
 						state = rStateInQuotedField
@@ -829,16 +951,22 @@ func (r *Reader) init(cfg rCfg) {
 						return false
 					}
 					state = rStateStartOfField
+					fieldIndex++
 				default:
 					if isRecordSeparator(c) {
 						row = append(row, string(field))
 						field = nil
 						state = rStateStartOfRecord
-						return checkNumFields()
+						if checkNumFields() {
+							fieldIndex = 0
+							recordIndex++
+							return true
+						}
+						return false
 					}
 					if cfg.escapeSet && cfg.escape == c {
 						done = true
-						r.err = errors.New("escape character found outside the context of a quoted field when processing a field")
+						r.err = parsingErr(ErrBadEscapeInUnquotedField)
 						return false
 					}
 					field = append(field, runeBytes(c)...)
@@ -847,6 +975,7 @@ func (r *Reader) init(cfg rCfg) {
 			case rStateInLineComment:
 				if isRecordSeparator(c) {
 					state = rStateStartOfRecord
+					// recordIndex++ // not valid in this case because the previous state was not a record
 					return prepareRow()
 				}
 			}
@@ -879,9 +1008,9 @@ func (r *Reader) init(cfg rCfg) {
 			v := r.scan()
 			if !v && r.err == nil {
 				if !headersHandled {
-					r.err = newErrNoHeaderRow()
+					r.err = parsingErr(ErrNoHeaderRow)
 				} else if cfg.errorOnNoRows {
-					r.err = newErrNoRows()
+					r.err = parsingErr(ErrNoRows)
 				}
 			}
 			return v
