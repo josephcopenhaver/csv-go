@@ -37,6 +37,17 @@ const (
 	rStateUnusedUpperBound
 )
 
+type posErrType uint8
+
+const (
+	posErrTypeIO posErrType = iota + 1
+	posErrTypeParsing
+)
+
+func (et posErrType) String() string {
+	return []string{"io", "parsing"}[et-1]
+}
+
 var (
 	ErrUnexpectedHeaderRowContents   = errors.New("header row values do not match expectations")
 	ErrBadRecordSeparator            = errors.New("record separator can only be one rune long or \"\r\n\"")
@@ -61,8 +72,8 @@ func (e UnexpectedEOFError) Error() string {
 
 type posTracedErr struct {
 	err                                error
-	errType                            string
 	byteIndex, recordIndex, fieldIndex uint
+	errType                            posErrType
 }
 
 func (e posTracedErr) Error() string {
@@ -79,7 +90,7 @@ type IOError struct {
 
 func newIOError(byteIndex, recordIndex, fieldIndex uint, err error) IOError {
 	return IOError{posTracedErr{
-		errType:     "io",
+		errType:     posErrTypeIO,
 		err:         err,
 		byteIndex:   byteIndex,
 		recordIndex: recordIndex,
@@ -93,7 +104,7 @@ type ParsingError struct {
 
 func newParsingError(byteIndex, recordIndex, fieldIndex uint, err error) ParsingError {
 	return ParsingError{posTracedErr{
-		errType:     "parsing",
+		errType:     posErrTypeParsing,
 		err:         err,
 		byteIndex:   byteIndex,
 		recordIndex: recordIndex,
