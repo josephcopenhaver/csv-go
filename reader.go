@@ -1083,7 +1083,10 @@ func isNewlineRune(c rune) (isCarriageReturn bool, ok bool) {
 }
 
 func runeBytes(r rune) []byte {
-	return []byte(string([]rune{r}))
+	var buf [4]byte
+	b := buf[:]
+	n := utf8.EncodeRune(b, r)
+	return b[:n]
 }
 
 func validUtf8Rune(r rune) bool {
