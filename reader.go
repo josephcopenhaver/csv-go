@@ -521,6 +521,8 @@ func (r *Reader) init(cfg rCfg) {
 		return newIOError(byteIndex, recordIndex, fieldIndex, err)
 	}
 
+	numFields := cfg.numFields
+
 	var fieldStart int
 	var recordBuf bytes.Buffer
 
@@ -528,7 +530,7 @@ func (r *Reader) init(cfg rCfg) {
 	var fieldLengths []int
 	if cfg.borrowRow {
 		r.row = func() []string {
-			if fieldLengths == nil {
+			if fieldLengths == nil || len(fieldLengths) != numFields {
 				return nil
 			}
 
@@ -562,8 +564,6 @@ func (r *Reader) init(cfg rCfg) {
 	in := bufio.NewReader(cfg.reader)
 
 	state := rStateStartOfRecord
-
-	numFields := cfg.numFields
 
 	checkNumFields := func() bool {
 		if len(fieldLengths) == numFields {
