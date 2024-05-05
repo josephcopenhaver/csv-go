@@ -2,12 +2,14 @@ package csv
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"slices"
 	"strings"
 	"unicode/utf8"
+	"unsafe"
 )
 
 // TODO: add an option to strip a starting utf8/utf16 byte order marker
@@ -519,19 +521,41 @@ func (r *Reader) init(cfg rCfg) {
 		return newIOError(byteIndex, recordIndex, fieldIndex, err)
 	}
 
+	numFields := cfg.numFields
+
+	var fieldStart int
+	var recordBuf bytes.Buffer
+
 	var done bool
-	var row []string
+	var fieldLengths []int
 	if cfg.borrowRow {
 		r.row = func() []string {
-			n := len(row)
-			return row[:n:n]
+			if fieldLengths == nil || len(fieldLengths) != numFields {
+				return nil
+			}
+
+			row := make([]string, len(fieldLengths))
+			r.row = func() []string {
+				buf := recordBuf.Bytes()
+				p := 0
+				for i, s := range fieldLengths {
+					row[i] = unsafe.String(&buf[p], s)
+					p += s
+				}
+				return row
+			}
+			return r.row()
 		}
 	} else {
 		r.row = func() []string {
-			n := len(row)
-			c := make([]string, n)
-			copy(c, row)
-			return c
+			buf := recordBuf.Bytes()
+			p := 0
+			row := make([]string, len(fieldLengths))
+			for i, s := range fieldLengths {
+				row[i] = strings.Clone(unsafe.String(&buf[p], s))
+				p += s
+			}
+			return row
 		}
 	}
 
@@ -540,59 +564,22 @@ func (r *Reader) init(cfg rCfg) {
 	in := bufio.NewReader(cfg.reader)
 
 	state := rStateStartOfRecord
-	var field []byte
-
-	numFields := cfg.numFields
 
 	checkNumFields := func() bool {
-		if len(row) == numFields {
+		if len(fieldLengths) == numFields {
 			return true
 		}
 
 		done = true
-		r.err = parsingErr(fieldCountMismatchErr(numFields, len(row)))
+		r.err = parsingErr(fieldCountMismatchErr(numFields, len(fieldLengths)))
 		return false
 	}
 	if numFields == -1 {
 		next := checkNumFields
 		checkNumFields = func() bool {
-			numFields = len(row)
+			numFields = len(fieldLengths)
 			checkNumFields = next
 			return true
-		}
-	}
-
-	headersHandled := true
-	if cfg.headers != nil || cfg.removeHeaderRow || cfg.trimHeaders {
-		headersHandled = false
-		next := checkNumFields
-		checkNumFields = func() bool {
-
-			checkNumFields = next
-
-			if !checkNumFields() {
-				return false
-			}
-
-			if cfg.trimHeaders {
-				for i := range row {
-					row[i] = strings.TrimSpace(row[i])
-				}
-			}
-
-			if cfg.headers != nil && !slices.Equal(cfg.headers, row) {
-				done = true
-				r.err = parsingErr(ErrUnexpectedHeaderRowContents)
-				return false
-			}
-
-			headersHandled = true
-
-			if !cfg.removeHeaderRow {
-				return true
-			}
-
-			return prepareRow()
 		}
 	}
 
@@ -605,7 +592,7 @@ func (r *Reader) init(cfg rCfg) {
 	// okay to do if expected field count is greater than 1, field content overlapping with a record separator should be quoted)
 
 	fieldNumOverflow := func() bool {
-		if len(row) == numFields {
+		if len(fieldLengths) == numFields {
 			done = true
 			r.err = parsingErr(tooManyFieldsErr(numFields))
 			return true
@@ -741,13 +728,13 @@ func (r *Reader) init(cfg rCfg) {
 
 				switch state {
 				case rStateStartOfRecord, rStateStartOfField:
-					field = append(field, b)
+					recordBuf.WriteByte(b)
 					state = rStateInField
 				case rStateInField, rStateInQuotedField:
-					field = append(field, b)
+					recordBuf.WriteByte(b)
 					// state = rStateInField
 				// case rStateInQuotedField:
-				// 	field = append(field, b)
+				// 	recordBuf.WriteByte(b)
 				// 	// state = rStateInQuotedField
 				case rStateEndOfQuotedField:
 					if rErr == nil {
@@ -778,11 +765,10 @@ func (r *Reader) init(cfg rCfg) {
 						return false
 					case rStateStartOfRecord:
 						if cfg.trsEmitsRecord && numFields == 1 {
-							row = append(row, "")
+							fieldLengths = append(fieldLengths, 0)
+							// fieldStart = recordBuf.Len()
 							if !checkNumFields() {
-								if !errors.Is(r.err, UnexpectedEOFError{}) {
-									r.err = errors.Join(r.err, UnexpectedEOFError{})
-								}
+								r.err = errors.Join(r.err, UnexpectedEOFError{})
 								return false
 							}
 							return true
@@ -791,22 +777,21 @@ func (r *Reader) init(cfg rCfg) {
 					case rStateInLineComment:
 						return false
 					case rStateStartOfField:
-						row = append(row, "")
-						// field = nil
+						fieldLengths = append(fieldLengths, 0)
+						// fieldStart = recordBuf.Len()
 						if !checkNumFields() {
-							if !errors.Is(r.err, UnexpectedEOFError{}) {
-								r.err = errors.Join(r.err, UnexpectedEOFError{})
-							}
+							r.err = errors.Join(r.err, UnexpectedEOFError{})
 							return false
 						}
 						return true
 					case rStateEndOfQuotedField, rStateInField:
-						row = append(row, string(field))
-						field = nil
+						{
+							rbl := recordBuf.Len()
+							fieldLengths = append(fieldLengths, rbl-fieldStart)
+							fieldStart = rbl
+						}
 						if !checkNumFields() {
-							if !errors.Is(r.err, UnexpectedEOFError{}) {
-								r.err = errors.Join(r.err, UnexpectedEOFError{})
-							}
+							r.err = errors.Join(r.err, UnexpectedEOFError{})
 							return false
 						}
 						return true
@@ -820,14 +805,14 @@ func (r *Reader) init(cfg rCfg) {
 			case rStateStartOfRecord:
 				switch c {
 				case cfg.fieldSeparator:
-					row = append(row, "")
-					// field = nil
+					fieldLengths = append(fieldLengths, 0)
+					// fielStart = recordBuf.Len()
 					state = rStateStartOfField
 					fieldIndex++
 				default:
 					if isRecordSeparator(c) {
-						row = append(row, "")
-						// field = nil
+						fieldLengths = append(fieldLengths, 0)
+						// fieldStart = recordBuf.Len()
 						// state = rStateStartOfRecord
 						if checkNumFields() {
 							fieldIndex = 0
@@ -845,7 +830,7 @@ func (r *Reader) init(cfg rCfg) {
 					} else if cfg.commentSet && c == cfg.comment {
 						state = rStateInLineComment
 					} else {
-						field = append(field, runeBytes(c)...)
+						recordBuf.Write(runeBytes(c))
 						state = rStateInField
 					}
 				}
@@ -857,7 +842,7 @@ func (r *Reader) init(cfg rCfg) {
 					if cfg.escapeSet && c == cfg.escape {
 						if iresp := nextRuneIsEscapeOrQuote(); iresp != -1 {
 							if iresp == 1 {
-								field = append(field, quoteBytes...)
+								recordBuf.Write(quoteBytes)
 								continue
 							}
 							// otherwise append escape char
@@ -872,14 +857,17 @@ func (r *Reader) init(cfg rCfg) {
 							return false
 						}
 					}
-					field = append(field, runeBytes(c)...)
+					recordBuf.Write(runeBytes(c))
 					// state = rStateInQuotedField
 				}
 			case rStateEndOfQuotedField:
 				switch c {
 				case cfg.fieldSeparator:
-					row = append(row, string(field))
-					field = nil
+					{
+						rbl := recordBuf.Len()
+						fieldLengths = append(fieldLengths, rbl-fieldStart)
+						fieldStart = rbl
+					}
 					if fieldNumOverflow() {
 						return false
 					}
@@ -891,12 +879,15 @@ func (r *Reader) init(cfg rCfg) {
 						r.err = parsingErr(ErrInvalidQuotedFieldEnding)
 						return false
 					}
-					field = append(field, quoteBytes...)
+					recordBuf.Write(quoteBytes)
 					state = rStateInQuotedField
 				default:
 					if isRecordSeparator(c) {
-						row = append(row, string(field))
-						field = nil
+						{
+							rbl := recordBuf.Len()
+							fieldLengths = append(fieldLengths, rbl-fieldStart)
+							fieldStart = rbl
+						}
 						state = rStateStartOfRecord
 						if checkNumFields() {
 							fieldIndex = 0
@@ -912,8 +903,8 @@ func (r *Reader) init(cfg rCfg) {
 			case rStateStartOfField:
 				switch c {
 				case cfg.fieldSeparator:
-					row = append(row, "")
-					// field = nil
+					fieldLengths = append(fieldLengths, 0)
+					// fieldStart = recordBuf.Len()
 					if fieldNumOverflow() {
 						return false
 					}
@@ -921,8 +912,8 @@ func (r *Reader) init(cfg rCfg) {
 					fieldIndex++
 				default:
 					if isRecordSeparator(c) {
-						row = append(row, "")
-						// field = nil
+						fieldLengths = append(fieldLengths, 0)
+						// fieldStart = recordBuf.Len()
 						state = rStateStartOfRecord
 						if checkNumFields() {
 							fieldIndex = 0
@@ -938,15 +929,18 @@ func (r *Reader) init(cfg rCfg) {
 					} else if cfg.quoteSet && c == cfg.quote {
 						state = rStateInQuotedField
 					} else {
-						field = append(field, runeBytes(c)...)
+						recordBuf.Write(runeBytes(c))
 						state = rStateInField
 					}
 				}
 			case rStateInField:
 				switch c {
 				case cfg.fieldSeparator:
-					row = append(row, string(field))
-					field = nil
+					{
+						rbl := recordBuf.Len()
+						fieldLengths = append(fieldLengths, rbl-fieldStart)
+						fieldStart = rbl
+					}
 					if fieldNumOverflow() {
 						return false
 					}
@@ -954,8 +948,11 @@ func (r *Reader) init(cfg rCfg) {
 					fieldIndex++
 				default:
 					if isRecordSeparator(c) {
-						row = append(row, string(field))
-						field = nil
+						{
+							rbl := recordBuf.Len()
+							fieldLengths = append(fieldLengths, rbl-fieldStart)
+							fieldStart = rbl
+						}
 						state = rStateStartOfRecord
 						if checkNumFields() {
 							fieldIndex = 0
@@ -969,7 +966,7 @@ func (r *Reader) init(cfg rCfg) {
 						r.err = parsingErr(ErrBadEscapeInUnquotedField)
 						return false
 					}
-					field = append(field, runeBytes(c)...)
+					recordBuf.Write(runeBytes(c))
 					// state = rStateInField
 				}
 			case rStateInLineComment:
@@ -984,15 +981,72 @@ func (r *Reader) init(cfg rCfg) {
 		return checkNumFields()
 	}
 
+	resetRecordBuffer := func() {
+		fieldLengths = fieldLengths[:0]
+		fieldStart = 0
+		recordBuf.Reset()
+	}
+
 	// letting any valid utf8 end of line act as the record separator
 	r.scan = func() bool {
 		if done {
 			return false
 		}
 
-		row = row[:0]
+		resetRecordBuffer()
 
 		return prepareRow()
+	}
+
+	headersHandled := true
+	if cfg.headers != nil || cfg.removeHeaderRow || cfg.trimHeaders {
+		headersHandled = false
+		next := r.scan
+		r.scan = func() bool {
+			r.scan = next
+
+			if !r.scan() {
+				return false
+			}
+
+			headerBytes := slices.Clone(recordBuf.Bytes())
+			recordBuf.Reset()
+
+			var p int
+			matching := true
+			for i, s := range fieldLengths {
+				np := p + s
+				field := unsafe.String(&headerBytes[p], s)
+				p = np
+
+				if cfg.trimHeaders {
+					field = strings.TrimSpace(field)
+					fieldLengths[i] = len(field)
+				}
+
+				recordBuf.WriteString(field)
+
+				if matching && cfg.headers != nil && field != cfg.headers[i] {
+					matching = false
+				}
+			}
+
+			if !matching {
+				done = true
+				r.err = parsingErr(ErrUnexpectedHeaderRowContents)
+				return false
+			}
+
+			headersHandled = true
+
+			if !cfg.removeHeaderRow {
+				return true
+			}
+
+			resetRecordBuffer()
+
+			return prepareRow()
+		}
 	}
 
 	if cfg.headers == nil && !cfg.errorOnNoRows {
@@ -1029,7 +1083,10 @@ func isNewlineRune(c rune) (isCarriageReturn bool, ok bool) {
 }
 
 func runeBytes(r rune) []byte {
-	return []byte(string([]rune{r}))
+	var buf [4]byte
+	b := buf[:]
+	n := utf8.EncodeRune(b, r)
+	return b[:n]
 }
 
 func validUtf8Rune(r rune) bool {
