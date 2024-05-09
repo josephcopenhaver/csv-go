@@ -1104,6 +1104,6 @@ func validUtf8Rune(r rune) bool {
 	if r == utf8ReplacementChar {
 		return false
 	}
-	v, n := utf8.DecodeRuneInString(string([]rune{r}))
+	v, n := utf8.DecodeRuneInString(string(r))
 	return n != 0 && r == v
 }
