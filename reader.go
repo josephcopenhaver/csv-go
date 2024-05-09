@@ -20,7 +20,6 @@ const (
 	asciiLineFeed       = 0x0A
 	asciiVerticalTab    = 0x0B
 	asciiFormFeed       = 0x0C
-	utf8ReplacementChar = 0xFFFD
 	utf8NextLine        = 0x85
 	utf8LineSeparator   = 0x2028
 )
@@ -726,7 +725,7 @@ func (r *Reader) init(cfg rCfg) {
 			// advance the position indicator
 			byteIndex += uint(size)
 
-			if size == 1 && c == utf8ReplacementChar {
+			if size == 1 && c == utf8.RuneError {
 				if err := in.UnreadRune(); err != nil {
 					panic(err)
 				}
@@ -1101,7 +1100,7 @@ func runeBytes(r rune) []byte {
 }
 
 func validUtf8Rune(r rune) bool {
-	if r == utf8ReplacementChar {
+	if r == utf8.RuneError {
 		return false
 	}
 	v, n := utf8.DecodeRuneInString(string(r))
