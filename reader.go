@@ -1100,9 +1100,5 @@ func runeBytes(r rune) []byte {
 }
 
 func validUtf8Rune(r rune) bool {
-	if r == utf8.RuneError {
-		return false
-	}
-	v, n := utf8.DecodeRuneInString(string(r))
-	return n != 0 && r == v
+	return r != utf8.RuneError && utf8.ValidRune(utf8.RuneError)
 }
