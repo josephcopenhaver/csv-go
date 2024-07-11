@@ -593,8 +593,6 @@ func (r *Reader) init(cfg rCfg) {
 		}
 	}
 
-	recordSep := cfg.recordSep
-
 	// TODO: turn off allowing comments after first record/header line encountered?
 	// TODO: must handle zero columns case in some fashion
 	// TODO: how about ignoring empty newlines encountered before header or data rows?
@@ -705,17 +703,15 @@ func (r *Reader) init(cfg rCfg) {
 			}
 
 			if isCarriageReturn && nextRuneIsLF() {
-				recordSep = []rune{asciiCarriageReturn, asciiLineFeed}
+				isRecordSeparator = isRecordSeparatorImplForRunes([]rune{asciiCarriageReturn, asciiLineFeed})
 			} else {
-				recordSep = []rune{c}
+				isRecordSeparator = isRecordSeparatorImplForRunes([]rune{c})
 			}
-
-			isRecordSeparator = isRecordSeparatorImplForRunes(recordSep)
 
 			return true
 		}
 	} else {
-		isRecordSeparator = isRecordSeparatorImplForRunes(recordSep)
+		isRecordSeparator = isRecordSeparatorImplForRunes(cfg.recordSep)
 	}
 
 	prepareRow = func() bool {
