@@ -360,8 +360,15 @@ func (cfg *rCfg) validate() error {
 		return ErrNilReader
 	}
 
-	if cfg.headers != nil && len(cfg.headers) == 0 {
-		return errors.New("empty set of headers expected")
+	if cfg.headers != nil {
+		if len(cfg.headers) == 0 {
+			return errors.New("empty set of headers expected")
+		}
+		if !cfg.numFieldsSet {
+			cfg.numFields = len(cfg.headers)
+		} else if cfg.numFields != len(cfg.headers) {
+			return errors.New("explicitly specified NumFields does not match length of ExpectHeaders list")
+		}
 	}
 
 	if cfg.recordSepStrSet {
@@ -1005,7 +1012,8 @@ func (r *Reader) init(cfg rCfg) {
 	}
 
 	headersHandled := true
-	if cfg.headers != nil || cfg.removeHeaderRow || cfg.trimHeaders {
+	checkHeadersMatch := (cfg.headers != nil)
+	if checkHeadersMatch || cfg.removeHeaderRow || cfg.trimHeaders {
 		headersHandled = false
 		next := r.scan
 		r.scan = func() bool {
@@ -1015,32 +1023,47 @@ func (r *Reader) init(cfg rCfg) {
 				return false
 			}
 
-			headerBytes := slices.Clone(recordBuf.Bytes())
-			recordBuf.Reset()
+			if cfg.trimHeaders {
+				headerBytes := slices.Clone(recordBuf.Bytes())
+				recordBuf.Reset()
 
-			var p int
-			matching := true
-			for i, s := range fieldLengths {
-				np := p + s
-				field := unsafe.String(&headerBytes[p], s)
-				p = np
+				var p int
+				matching := checkHeadersMatch
+				for i, s := range fieldLengths {
+					np := p + s
+					field := unsafe.String(&headerBytes[p], s)
+					p = np
 
-				if cfg.trimHeaders {
 					field = strings.TrimSpace(field)
 					fieldLengths[i] = len(field)
+
+					recordBuf.WriteString(field)
+
+					if matching && field != cfg.headers[i] {
+						matching = false
+					}
 				}
 
-				recordBuf.WriteString(field)
-
-				if matching && cfg.headers != nil && field != cfg.headers[i] {
-					matching = false
+				if checkHeadersMatch && !matching {
+					done = true
+					r.err = parsingErr(ErrUnexpectedHeaderRowContents)
+					return false
 				}
-			}
+			} else if checkHeadersMatch {
+				headerBytes := recordBuf.Bytes()
 
-			if !matching {
-				done = true
-				r.err = parsingErr(ErrUnexpectedHeaderRowContents)
-				return false
+				var p int
+				for i, s := range fieldLengths {
+					np := p + s
+					field := unsafe.String(&headerBytes[p], s)
+					p = np
+
+					if field != cfg.headers[i] {
+						done = true
+						r.err = parsingErr(ErrUnexpectedHeaderRowContents)
+						return false
+					}
+				}
 			}
 
 			headersHandled = true
