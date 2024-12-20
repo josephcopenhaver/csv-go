@@ -1038,12 +1038,11 @@ func (r *Reader) init(cfg rCfg) {
 				var p int
 				matching := checkHeadersMatch
 				for i, s := range fieldLengths {
-					np := p + s
 					var field string
 					if s > 0 {
 						field = unsafe.String(&headerBytes[p], s)
 					}
-					p = np
+					p += s
 
 					field = strings.TrimSpace(field)
 					fieldLengths[i] = len(field)
@@ -1065,12 +1064,11 @@ func (r *Reader) init(cfg rCfg) {
 
 				var p int
 				for i, s := range fieldLengths {
-					np := p + s
 					var field string
 					if s > 0 {
 						field = unsafe.String(&headerBytes[p], s)
 					}
-					p = np
+					p += s
 
 					if field != cfg.headers[i] {
 						done = true
