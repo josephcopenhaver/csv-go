@@ -556,6 +556,10 @@ func (r *Reader) init(cfg rCfg) {
 				buf := recordBuf.Bytes()
 				p := 0
 				for i, s := range fieldLengths {
+					if s == 0 {
+						row[i] = ""
+						continue
+					}
 					row[i] = unsafe.String(&buf[p], s)
 					p += s
 				}
@@ -569,6 +573,10 @@ func (r *Reader) init(cfg rCfg) {
 			p := 0
 			row := make([]string, len(fieldLengths))
 			for i, s := range fieldLengths {
+				if s == 0 {
+					row[i] = ""
+					continue
+				}
 				row[i] = strings.Clone(unsafe.String(&buf[p], s))
 				p += s
 			}
@@ -1031,7 +1039,10 @@ func (r *Reader) init(cfg rCfg) {
 				matching := checkHeadersMatch
 				for i, s := range fieldLengths {
 					np := p + s
-					field := unsafe.String(&headerBytes[p], s)
+					var field string
+					if s > 0 {
+						field = unsafe.String(&headerBytes[p], s)
+					}
 					p = np
 
 					field = strings.TrimSpace(field)
@@ -1055,7 +1066,10 @@ func (r *Reader) init(cfg rCfg) {
 				var p int
 				for i, s := range fieldLengths {
 					np := p + s
-					field := unsafe.String(&headerBytes[p], s)
+					var field string
+					if s > 0 {
+						field = unsafe.String(&headerBytes[p], s)
+					}
 					p = np
 
 					if field != cfg.headers[i] {
