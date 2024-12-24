@@ -16,6 +16,12 @@ var tsImports string
 //go:embed prepare_row.go.tmpl
 var tsPrepareRow string
 
+//go:embed process_field.go.tmpl
+var tsProcessField string
+
+//go:embed escape_chars.go.tmpl
+var tsEscapeChars string
+
 func parse(s string) *template.Template {
 	t, err := template.New("").Parse(s)
 	if err != nil {
@@ -99,6 +105,41 @@ func main() {
 		render(t, []cfg{
 			{ClearMemoryAfterUse: false},
 			{ClearMemoryAfterUse: true},
+		})
+	}
+
+	// render processField strategies
+	{
+		t := parse(tsProcessField)
+
+		type cfg struct {
+			EscapeSet   bool
+			QuoteForced bool
+		}
+
+		render := renderer[cfg](&buf)
+
+		render(t, []cfg{
+			{EscapeSet: false, QuoteForced: false},
+			{EscapeSet: true, QuoteForced: false},
+			{EscapeSet: false, QuoteForced: true},
+			{EscapeSet: true, QuoteForced: true},
+		})
+	}
+
+	// render quoteRune and EscapeChars strategies
+	{
+		t := parse(tsEscapeChars)
+
+		type cfg struct {
+			EscapeEnabled bool
+		}
+
+		render := renderer[cfg](&buf)
+
+		render(t, []cfg{
+			{EscapeEnabled: false},
+			{EscapeEnabled: true},
 		})
 	}
 

@@ -65,7 +65,7 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 				}
 
 				v, err := csv.NewReader(opts...)
-				if tc.hasNewReaderErr || len(tc.newReaderErrIs) > 0 || len(tc.newReaderErrAs) > 0 || tc.newReaderErrStr != "" {
+				if tc.hasNewReaderErr || len(tc.newReaderErrIs) > 0 || len(tc.newReaderErrAs) > 0 || len(tc.newReaderErrIsNot) > 0 || len(tc.newReaderErrAsNot) > 0 || tc.newReaderErrStr != "" {
 					is.NotNil(t, err)
 					is.Nil(t, v)
 
@@ -87,17 +87,22 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 						is.False(errors.As(err, &v))
 					}
 
-					if tc.newReaderErrStr != "" {
+					if tc.newReaderErrStr != "" && err != nil {
 						is.Equal(tc.newReaderErrStr, err.Error(), tc.newReaderErrStrMsgAndArgs...)
 					}
 
 					if tc.afterTest != nil {
 						tc.afterTest(t)
 					}
+
 					return
-				} else {
-					is.Nil(err)
-					is.NotNil(v)
+				}
+
+				is.Nil(err)
+				is.NotNil(v)
+
+				if v == nil {
+					return
 				}
 
 				cr = v
@@ -133,7 +138,7 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 			numRows += 1
 
 			err := cr.Err()
-			if tc.hasIterErr || len(tc.iterErrIs) > 0 || len(tc.iterErrAs) > 0 || tc.iterErrStr != "" {
+			if tc.hasIterErr || len(tc.iterErrIs) > 0 || len(tc.iterErrIsNot) > 0 || len(tc.iterErrAs) > 0 || len(tc.iterErrAsNot) > 0 || tc.iterErrStr != "" {
 				is.NotNil(err)
 
 				for _, terr := range tc.iterErrIs {
