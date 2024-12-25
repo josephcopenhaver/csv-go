@@ -8,13 +8,14 @@ import (
 )
 
 type Writer struct {
-	buf                     []byte
-	numFields               int
-	writer                  io.Writer
-	err                     error
-	escapeQuote             string
-	escape, quote, fieldSep rune
-	recordSep               []rune
+	buf             []byte
+	numFields       int
+	writer          io.Writer
+	err             error
+	escapeQuote     string
+	escape          rune
+	quote, fieldSep rune
+	recordSep       []rune
 }
 
 type WriterOption func(*wCfg)
@@ -229,39 +230,198 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		numFields:   cfg.numFields,
 		writer:      cfg.writer,
 		escapeQuote: string([]rune{cfg.escape, cfg.quote}),
-		escape:      cfg.escape,
+		escape:      cfg.escape, // TODO: find out what to do with the escape value algorithmically or remove it
 		quote:       cfg.quote,
 		recordSep:   cfg.recordSep,
 		fieldSep:    cfg.fieldSeparator,
 	}, nil
 }
 
-func (w *Writer) newFieldWriter() func(string) {
-	var writeSep func()
-	writeSep = func() {
-		writeSep = func() {
-			w.buf = append(w.buf, byte(w.fieldSep))
-		}
-	}
+func (w *Writer) writeField(v string) {
 
-	return func(v string) {
-		writeSep()
+	hasQuote, hasSep := w.hasQuoteOrSep(v)
 
-		// TODO: perf optimize? linear scan once rather than 3x?
-		hasQuote := strings.ContainsRune(v, w.quote)
-		hasSep := (strings.Contains(v, string(w.recordSep)) || strings.Contains(v, string(w.fieldSep)))
-
-		if hasQuote {
-			v = strings.ReplaceAll(v, string(w.quote), w.escapeQuote)
-		} else if !hasSep {
-			w.buf = append(w.buf, []byte(v)...)
-			return
-		}
-
-		w.buf = append(w.buf, []byte(string(w.quote))...)
+	if hasQuote {
+		// TODO: ? Should the replace operation happen at the same time as the scan for quotes or separators?
+		v = strings.ReplaceAll(v, string(w.quote), w.escapeQuote)
+	} else if !hasSep {
 		w.buf = append(w.buf, []byte(v)...)
-		w.buf = append(w.buf, []byte(string(w.quote))...)
+		return
 	}
+
+	w.buf = append(w.buf, []byte(string(w.quote))...)
+	w.buf = append(w.buf, []byte(v)...)
+	w.buf = append(w.buf, []byte(string(w.quote))...)
+}
+
+func (w *Writer) hasQuoteOrSep(input string) (bool, bool) {
+	v := []byte(input)
+	var hasQuote, hasSep = false, false
+
+	i := 0
+	di := 0
+	var r rune
+
+	if len(w.recordSep) == 1 {
+		for {
+			r, di = utf8.DecodeRune(v[i:])
+			if di == 0 {
+				return hasQuote, hasSep
+			}
+			if di == 1 && r == utf8.RuneError {
+				i += di
+				continue
+			}
+
+			if r == w.quote {
+				// TODO: ensure no overlap possible between quote and sep values
+				hasQuote = true
+				break
+			}
+
+			if r == w.fieldSep {
+				hasSep = true
+				break
+			}
+
+			if r == w.recordSep[0] {
+				hasSep = true
+				break
+			}
+
+			i += di
+		}
+
+		if !hasQuote {
+			for {
+				r, di = utf8.DecodeRune(v[i:])
+				if di == 0 {
+					return hasQuote, hasSep
+				}
+				if di == 1 && r == utf8.RuneError {
+					i += di
+					continue
+				}
+
+				if r == w.quote {
+					hasQuote = true
+					break
+				}
+
+				i += di
+			}
+		} else if !hasSep {
+			for {
+				r, di = utf8.DecodeRune(v[i:])
+				if di == 0 {
+					return hasQuote, hasSep
+				}
+				if di == 1 && r == utf8.RuneError {
+					i += di
+					continue
+				}
+
+				if r == w.fieldSep {
+					hasSep = true
+					break
+				}
+
+				if r == w.recordSep[0] {
+					hasSep = true
+					break
+				}
+
+				i += di
+			}
+		}
+
+		return hasQuote, hasSep
+	}
+
+	var lastRune rune
+	var lastRuneSet bool
+
+	for {
+		r, di = utf8.DecodeRune(v[i:])
+		if di == 0 {
+			return hasQuote, hasSep
+		}
+		if di == 1 && r == utf8.RuneError {
+			i += di
+			lastRuneSet = false
+			continue
+		}
+
+		if r == w.quote {
+			// TODO: ensure no overlap possible between quote and sep values
+			hasQuote = true
+			break
+		}
+
+		if r == w.fieldSep {
+			hasSep = true
+			break
+		}
+
+		if lastRuneSet && lastRune == w.recordSep[0] && r == w.recordSep[1] {
+			hasSep = true
+			break
+		}
+
+		lastRuneSet = true
+		lastRune = r
+		i += di
+	}
+
+	if !hasQuote {
+		for {
+			r, di = utf8.DecodeRune(v[i:])
+			if di == 0 {
+				return hasQuote, hasSep
+			}
+			if di == 1 && r == utf8.RuneError {
+				i += di
+				continue
+			}
+
+			if r == w.quote {
+				hasQuote = true
+				break
+			}
+
+			i += di
+		}
+	} else if !hasSep {
+		lastRuneSet = false
+
+		for {
+			r, di = utf8.DecodeRune(v[i:])
+			if di == 0 {
+				return hasQuote, hasSep
+			}
+			if di == 1 && r == utf8.RuneError {
+				i += di
+				lastRuneSet = false
+				continue
+			}
+
+			if r == w.fieldSep {
+				hasSep = true
+				break
+			}
+
+			if lastRuneSet && lastRune == w.recordSep[0] && r == w.recordSep[1] {
+				hasSep = true
+				break
+			}
+
+			lastRuneSet = true
+			lastRune = r
+			i += di
+		}
+	}
+
+	return hasQuote, hasSep
 }
 
 func (w *Writer) WriteRow(row []string) (int, error) {
@@ -273,7 +433,7 @@ func (w *Writer) WriteRow(row []string) (int, error) {
 	}()
 
 	if len(row) == 0 {
-		panic("write to write a nil or empty row")
+		panic("tried to write a nil or empty row")
 	}
 
 	if w.numFields == -1 {
@@ -295,10 +455,14 @@ func (w *Writer) WriteRow(row []string) (int, error) {
 		w.buf = append(w.buf, []byte(string(w.quote))...)
 		w.buf = append(w.buf, []byte(string(w.quote))...)
 	} else {
-		writeField := w.newFieldWriter()
+		w.writeField(row[0])
 
-		for _, v := range row {
-			writeField(v)
+		for _, v := range row[1:] {
+
+			// write field separator
+			w.buf = append(w.buf, []byte(string(w.fieldSep))...)
+
+			w.writeField(v)
 		}
 	}
 
