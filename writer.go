@@ -26,10 +26,14 @@ type Writer struct {
 	// contents do not require escaping.
 	//
 	// to determine if w.fieldBuf or the original input slice should be used
-	// when serializing simply check the size of w.fieldBuf.
+	// when serializing simply check the size of w.fieldBuf. if it is has a
+	// length greater than zero then w.fieldBuf should be used
 	//
-	// if it is greater than zero in length then w.fieldBuf should be used
-	escapeQuotesInField func([]byte) (bool, error)
+	// A portion of the input slice may need to still be copied to the record buffer
+	// as well after calling this function. That slice starts at the returned index.
+	// which is only valid when quoting is required and w.fieldBuf has a length
+	// greater than zero
+	escapeQuotesInField func([]byte) (int, bool, error)
 	fieldBuf            []byte
 	recordBuf           []byte
 	escapeQuote         []byte
@@ -304,9 +308,20 @@ func (w *Writer) writeField(input string) error {
 		w.fieldBuf = w.fieldBuf[:0]
 	}()
 
+	// v here is immutable
+	//
+	// unsafe make look concerning and scary, and it can be,
+	// however in this case we're never writing to the slice
+	// created here which is stored within `v`
+	//
+	// since strings are immutable as well this is actually a safe
+	// usage of the unsafe package to avoid an allocation we're
+	// just going to read from and then throw away before this
+	// returns
 	v := unsafe.Slice(unsafe.StringData(input), len(input))
 
-	if needsQuoting, err := w.escapeQuotesInField(v); err != nil {
+	si, needsQuoting, err := w.escapeQuotesInField(v)
+	if err != nil {
 
 		return err
 	} else if !needsQuoting {
@@ -320,34 +335,33 @@ func (w *Writer) writeField(input string) error {
 
 	// w.fieldBuf might have a len greater than zero on this code path
 	// if it does then use it
-	var buf []byte
-	if len(w.fieldBuf) > 0 {
-		buf = w.fieldBuf
-	} else {
-		buf = v
-	}
 
 	w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
-	w.recordBuf = append(w.recordBuf, buf...)
+	if len(w.fieldBuf) > 0 {
+		w.recordBuf = append(w.recordBuf, w.fieldBuf...)
+		w.recordBuf = append(w.recordBuf, v[si:]...)
+	} else {
+		w.recordBuf = append(w.recordBuf, v...)
+	}
 	w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
 
 	return nil
 }
 
-func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) (bool, error) {
+func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) (int, bool, error) {
 	var si, i, di int
 	var r rune
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
 		if di == 0 {
-			return false, nil
+			return -1, false, nil
 		}
 		if di == 1 && r == utf8.RuneError {
 
 			// i += di
 			// continue
-			return false, fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
+			return -1, false, fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
 		}
 
 		if r == w.quote {
@@ -367,28 +381,29 @@ func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) (bool, error) 
 		}
 	}
 
-	if err := w.escapeQuotes(v[si:], i-si); err != nil {
-		return true, err
+	si2, err := w.escapeQuotes(v[si:], i-si)
+	if err != nil {
+		return -1, false, err
 	}
 
-	return true, nil
+	return si + si2, true, nil
 }
 
-func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) (bool, error) {
+func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) (int, bool, error) {
 	var si, i, di int
 	var r, prevRune rune
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
 		if di == 0 {
-			return false, nil
+			return -1, false, nil
 		}
 		if di == 1 && r == utf8.RuneError {
 			// lastRuneSet = false
 
 			// i += di
 			// continue
-			return false, fmt.Errorf("CRLF mode: %w", ErrNonUTF8InRecord)
+			return -1, false, fmt.Errorf("CRLF mode: %w", ErrNonUTF8InRecord)
 		}
 
 		if r == w.quote {
@@ -414,37 +429,29 @@ func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) (bool, error) {
 		prevRune = r
 	}
 
-	if err := w.escapeQuotes(v[si:], i-si); err != nil {
-		return true, err
+	si2, err := w.escapeQuotes(v[si:], i-si)
+	if err != nil {
+		return -1, false, err
 	}
 
-	return true, nil
+	return si + si2, true, nil
 }
 
-func (w *Writer) escapeQuotes(v []byte, i int) error {
+func (w *Writer) escapeQuotes(v []byte, i int) (int, error) {
 	var si, di int
 	var r rune
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
 		if di == 0 {
-			// TODO: note that this final append context could be managed in higher layers so
-			// the field buffer could be a bit more minimal
-			//
-			// would need to perf test that as it would just move the append up to the higher layers
-			// and likely cause slow-downs on certain input patterns that cause cpu cache misses.
-			if len(w.fieldBuf) > 0 {
-				w.fieldBuf = append(w.fieldBuf, v[si:i]...)
-			}
-
-			return nil
+			return si, nil
 		}
 
 		if di == 1 && r == utf8.RuneError {
 
 			// i += di
 			// continue
-			return ErrNonUTF8InRecord
+			return 0, ErrNonUTF8InRecord
 		}
 
 		if r != w.quote {
