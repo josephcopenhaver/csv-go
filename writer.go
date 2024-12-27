@@ -2,13 +2,28 @@ package csv
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"unicode/utf8"
 	"unsafe"
 )
 
+var (
+	ErrRowNilOrEmpty   = errors.New("row is nil or empty")
+	ErrNonUTF8InRecord = errors.New("non-utf8 characters present in record")
+)
+
 type Writer struct {
-	escapeQuotesInField func([]byte) bool
+	// escapeQuotesInField will scan the input byte slice
+	//
+	// if the slice contains a quote character then it is escaped
+	// and the writes occur to the w.fieldBuf slice.
+	//
+	// returns true if the contents of w.fieldBuf should be escaped.
+	//
+	// if it returns false then w.fieldBuf has not changed and input
+	// contents do not require escaping.
+	escapeQuotesInField func([]byte) (bool, error)
 	fieldBuf            []byte
 	recordBuf           []byte
 	escapeQuote         []byte
@@ -275,23 +290,26 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	return w, nil
 }
 
-func (w *Writer) writeField(input string) {
+func (w *Writer) writeField(input string) error {
 	if input == "" {
-		return
+		return nil
 	}
-
 	defer func() {
 		w.fieldBuf = w.fieldBuf[:0]
 	}()
 
 	v := unsafe.Slice(unsafe.StringData(input), len(input))
 
-	if needsQuoting := w.escapeQuotesInField(v); !needsQuoting {
+	if needsQuoting, err := w.escapeQuotesInField(v); err != nil {
+
+		return err
+	} else if !needsQuoting {
 		// w.fieldBuf is guaranteed to be empty on this code path
 		//
 		// use v instead
 		w.recordBuf = append(w.recordBuf, v...)
-		return
+
+		return nil
 	}
 
 	// w.fieldBuf is guaranteed to be populated and escaped properly for usage
@@ -300,22 +318,24 @@ func (w *Writer) writeField(input string) {
 	w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
 	w.recordBuf = append(w.recordBuf, w.fieldBuf...)
 	w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
+
+	return nil
 }
 
-func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) bool {
+func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) (bool, error) {
 	var si, i, di int
 	var r rune
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
 		if di == 0 {
-			return false
+			return false, nil
 		}
 		if di == 1 && r == utf8.RuneError {
 
 			// i += di
 			// continue
-			panic("non-CRLF mode: non-utf8 characters present in record")
+			return false, fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
 		}
 
 		if r == w.quote {
@@ -335,26 +355,28 @@ func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) bool {
 		}
 	}
 
-	w.escapeQuotes(v[si:], i-si)
+	if err := w.escapeQuotes(v[si:], i-si); err != nil {
+		return true, err
+	}
 
-	return true
+	return true, nil
 }
 
-func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) bool {
+func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) (bool, error) {
 	var si, i, di int
 	var r, prevRune rune
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
 		if di == 0 {
-			return false
+			return false, nil
 		}
 		if di == 1 && r == utf8.RuneError {
 			// lastRuneSet = false
 
 			// i += di
 			// continue
-			panic("CRLF mode: non-utf8 characters present in record")
+			return false, fmt.Errorf("CRLF mode: %w", ErrNonUTF8InRecord)
 		}
 
 		if r == w.quote {
@@ -380,12 +402,14 @@ func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) bool {
 		prevRune = r
 	}
 
-	w.escapeQuotes(v[si:], i-si)
+	if err := w.escapeQuotes(v[si:], i-si); err != nil {
+		return true, err
+	}
 
-	return true
+	return true, nil
 }
 
-func (w *Writer) escapeQuotes(v []byte, i int) {
+func (w *Writer) escapeQuotes(v []byte, i int) error {
 	var si, di int
 	var r rune
 
@@ -393,14 +417,15 @@ func (w *Writer) escapeQuotes(v []byte, i int) {
 		r, di = utf8.DecodeRune(v[i:])
 		if di == 0 {
 			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
-			return
+
+			return nil
 		}
 
 		if di == 1 && r == utf8.RuneError {
 
 			// i += di
 			// continue
-			panic("non-utf8 characters present in record")
+			return ErrNonUTF8InRecord
 		}
 
 		if r != w.quote {
@@ -426,7 +451,7 @@ func (w *Writer) WriteRow(row []string) (int, error) {
 	}()
 
 	if len(row) == 0 {
-		panic("tried to write a nil or empty row")
+		return 0, ErrRowNilOrEmpty
 	}
 
 	if w.numFields == -1 {
@@ -448,14 +473,18 @@ func (w *Writer) WriteRow(row []string) (int, error) {
 		w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
 		w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
 	} else {
-		w.writeField(row[0])
+		if err := w.writeField(row[0]); err != nil {
+			return 0, err
+		}
 
 		for _, v := range row[1:] {
 
 			// write field separator
 			w.recordBuf = append(w.recordBuf, []byte(string(w.fieldSep))...)
 
-			w.writeField(v)
+			if err := w.writeField(v); err != nil {
+				return 0, err
+			}
 		}
 	}
 
