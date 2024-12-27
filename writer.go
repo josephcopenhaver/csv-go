@@ -19,10 +19,16 @@ type Writer struct {
 	// if the slice contains a quote character then it is escaped
 	// and the writes occur to the w.fieldBuf slice.
 	//
-	// returns true if the contents of w.fieldBuf should be escaped.
+	// returns true if the contents of w.fieldBuf should be escaped
+	// or if the original input slice should be wrapped in quotes.
 	//
 	// if it returns false then w.fieldBuf has not changed and input
 	// contents do not require escaping.
+	//
+	// to determine if w.fieldBuf or the original input slice should be used
+	// when serializing simply check the size of w.fieldBuf.
+	//
+	// if it is greater than zero in length then w.fieldBuf should be used
 	escapeQuotesInField func([]byte) (bool, error)
 	fieldBuf            []byte
 	recordBuf           []byte
@@ -312,11 +318,17 @@ func (w *Writer) writeField(input string) error {
 		return nil
 	}
 
-	// w.fieldBuf is guaranteed to be populated and escaped properly for usage
-	// on this code path
+	// w.fieldBuf might have a len greater than zero on this code path
+	// if it does then use it
+	var buf []byte
+	if len(w.fieldBuf) > 0 {
+		buf = w.fieldBuf
+	} else {
+		buf = v
+	}
 
 	w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
-	w.recordBuf = append(w.recordBuf, w.fieldBuf...)
+	w.recordBuf = append(w.recordBuf, buf...)
 	w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
 
 	return nil
@@ -416,7 +428,14 @@ func (w *Writer) escapeQuotes(v []byte, i int) error {
 	for {
 		r, di = utf8.DecodeRune(v[i:])
 		if di == 0 {
-			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
+			// TODO: note that this final append context could be managed in higher layers so
+			// the field buffer could be a bit more minimal
+			//
+			// would need to perf test that as it would just move the append up to the higher layers
+			// and likely cause slow-downs on certain input patterns that cause cpu cache misses.
+			if len(w.fieldBuf) > 0 {
+				w.fieldBuf = append(w.fieldBuf, v[si:i]...)
+			}
 
 			return nil
 		}
