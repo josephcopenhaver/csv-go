@@ -259,9 +259,15 @@ func (w *Writer) writeField(input string) {
 	v := []byte(input)
 
 	if needsQuoting := w.escapeQuotesInField(v); !needsQuoting {
+		// w.fieldBuf is guaranteed to be empty on this code path
+		//
+		// use v instead
 		w.recordBuf = append(w.recordBuf, v...)
 		return
 	}
+
+	// w.fieldBuf is guaranteed to be populated and escaped properly for usage
+	// on this code path
 
 	w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
 	w.recordBuf = append(w.recordBuf, w.fieldBuf...)
@@ -269,7 +275,7 @@ func (w *Writer) writeField(input string) {
 }
 
 func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) bool {
-	var i, di int
+	var si, i, di int
 	var r rune
 
 	for {
@@ -290,24 +296,24 @@ func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) bool {
 			w.fieldBuf = append(w.fieldBuf, w.escapeQuote...)
 
 			i += di
+			si = i
 			break
 		}
 
 		i += di
 
 		if r == w.fieldSep || r == w.recordSep[0] {
-			w.fieldBuf = append(w.fieldBuf, v[:i]...)
 			break
 		}
 	}
 
-	w.escapeQuotes(v[i:])
+	w.escapeQuotes(v[si:], i-si)
 
 	return true
 }
 
 func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) bool {
-	var i, di int
+	var si, i, di int
 	var r rune
 
 	var lastRune rune
@@ -331,13 +337,13 @@ func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) bool {
 			w.fieldBuf = append(w.fieldBuf, w.escapeQuote...)
 
 			i += di
+			si = i
 			break
 		}
 
 		i += di
 
 		if r == w.fieldSep || (lastRuneSet && lastRune == w.recordSep[0] && r == w.recordSep[1]) {
-			w.fieldBuf = append(w.fieldBuf, v[:i]...)
 			break
 		}
 
@@ -345,31 +351,40 @@ func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) bool {
 		lastRuneSet = true
 	}
 
-	w.escapeQuotes(v[i:])
+	w.escapeQuotes(v[si:], i-si)
 
 	return true
 }
 
-func (w *Writer) escapeQuotes(v []byte) {
-	var wi, i, di int
+func (w *Writer) escapeQuotes(v []byte, i int) {
+	var si, di int
 	var r rune
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
 		if di == 0 {
-			w.fieldBuf = append(w.fieldBuf, v[wi:i]...)
+			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
 			return
 		}
-		if (di != 1 || r != utf8.RuneError) || r == w.quote {
-			w.fieldBuf = append(w.fieldBuf, v[wi:i]...)
-			w.fieldBuf = append(w.fieldBuf, w.escapeQuote...)
 
+		if di == 1 && r == utf8.RuneError {
+
+			// i += di
+			// continue
+			panic("non-utf8 characters present in record")
+		}
+
+		if r != w.quote {
 			i += di
-			wi = i
+
 			continue
 		}
 
+		w.fieldBuf = append(w.fieldBuf, v[si:i]...)
+		w.fieldBuf = append(w.fieldBuf, w.escapeQuote...)
+
 		i += di
+		si = i
 	}
 }
 
