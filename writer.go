@@ -11,6 +11,7 @@ type Writer struct {
 	fieldBuf            []byte
 	recordBuf           []byte
 	escapeQuote         []byte
+	recordSepBytes      []byte
 	numFields           int
 	writer              io.Writer
 	err                 error
@@ -232,14 +233,36 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		escape = cfg.escape
 	}
 
+	var escapeQuote, recordSepBytes []byte
+	{
+		n := utf8.RuneLen(escape) + utf8.RuneLen(cfg.quote) + utf8.RuneLen(cfg.recordSep[0])
+		if len(cfg.recordSep) == 2 {
+			n += utf8.RuneLen(cfg.recordSep[1])
+		}
+		buf := make([]byte, n)
+		n = utf8.EncodeRune(buf, escape)
+		n += utf8.EncodeRune(buf[n:], cfg.quote)
+		sn := n
+
+		escapeQuote = buf[:n]
+
+		n += utf8.EncodeRune(buf[n:], cfg.recordSep[0])
+		if len(cfg.recordSep) == 2 {
+			n += utf8.EncodeRune(buf[n:], cfg.recordSep[1])
+		}
+
+		recordSepBytes = buf[sn:n]
+	}
+
 	w := &Writer{
-		numFields:   cfg.numFields,
-		writer:      cfg.writer,
-		escapeQuote: []byte(string([]rune{escape, cfg.quote})),
-		escape:      cfg.escape, // TODO: find out what to do with the escape value algorithmically or remove it
-		quote:       cfg.quote,
-		recordSep:   cfg.recordSep,
-		fieldSep:    cfg.fieldSeparator,
+		numFields:      cfg.numFields,
+		writer:         cfg.writer,
+		escapeQuote:    escapeQuote,
+		recordSepBytes: recordSepBytes,
+		escape:         cfg.escape, // TODO: find out what to do with the escape value algorithmically or remove it
+		quote:          cfg.quote,
+		recordSep:      cfg.recordSep,
+		fieldSep:       cfg.fieldSeparator,
 	}
 
 	if len(w.recordSep) == 2 {
@@ -287,7 +310,7 @@ func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) bool {
 
 			// i += di
 			// continue
-			panic("non-utf8 characters present in record")
+			panic("non-CRLF mode: non-utf8 characters present in record")
 		}
 
 		if r == w.quote {
@@ -314,10 +337,7 @@ func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) bool {
 
 func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) bool {
 	var si, i, di int
-	var r rune
-
-	var lastRune rune
-	var lastRuneSet bool
+	var r, prevRune rune
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
@@ -329,7 +349,7 @@ func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) bool {
 
 			// i += di
 			// continue
-			panic("non-utf8 characters present in record")
+			panic("CRLF mode: non-utf8 characters present in record")
 		}
 
 		if r == w.quote {
@@ -343,12 +363,16 @@ func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) bool {
 
 		i += di
 
-		if r == w.fieldSep || (lastRuneSet && lastRune == w.recordSep[0] && r == w.recordSep[1]) {
+		if r == w.fieldSep {
 			break
 		}
 
-		lastRune = r
-		lastRuneSet = true
+		prevRuneIsSet := (i > di)
+		if prevRuneIsSet && prevRune == w.recordSep[0] && r == w.recordSep[1] {
+			break
+		}
+
+		prevRune = r
 	}
 
 	w.escapeQuotes(v[si:], i-si)
@@ -430,7 +454,7 @@ func (w *Writer) WriteRow(row []string) (int, error) {
 		}
 	}
 
-	w.recordBuf = append(w.recordBuf, []byte(string(w.recordSep))...)
+	w.recordBuf = append(w.recordBuf, w.recordSepBytes...)
 
 	n, err := w.writer.Write(w.recordBuf)
 	if err != nil {
