@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io"
 	"unicode/utf8"
+	"unsafe"
 )
 
 type Writer struct {
@@ -275,11 +276,15 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 }
 
 func (w *Writer) writeField(input string) {
+	if input == "" {
+		return
+	}
+
 	defer func() {
 		w.fieldBuf = w.fieldBuf[:0]
 	}()
 
-	v := []byte(input)
+	v := unsafe.Slice(unsafe.StringData(input), len(input))
 
 	if needsQuoting := w.escapeQuotesInField(v); !needsQuoting {
 		// w.fieldBuf is guaranteed to be empty on this code path
