@@ -1124,12 +1124,12 @@ func isNewlineRune(c rune) (isCarriageReturn bool, ok bool) {
 }
 
 func runeBytes(r rune) []byte {
-	var buf [4]byte
+	var buf [utf8.UTFMax]byte
 	b := buf[:]
 	n := utf8.EncodeRune(b, r)
 	return b[:n]
 }
 
 func validUtf8Rune(r rune) bool {
-	return r != utf8.RuneError && utf8.ValidRune(utf8.RuneError)
+	return r != utf8.RuneError && utf8.ValidRune(r)
 }
