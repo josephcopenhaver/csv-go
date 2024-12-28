@@ -37,7 +37,7 @@ type Writer struct {
 	fieldBuf            []byte
 	recordBuf           []byte
 	escapeQuote         [utf8.UTFMax * 2]byte
-	recordSepBytes      [utf8.UTFMax * 2]byte
+	recordSepBytes      [utf8.UTFMax]byte
 	numFields           int
 	writer              io.Writer
 	err                 error
@@ -57,13 +57,9 @@ func WriterOpts() writerOpts {
 	return writerOpts{}
 }
 
-func badRecordSeparator(cfg *wCfg) {
-	cfg.recordSepLen = -1
-}
-
 func (writerOpts) RecordSeparator(s string) WriterOption {
 	if len(s) == 0 {
-		return badRecordSeparator
+		return badRecordSeparatorConfig
 	}
 	// usage of unsafe here is actually safe because v is
 	// never modified and no parts of its contents exist
@@ -73,7 +69,7 @@ func (writerOpts) RecordSeparator(s string) WriterOption {
 
 	r1, n1 := utf8.DecodeRune(v)
 	if n1 == 1 && r1 == utf8.RuneError {
-		return badRecordSeparator
+		return badRecordSeparatorConfig
 	}
 	if n1 == len(v) {
 		return func(cfg *wCfg) {
@@ -84,7 +80,7 @@ func (writerOpts) RecordSeparator(s string) WriterOption {
 
 	r2, n2 := utf8.DecodeRune(v[n1:])
 	if n2 == 1 && r2 == utf8.RuneError {
-		return badRecordSeparator
+		return badRecordSeparatorConfig
 	}
 	if n1+n2 == len(v) {
 		return func(cfg *wCfg) {
@@ -94,7 +90,7 @@ func (writerOpts) RecordSeparator(s string) WriterOption {
 		}
 	}
 
-	return badRecordSeparator
+	return badRecordSeparatorConfig
 }
 
 func (writerOpts) FieldSeparator(v rune) WriterOption {
@@ -179,6 +175,10 @@ func (cfg *wCfg) validate() error {
 	// TODO: flush out further
 
 	if cfg.recordSepLen == -1 {
+		return ErrBadRecordSeparator
+	}
+
+	if cfg.recordSepLen == 2 && !(cfg.recordSep[0] == asciiCarriageReturn && cfg.recordSep[1] == asciiLineFeed) {
 		return ErrBadRecordSeparator
 	}
 
@@ -276,18 +276,17 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		escape = cfg.escape
 	}
 
-	var escapeQuote, recordSepBytes [utf8.UTFMax * 2]byte
+	var escapeQuote [utf8.UTFMax * 2]byte
+	var recordSepBytes [utf8.UTFMax]byte
 	var escapeQuoteByteLen, recordSepByteLen int8
 	{
-		dst := escapeQuote[:]
-		n := utf8.EncodeRune(dst, escape)
-		n += utf8.EncodeRune(dst[n:], cfg.quote)
+		n := utf8.EncodeRune(escapeQuote[:], escape)
+		n += utf8.EncodeRune(escapeQuote[n:], cfg.quote)
 		escapeQuoteByteLen = int8(n)
 
-		dst = recordSepBytes[:]
-		n = utf8.EncodeRune(dst, cfg.recordSep[0])
+		n = utf8.EncodeRune(recordSepBytes[:], cfg.recordSep[0])
 		if cfg.recordSepLen == 2 {
-			n += utf8.EncodeRune(dst[n:], cfg.recordSep[1])
+			n += utf8.EncodeRune(recordSepBytes[n:], cfg.recordSep[1])
 		}
 		recordSepByteLen = int8(n)
 	}
@@ -306,10 +305,10 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		fieldSep:           cfg.fieldSeparator,
 	}
 
-	if w.recordSepLen == 2 {
-		w.escapeQuotesInField = w.escapeQuotesInFieldForCRLFRecordSep
+	if w.recordSepLen == 2 || isNewlineRuneForWrite(w.recordSep[0]) {
+		w.escapeQuotesInField = w.escapeQuotesInFieldForNormalFieldSep
 	} else {
-		w.escapeQuotesInField = w.escapeQuotesInFieldForNonCRLFRecordSep
+		w.escapeQuotesInField = w.escapeQuotesInFieldForCustomFieldSep
 	}
 
 	return w, nil
@@ -363,7 +362,7 @@ func (w *Writer) writeField(input string) error {
 	return nil
 }
 
-func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) (int, bool, error) {
+func (w *Writer) escapeQuotesInFieldForCustomFieldSep(v []byte) (int, bool, error) {
 	var si, i, di int
 	var r rune
 
@@ -391,7 +390,7 @@ func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) (int, bool, er
 
 		i += di
 
-		if r == w.fieldSep || r == w.recordSep[0] {
+		if r == w.fieldSep || isNewlineRuneForWrite(r) || r == w.recordSep[0] {
 			break
 		}
 	}
@@ -404,9 +403,9 @@ func (w *Writer) escapeQuotesInFieldForNonCRLFRecordSep(v []byte) (int, bool, er
 	return si + si2, true, nil
 }
 
-func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) (int, bool, error) {
+func (w *Writer) escapeQuotesInFieldForNormalFieldSep(v []byte) (int, bool, error) {
 	var si, i, di int
-	var r, prevRune rune
+	var r rune
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
@@ -414,11 +413,10 @@ func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) (int, bool, error
 			return -1, false, nil
 		}
 		if di == 1 && r == utf8.RuneError {
-			// lastRuneSet = false
 
 			// i += di
 			// continue
-			return -1, false, fmt.Errorf("CRLF mode: %w", ErrNonUTF8InRecord)
+			return -1, false, fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
 		}
 
 		if r == w.quote {
@@ -432,16 +430,9 @@ func (w *Writer) escapeQuotesInFieldForCRLFRecordSep(v []byte) (int, bool, error
 
 		i += di
 
-		if r == w.fieldSep {
+		if r == w.fieldSep || isNewlineRuneForWrite(r) {
 			break
 		}
-
-		prevRuneIsSet := (i > di)
-		if prevRuneIsSet && prevRune == w.recordSep[0] && r == w.recordSep[1] {
-			break
-		}
-
-		prevRune = r
 	}
 
 	si2, err := w.escapeQuotes(v[si:], i-si)
@@ -538,4 +529,20 @@ func (w *Writer) WriteRow(row []string) (int, error) {
 	}
 
 	return n, nil
+}
+
+//
+// helpers
+//
+
+func badRecordSeparatorConfig(cfg *wCfg) {
+	cfg.recordSepLen = -1
+}
+
+func isNewlineRuneForWrite(c rune) bool {
+	switch c {
+	case asciiCarriageReturn, asciiLineFeed, asciiVerticalTab, asciiFormFeed, utf8NextLine, utf8LineSeparator:
+		return true
+	}
+	return false
 }
