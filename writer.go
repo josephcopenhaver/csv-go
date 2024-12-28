@@ -19,10 +19,10 @@ type Writer struct {
 	// if the slice contains a quote character then it is escaped
 	// and the writes occur to the w.fieldBuf slice.
 	//
-	// returns true if the contents of w.fieldBuf should be escaped
+	// returns a value greater than -1 if the contents of w.fieldBuf should be escaped
 	// or if the original input slice should be wrapped in quotes.
 	//
-	// if it returns false then w.fieldBuf has not changed and input
+	// if it returns -1 then w.fieldBuf has not changed and input
 	// contents do not require escaping.
 	//
 	// to determine if w.fieldBuf or the original input slice should be used
@@ -31,9 +31,7 @@ type Writer struct {
 	//
 	// A portion of the input slice may need to still be copied to the record buffer
 	// as well after calling this function. That slice starts at the returned index.
-	// which is only valid when quoting is required and w.fieldBuf has a length
-	// greater than zero
-	escapeQuotesInField func([]byte) (int, bool, error)
+	escapeQuotesInField func([]byte) (int, error)
 	fieldBuf            []byte
 	recordBuf           []byte
 	escapeQuote         [utf8.UTFMax * 2]byte
@@ -324,7 +322,7 @@ func (w *Writer) writeField(input string) error {
 
 	// v here is immutable
 	//
-	// unsafe make look concerning and scary, and it can be,
+	// unsafe may look concerning and scary, and it can be,
 	// however in this case we're never writing to the slice
 	// created here which is stored within `v`
 	//
@@ -334,11 +332,11 @@ func (w *Writer) writeField(input string) error {
 	// returns
 	v := unsafe.Slice(unsafe.StringData(input), len(input))
 
-	si, needsQuoting, err := w.escapeQuotesInField(v)
+	si, err := w.escapeQuotesInField(v)
 	if err != nil {
 
 		return err
-	} else if !needsQuoting {
+	} else if si == -1 {
 		// w.fieldBuf is guaranteed to be empty on this code path
 		//
 		// use v instead
@@ -362,20 +360,20 @@ func (w *Writer) writeField(input string) error {
 	return nil
 }
 
-func (w *Writer) escapeQuotesInFieldForCustomFieldSep(v []byte) (int, bool, error) {
+func (w *Writer) escapeQuotesInFieldForCustomFieldSep(v []byte) (int, error) {
 	var si, i, di int
 	var r rune
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
 		if di == 0 {
-			return -1, false, nil
+			return -1, nil
 		}
 		if di == 1 && r == utf8.RuneError {
 
 			// i += di
 			// continue
-			return -1, false, fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
+			return -1, fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
 		}
 
 		if r == w.quote {
@@ -397,26 +395,26 @@ func (w *Writer) escapeQuotesInFieldForCustomFieldSep(v []byte) (int, bool, erro
 
 	si2, err := w.escapeQuotes(v[si:], i-si)
 	if err != nil {
-		return -1, false, err
+		return -1, err
 	}
 
-	return si + si2, true, nil
+	return si + si2, nil
 }
 
-func (w *Writer) escapeQuotesInFieldForNormalFieldSep(v []byte) (int, bool, error) {
+func (w *Writer) escapeQuotesInFieldForNormalFieldSep(v []byte) (int, error) {
 	var si, i, di int
 	var r rune
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
 		if di == 0 {
-			return -1, false, nil
+			return -1, nil
 		}
 		if di == 1 && r == utf8.RuneError {
 
 			// i += di
 			// continue
-			return -1, false, fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
+			return -1, fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
 		}
 
 		if r == w.quote {
@@ -437,10 +435,10 @@ func (w *Writer) escapeQuotesInFieldForNormalFieldSep(v []byte) (int, bool, erro
 
 	si2, err := w.escapeQuotes(v[si:], i-si)
 	if err != nil {
-		return -1, false, err
+		return -1, err
 	}
 
-	return si + si2, true, nil
+	return si + si2, nil
 }
 
 func (w *Writer) escapeQuotes(v []byte, i int) (int, error) {
