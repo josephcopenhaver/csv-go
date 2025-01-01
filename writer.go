@@ -16,12 +16,12 @@ var (
 )
 
 type Writer struct {
-	// escapeQuotesInField will scan the input byte slice
+	// doubleQuotesInField will scan the input byte slice
 	//
-	// if the slice contains a quote character then it is escaped
+	// if the slice contains a quote character then it is doubled
 	// and the writes occur to the w.fieldBuf slice.
 	//
-	// returns a value greater than -1 if the contents of w.fieldBuf should be escaped
+	// returns a value greater than -1 if the contents of w.fieldBuf
 	// or if the original input slice should be wrapped in quotes.
 	//
 	// if it returns -1 then w.fieldBuf has not changed and input
@@ -33,19 +33,18 @@ type Writer struct {
 	//
 	// A portion of the input slice may need to still be copied to the record buffer
 	// as well after calling this function. That slice starts at the returned index.
-	escapeQuotesInField func([]byte) (int, error)
+	doubleQuotesInField func([]byte) (int, error)
 	fieldBuf            []byte
 	recordBuf           []byte
-	escapeQuote         [utf8.UTFMax * 2]byte
+	doubleQuote         [utf8.UTFMax * 2]byte
 	recordSepBytes      [utf8.UTFMax]byte
 	numFields           int
 	writer              io.Writer
 	err                 error
-	escape              rune
 	quote, fieldSep     rune
 	recordSep           [2]rune
 	recordSepLen        int8
-	escapeQuoteByteLen  int8
+	doubleQuoteByteLen  int8
 	recordSepByteLen    int8
 }
 
@@ -106,13 +105,6 @@ func (writerOpts) Quote(v rune) WriterOption {
 	}
 }
 
-func (writerOpts) Escape(v rune) WriterOption {
-	return func(cfg *wCfg) {
-		cfg.escape = v
-		cfg.escapeSet = true
-	}
-}
-
 func (writerOpts) Writer(v io.Writer) WriterOption {
 	return func(cfg *wCfg) {
 		cfg.writer = v
@@ -158,10 +150,8 @@ type wCfg struct {
 	numFields         int
 	fieldSeparator    rune
 	quote             rune
-	escape            rune
 	discoverNumFields bool
 	quoteSet          bool
-	escapeSet         bool
 	trimHeaders       bool
 	numFieldsSet      bool
 	recordSepLen      int8
@@ -215,32 +205,13 @@ func (cfg *wCfg) validate() error {
 		if !validUtf8Rune(cfg.quote) {
 			return errors.New("invalid quote value")
 		}
-		// if escape would behave just like quote alone
-		// then just have quote set
-		if cfg.escapeSet && cfg.escape == cfg.quote {
-			cfg.escapeSet = false
-		}
 
 		if cfg.fieldSeparator == cfg.quote {
 			return errors.New("invalid field separator and quote combination")
 		}
 	}
 
-	if cfg.escapeSet {
-		if !validUtf8Rune(cfg.escape) {
-			return errors.New("invalid escape value")
-		}
-
-		if cfg.fieldSeparator == cfg.escape {
-			return errors.New("invalid field separator and escape combination")
-		}
-
-		if !cfg.quoteSet {
-			return errors.New("escape can only be specified when quote is also specified")
-		}
-	}
-
-	if !cfg.quoteSet && !cfg.escapeSet {
+	if !cfg.quoteSet {
 		cfg.quote = '"'
 	}
 
@@ -271,18 +242,13 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		return nil, err
 	}
 
-	escape := cfg.quote
-	if cfg.escapeSet {
-		escape = cfg.escape
-	}
-
-	var escapeQuote [utf8.UTFMax * 2]byte
+	var doubleQuote [utf8.UTFMax * 2]byte
 	var recordSepBytes [utf8.UTFMax]byte
-	var escapeQuoteByteLen, recordSepByteLen int8
+	var doubleQuoteByteLen, recordSepByteLen int8
 	{
-		n := utf8.EncodeRune(escapeQuote[:], escape)
-		n += utf8.EncodeRune(escapeQuote[n:], cfg.quote)
-		escapeQuoteByteLen = int8(n)
+		n := utf8.EncodeRune(doubleQuote[:], cfg.quote)
+		n += utf8.EncodeRune(doubleQuote[n:], cfg.quote)
+		doubleQuoteByteLen = int8(n)
 
 		n = utf8.EncodeRune(recordSepBytes[:], cfg.recordSep[0])
 		if cfg.recordSepLen == 2 {
@@ -294,11 +260,10 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	w := &Writer{
 		numFields:          cfg.numFields,
 		writer:             cfg.writer,
-		escapeQuote:        escapeQuote,
-		escapeQuoteByteLen: escapeQuoteByteLen,
+		doubleQuote:        doubleQuote,
+		doubleQuoteByteLen: doubleQuoteByteLen,
 		recordSepBytes:     recordSepBytes,
 		recordSepByteLen:   recordSepByteLen,
-		escape:             cfg.escape, // TODO: find out what to do with the escape value algorithmically or remove it
 		quote:              cfg.quote,
 		recordSep:          cfg.recordSep,
 		recordSepLen:       cfg.recordSepLen,
@@ -306,9 +271,9 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	}
 
 	if w.recordSepLen == 2 || isNewlineRuneForWrite(w.recordSep[0]) {
-		w.escapeQuotesInField = w.escapeQuotesInFieldForNormalFieldSep
+		w.doubleQuotesInField = w.doubleQuotesInFieldForNormalFieldSep
 	} else {
-		w.escapeQuotesInField = w.escapeQuotesInFieldForCustomFieldSep
+		w.doubleQuotesInField = w.doubleQuotesInFieldForCustomFieldSep
 	}
 
 	return w, nil
@@ -334,7 +299,7 @@ func (w *Writer) writeField(input string) error {
 	// returns
 	v := unsafe.Slice(unsafe.StringData(input), len(input))
 
-	si, err := w.escapeQuotesInField(v)
+	si, err := w.doubleQuotesInField(v)
 	if err != nil {
 
 		return err
@@ -362,7 +327,7 @@ func (w *Writer) writeField(input string) error {
 	return nil
 }
 
-func (w *Writer) escapeQuotesInFieldForCustomFieldSep(v []byte) (int, error) {
+func (w *Writer) doubleQuotesInFieldForCustomFieldSep(v []byte) (int, error) {
 	var si, i, di int
 	var r rune
 
@@ -381,7 +346,7 @@ func (w *Writer) escapeQuotesInFieldForCustomFieldSep(v []byte) (int, error) {
 		if r == w.quote {
 			// TODO: ensure no overlap possible between quote and sep values
 			w.fieldBuf = append(w.fieldBuf, v[:i]...)
-			w.fieldBuf = append(w.fieldBuf, w.escapeQuote[:w.escapeQuoteByteLen]...)
+			w.fieldBuf = append(w.fieldBuf, w.doubleQuote[:w.doubleQuoteByteLen]...)
 
 			i += di
 			si = i
@@ -395,7 +360,7 @@ func (w *Writer) escapeQuotesInFieldForCustomFieldSep(v []byte) (int, error) {
 		}
 	}
 
-	si2, err := w.escapeQuotes(v[si:], i-si)
+	si2, err := w.doubleQuotes(v[si:], i-si)
 	if err != nil {
 		return -1, err
 	}
@@ -403,7 +368,7 @@ func (w *Writer) escapeQuotesInFieldForCustomFieldSep(v []byte) (int, error) {
 	return si + si2, nil
 }
 
-func (w *Writer) escapeQuotesInFieldForNormalFieldSep(v []byte) (int, error) {
+func (w *Writer) doubleQuotesInFieldForNormalFieldSep(v []byte) (int, error) {
 	var si, i, di int
 	var r rune
 
@@ -421,7 +386,7 @@ func (w *Writer) escapeQuotesInFieldForNormalFieldSep(v []byte) (int, error) {
 
 		if r == w.quote {
 			w.fieldBuf = append(w.fieldBuf, v[:i]...)
-			w.fieldBuf = append(w.fieldBuf, w.escapeQuote[:w.escapeQuoteByteLen]...)
+			w.fieldBuf = append(w.fieldBuf, w.doubleQuote[:w.doubleQuoteByteLen]...)
 
 			i += di
 			si = i
@@ -435,7 +400,7 @@ func (w *Writer) escapeQuotesInFieldForNormalFieldSep(v []byte) (int, error) {
 		}
 	}
 
-	si2, err := w.escapeQuotes(v[si:], i-si)
+	si2, err := w.doubleQuotes(v[si:], i-si)
 	if err != nil {
 		return -1, err
 	}
@@ -443,7 +408,7 @@ func (w *Writer) escapeQuotesInFieldForNormalFieldSep(v []byte) (int, error) {
 	return si + si2, nil
 }
 
-func (w *Writer) escapeQuotes(v []byte, i int) (int, error) {
+func (w *Writer) doubleQuotes(v []byte, i int) (int, error) {
 	var si, di int
 	var r rune
 
@@ -467,7 +432,7 @@ func (w *Writer) escapeQuotes(v []byte, i int) (int, error) {
 		}
 
 		w.fieldBuf = append(w.fieldBuf, v[si:i]...)
-		w.fieldBuf = append(w.fieldBuf, w.escapeQuote[:w.escapeQuoteByteLen]...)
+		w.fieldBuf = append(w.fieldBuf, w.doubleQuote[:w.doubleQuoteByteLen]...)
 
 		i += di
 		si = i
