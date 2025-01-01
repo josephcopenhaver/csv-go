@@ -48,17 +48,12 @@ func (et posErrType) String() string {
 }
 
 var (
-	ErrUnexpectedHeaderRowContents   = errors.New("header row values do not match expectations")
-	ErrBadRecordSeparator            = errors.New("record separator can only be one rune long or \"\r\n\"")
-	ErrIncompleteQuotedField         = fmt.Errorf("incomplete quoted field: %w", UnexpectedEOFError{})
-	ErrUnexpectedEndOfEscapeSequence = fmt.Errorf("expecting an escaped character in a quoted field: %w", UnexpectedEOFError{})
-	ErrBadEscapeSequence             = errors.New("found escape character not followed by a quote or another escape character")
-	ErrBadEscapeAtStartOfRecord      = errors.New("escape character found outside the context of a quoted field when expecting the start of a record")
-	ErrBadEscapeAtStartOfField       = errors.New("escape character found outside the context of a quoted field when expecting the start of a field")
-	ErrBadEscapeInUnquotedField      = errors.New("escape character found outside the context of a quoted field when processing an unquoted field")
-	ErrInvalidQuotedFieldEnding      = errors.New("unexpected character found after end of quoted field") // expecting field separator, record separator, quote char, or end of file if field count matches expectations
-	ErrNoHeaderRow                   = fmt.Errorf("no header row: %w", UnexpectedEOFError{})
-	ErrNoRows                        = fmt.Errorf("no rows: %w", UnexpectedEOFError{})
+	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
+	ErrBadRecordSeparator          = errors.New("record separator can only be one rune long or \"\r\n\"")
+	ErrIncompleteQuotedField       = fmt.Errorf("incomplete quoted field: %w", UnexpectedEOFError{})
+	ErrInvalidQuotedFieldEnding    = errors.New("unexpected character found after end of quoted field") // expecting field separator, record separator, quote char, or end of file if field count matches expectations
+	ErrNoHeaderRow                 = fmt.Errorf("no header row: %w", UnexpectedEOFError{})
+	ErrNoRows                      = fmt.Errorf("no rows: %w", UnexpectedEOFError{})
 	// config errors
 	ErrNilReader = errors.New("nil reader")
 )
@@ -247,13 +242,6 @@ func (readerOpts) Quote(r rune) ReaderOption {
 	}
 }
 
-func (readerOpts) Escape(r rune) ReaderOption {
-	return func(cfg *rCfg) {
-		cfg.escape = r
-		cfg.escapeSet = true
-	}
-}
-
 func (readerOpts) Comment(r rune) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.comment = r
@@ -336,7 +324,6 @@ type rCfg struct {
 	fieldSeparator          rune
 	quote                   rune
 	comment                 rune
-	escape                  rune
 	quoteSet                bool
 	removeHeaderRow         bool
 	discoverRecordSeparator bool
@@ -347,7 +334,6 @@ type rCfg struct {
 	recordSepStrSet         bool
 	trsEmitsRecord          bool
 	numFieldsSet            bool
-	escapeSet               bool
 	// removeByteOrderMarker   bool
 	// errOnNoByteOrderMarker  bool
 	//
@@ -427,11 +413,6 @@ func (cfg *rCfg) validate() error {
 		if !validUtf8Rune(cfg.quote) {
 			return errors.New("invalid quote value")
 		}
-		// if escape would behave just like quote alone
-		// then just have quote set
-		if cfg.escapeSet && cfg.escape == cfg.quote {
-			cfg.escapeSet = false
-		}
 
 		if cfg.commentSet && cfg.quote == cfg.comment {
 			return errors.New("invalid comment and quote combination")
@@ -442,32 +423,8 @@ func (cfg *rCfg) validate() error {
 		}
 	}
 
-	if cfg.escapeSet {
-		if !validUtf8Rune(cfg.escape) {
-			return errors.New("invalid escape value")
-		}
-
-		if cfg.commentSet && cfg.escape == cfg.comment {
-			return errors.New("invalid comment and escape combination")
-		}
-
-		if cfg.fieldSeparator == cfg.escape {
-			return errors.New("invalid field separator and escape combination")
-		}
-
-		if !cfg.quoteSet {
-			return errors.New("escape can only be specified when quote is also specified")
-		}
-	}
-
-	if cfg.commentSet {
-		if !validUtf8Rune(cfg.comment) {
-			return errors.New("invalid escape value")
-		}
-
-		if cfg.fieldSeparator == cfg.escape {
-			return errors.New("invalid field separator and escape combination")
-		}
+	if cfg.commentSet && !validUtf8Rune(cfg.comment) {
+		return errors.New("invalid comment value")
 	}
 
 	if cfg.numFieldsSet && cfg.numFields <= 0 {
@@ -653,49 +610,6 @@ func (r *Reader) init(cfg rCfg) {
 		return false
 	}
 
-	nextRuneIsEscapeOrQuote := func() int {
-		c, size, err := in.ReadRune()
-		if size <= 0 {
-			done = true
-			if !errors.Is(err, io.EOF) {
-				r.err = ioErr(err)
-			}
-			return -1
-		}
-
-		if c == cfg.escape {
-			// advance the position indicator
-			byteIndex += uint(size)
-
-			if err != nil {
-				done = true
-				if !errors.Is(err, io.EOF) {
-					r.err = ioErr(err)
-				}
-			}
-			return 0
-		}
-
-		if c == cfg.quote {
-			// advance the position indicator
-			byteIndex += uint(size)
-
-			if err != nil {
-				done = true
-				if !errors.Is(err, io.EOF) {
-					r.err = ioErr(err)
-				}
-			}
-			return 1
-		}
-
-		if err := in.UnreadRune(); err != nil {
-			panic(err)
-		}
-
-		return -1
-	}
-
 	isRecordSeparatorImplForRunes := func(sep []rune) func(rune) bool {
 		if len(sep) == 1 {
 			v := sep[0]
@@ -827,7 +741,7 @@ func (r *Reader) init(cfg rCfg) {
 				switch c {
 				case cfg.fieldSeparator:
 					fieldLengths = append(fieldLengths, 0)
-					// fielStart = recordBuf.Len()
+					// fieldStart = recordBuf.Len()
 					state = rStateStartOfField
 					fieldIndex++
 				default:
@@ -842,11 +756,7 @@ func (r *Reader) init(cfg rCfg) {
 						}
 						return false
 					}
-					if cfg.escapeSet && c == cfg.escape {
-						done = true
-						r.err = parsingErr(ErrBadEscapeAtStartOfRecord)
-						return false
-					} else if cfg.quoteSet && c == cfg.quote {
+					if cfg.quoteSet && c == cfg.quote {
 						state = rStateInQuotedField
 					} else if cfg.commentSet && c == cfg.comment {
 						state = rStateInLineComment
@@ -860,24 +770,6 @@ func (r *Reader) init(cfg rCfg) {
 				case cfg.quote:
 					state = rStateEndOfQuotedField
 				default:
-					if cfg.escapeSet && c == cfg.escape {
-						if iresp := nextRuneIsEscapeOrQuote(); iresp != -1 {
-							if iresp == 1 {
-								recordBuf.Write(quoteBytes)
-								continue
-							}
-							// otherwise append escape char
-						} else if done {
-							if r.err == nil {
-								r.err = parsingErr(ErrUnexpectedEndOfEscapeSequence)
-							}
-							return false
-						} else {
-							done = true
-							r.err = parsingErr(ErrBadEscapeSequence)
-							return false
-						}
-					}
 					recordBuf.Write(runeBytes(c))
 					// state = rStateInQuotedField
 				}
@@ -895,11 +787,6 @@ func (r *Reader) init(cfg rCfg) {
 					state = rStateStartOfField
 					fieldIndex++
 				case cfg.quote:
-					if cfg.escapeSet {
-						done = true
-						r.err = parsingErr(ErrInvalidQuotedFieldEnding)
-						return false
-					}
 					recordBuf.Write(quoteBytes)
 					state = rStateInQuotedField
 				default:
@@ -943,11 +830,7 @@ func (r *Reader) init(cfg rCfg) {
 						}
 						return false
 					}
-					if cfg.escapeSet && c == cfg.escape {
-						done = true
-						r.err = parsingErr(ErrBadEscapeAtStartOfField)
-						return false
-					} else if cfg.quoteSet && c == cfg.quote {
+					if cfg.quoteSet && c == cfg.quote {
 						state = rStateInQuotedField
 					} else {
 						recordBuf.Write(runeBytes(c))
@@ -980,11 +863,6 @@ func (r *Reader) init(cfg rCfg) {
 							recordIndex++
 							return true
 						}
-						return false
-					}
-					if cfg.escapeSet && cfg.escape == c {
-						done = true
-						r.err = parsingErr(ErrBadEscapeInUnquotedField)
 						return false
 					}
 					recordBuf.Write(runeBytes(c))
