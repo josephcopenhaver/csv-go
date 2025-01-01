@@ -8,6 +8,8 @@ import (
 	"unsafe"
 )
 
+// TODO: add an option to add a starting utf8/utf16 byte order marker
+
 var (
 	ErrRowNilOrEmpty   = errors.New("row is nil or empty")
 	ErrNonUTF8InRecord = errors.New("non-utf8 characters present in record")
