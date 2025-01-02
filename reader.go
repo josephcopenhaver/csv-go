@@ -503,41 +503,19 @@ func (r *Reader) init(cfg rCfg) {
 	var done bool
 	var fieldLengths []int
 	if cfg.borrowRow {
+		initBorrowedRowFunc(&r.row, &recordBuf, &fieldLengths)
+	} else {
+		r.row = clonedRowFunc(&recordBuf, &fieldLengths)
+	}
+	{
+		next := r.row
 		r.row = func() []string {
 			if fieldLengths == nil || len(fieldLengths) != numFields {
 				return nil
 			}
 
-			row := make([]string, len(fieldLengths))
-			r.row = func() []string {
-				buf := recordBuf.Bytes()
-				p := 0
-				for i, s := range fieldLengths {
-					if s == 0 {
-						row[i] = ""
-						continue
-					}
-					row[i] = unsafe.String(&buf[p], s)
-					p += s
-				}
-				return row
-			}
+			r.row = next
 			return r.row()
-		}
-	} else {
-		r.row = func() []string {
-			buf := recordBuf.Bytes()
-			p := 0
-			row := make([]string, len(fieldLengths))
-			for i, s := range fieldLengths {
-				if s == 0 {
-					row[i] = ""
-					continue
-				}
-				row[i] = strings.Clone(unsafe.String(&buf[p], s))
-				p += s
-			}
-			return row
 		}
 	}
 
@@ -988,6 +966,47 @@ func (r *Reader) init(cfg rCfg) {
 			}
 			return v
 		}
+	}
+}
+
+func initBorrowedRowFunc(dst *func() []string, recordBuf *bytes.Buffer, fieldLengths *[]int) {
+	*dst = func() []string {
+		// note: it is guaranteed that the length of fieldLengths will not change
+		// once this function is run
+		row := make([]string, len(*fieldLengths))
+
+		*dst = func() []string {
+			buf := recordBuf.Bytes()
+			p := 0
+			for i, s := range *fieldLengths {
+				if s == 0 {
+					row[i] = ""
+					continue
+				}
+				row[i] = unsafe.String(&buf[p], s)
+				p += s
+			}
+			return row
+		}
+
+		return (*dst)()
+	}
+}
+
+func clonedRowFunc(recordBuf *bytes.Buffer, fieldLengths *[]int) func() []string {
+	return func() []string {
+		buf := recordBuf.Bytes()
+		p := 0
+		row := make([]string, len(*fieldLengths))
+		for i, s := range *fieldLengths {
+			if s == 0 {
+				row[i] = ""
+				continue
+			}
+			row[i] = strings.Clone(unsafe.String(&buf[p], s))
+			p += s
+		}
+		return row
 	}
 }
 
