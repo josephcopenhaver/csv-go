@@ -57,8 +57,9 @@ func WriterOpts() writerOpts {
 }
 
 func (writerOpts) RecordSeparator(s string) WriterOption {
+
 	if len(s) == 0 {
-		return badRecordSeparatorConfig
+		return badRecordSeparatorWConfig
 	}
 	// usage of unsafe here is actually safe because v is
 	// never modified and no parts of its contents exist
@@ -67,8 +68,15 @@ func (writerOpts) RecordSeparator(s string) WriterOption {
 	v := unsafe.Slice(unsafe.StringData(s), len(s))
 
 	r1, n1 := utf8.DecodeRune(v)
-	if n1 == 1 && r1 == utf8.RuneError {
-		return badRecordSeparatorConfig
+	if r1 == utf8.RuneError {
+		// note that even when explicitly setting to utf8.RuneError
+		// we're not allowing it
+		//
+		// it's just not a good practice as this character has special meaning
+		//
+		// I'm open to a PR to enable it though should there be strong evidence to
+		// need it supported
+		return badRecordSeparatorWConfig
 	}
 	if n1 == len(v) {
 		return func(cfg *wCfg) {
@@ -78,10 +86,17 @@ func (writerOpts) RecordSeparator(s string) WriterOption {
 	}
 
 	r2, n2 := utf8.DecodeRune(v[n1:])
-	if n2 == 1 && r2 == utf8.RuneError {
-		return badRecordSeparatorConfig
+	if r2 == utf8.RuneError {
+		// note that even when explicitly setting to utf8.RuneError
+		// we're not allowing it
+		//
+		// it's just not a good practice as this character has special meaning
+		//
+		// I'm open to a PR to enable it though should there be strong evidence to
+		// need it supported
+		return badRecordSeparatorWConfig
 	}
-	if n1+n2 == len(v) {
+	if n1+n2 == len(v) && r1 == asciiCarriageReturn && r2 == asciiLineFeed {
 		return func(cfg *wCfg) {
 			cfg.recordSep[0] = r1
 			cfg.recordSep[1] = r2
@@ -89,7 +104,7 @@ func (writerOpts) RecordSeparator(s string) WriterOption {
 		}
 	}
 
-	return badRecordSeparatorConfig
+	return badRecordSeparatorWConfig
 }
 
 func (writerOpts) FieldSeparator(v rune) WriterOption {
@@ -168,10 +183,6 @@ func (cfg *wCfg) validate() error {
 		return ErrBadRecordSeparator
 	}
 
-	if cfg.recordSepLen == 2 && !(cfg.recordSep[0] == asciiCarriageReturn && cfg.recordSep[1] == asciiLineFeed) {
-		return ErrBadRecordSeparator
-	}
-
 	if cfg.headers != nil {
 		if len(cfg.headers) == 0 {
 			return errors.New("empty set of headers expected")
@@ -239,7 +250,7 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, err
+		return nil, ConfigurationError{err}
 	}
 
 	var doubleQuote [utf8.UTFMax * 2]byte
@@ -500,7 +511,7 @@ func (w *Writer) WriteRow(row []string) (int, error) {
 // helpers
 //
 
-func badRecordSeparatorConfig(cfg *wCfg) {
+func badRecordSeparatorWConfig(cfg *wCfg) {
 	cfg.recordSepLen = -1
 }
 
