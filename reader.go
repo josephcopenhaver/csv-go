@@ -524,7 +524,7 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		recordSepLen:    cfg.recordSepLen,
 	}
 
-	cr.createPipeline(cfg.reader, cfg.borrowRow, cfg.discoverRecordSeparator)
+	cr.initPipeline(cfg.reader, cfg.borrowRow, cfg.discoverRecordSeparator)
 
 	return &cr, nil
 }
@@ -706,12 +706,12 @@ func (r *Reader) defaultScan() bool {
 	return r.prepareRow()
 }
 
-func (r *Reader) createPipeline(reader io.Reader, borrowRow, discoverRecordSeparator bool) {
+func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparator bool) {
 
-	if v, ok := reader.(BufferedReader); !ok {
-		r.reader = bufio.NewReader(reader)
-	} else {
+	if v, ok := reader.(BufferedReader); ok {
 		r.reader = v
+	} else {
+		r.reader = bufio.NewReader(reader)
 	}
 
 	if borrowRow {
@@ -720,10 +720,10 @@ func (r *Reader) createPipeline(reader io.Reader, borrowRow, discoverRecordSepar
 		r.row = r.defaultRow
 	}
 
-	if r.numFields == -1 {
-		r.checkNumFields = r.checkNumFieldsWithDiscovery
-	} else {
+	if r.numFields != -1 {
 		r.checkNumFields = r.defaultCheckNumFields
+	} else {
+		r.checkNumFields = r.checkNumFieldsWithDiscovery
 	}
 
 	// TODO: turn off allowing comments after first record/header line encountered?
@@ -732,10 +732,10 @@ func (r *Reader) createPipeline(reader io.Reader, borrowRow, discoverRecordSepar
 	// TODO: how about ignoring multiple empty newlines at the end of the document? (probably
 	// okay to do if expected field count is greater than 1, field content overlapping with a record separator should be quoted)
 
-	if discoverRecordSeparator {
-		r.isRecordSeparator = r.isRecordSeparatorWithDiscovery
-	} else {
+	if !discoverRecordSeparator {
 		r.updateIsRecordSeparatorImpl()
+	} else {
+		r.isRecordSeparator = r.isRecordSeparatorWithDiscovery
 	}
 
 	// letting any valid utf8 end of line act as the record separator
@@ -845,7 +845,50 @@ func (r *Reader) fieldNumOverflow() bool {
 	return false
 }
 
+func (r *Reader) handleEOF() bool {
+
+	// check if we're in a terminal state otherwise error
+	// there is no new character to process
+	switch r.state {
+	case rStateInQuotedField:
+		r.parsingErr(ErrIncompleteQuotedField)
+		return false
+	case rStateStartOfRecord:
+		if r.trsEmitsRecord && r.numFields == 1 {
+			r.fieldLengths = append(r.fieldLengths, 0)
+			// r.fieldStart = len(r.recordBuf)
+			if !r.checkNumFields() {
+				r.err = errors.Join(r.err, UnexpectedEOFError{})
+				return false
+			}
+			return true
+		}
+		return false
+	case rStateInLineComment:
+		return false
+	case rStateStartOfField:
+		r.fieldLengths = append(r.fieldLengths, 0)
+		// r.fieldStart = len(r.recordBuf)
+		if !r.checkNumFields() {
+			r.err = errors.Join(r.err, UnexpectedEOFError{})
+			return false
+		}
+		return true
+	case rStateEndOfQuotedField, rStateInField:
+		r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+		r.fieldStart = len(r.recordBuf)
+		if !r.checkNumFields() {
+			r.err = errors.Join(r.err, UnexpectedEOFError{})
+			return false
+		}
+		return true
+	}
+
+	panic("reader in unknown state when EOF encountered")
+}
+
 func (r *Reader) prepareRow() bool {
+
 	for !r.done {
 		c, size, rErr := r.reader.ReadRune()
 
@@ -853,6 +896,11 @@ func (r *Reader) prepareRow() bool {
 		r.byteIndex += uint(size)
 
 		if size == 1 && c == utf8.RuneError {
+
+			//
+			// handle a non UTF8 byte
+			//
+
 			if err := r.reader.UnreadRune(); err != nil {
 				panic(err)
 			}
@@ -894,42 +942,7 @@ func (r *Reader) prepareRow() bool {
 				return false
 			}
 			if size == 0 {
-				// check if we're in a terminal state otherwise error
-				// there is no new character to process
-				switch r.state {
-				case rStateInQuotedField:
-					r.parsingErr(ErrIncompleteQuotedField)
-					return false
-				case rStateStartOfRecord:
-					if r.trsEmitsRecord && r.numFields == 1 {
-						r.fieldLengths = append(r.fieldLengths, 0)
-						// r.fieldStart = len(r.recordBuf)
-						if !r.checkNumFields() {
-							r.err = errors.Join(r.err, UnexpectedEOFError{})
-							return false
-						}
-						return true
-					}
-					return false
-				case rStateInLineComment:
-					return false
-				case rStateStartOfField:
-					r.fieldLengths = append(r.fieldLengths, 0)
-					// r.fieldStart = len(r.recordBuf)
-					if !r.checkNumFields() {
-						r.err = errors.Join(r.err, UnexpectedEOFError{})
-						return false
-					}
-					return true
-				case rStateEndOfQuotedField, rStateInField:
-					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
-					r.fieldStart = len(r.recordBuf)
-					if !r.checkNumFields() {
-						r.err = errors.Join(r.err, UnexpectedEOFError{})
-						return false
-					}
-					return true
-				}
+				return r.handleEOF()
 			}
 			// right here in the code is the only place where the runtime could loop back around where done = true and the last character
 			// has been processed
@@ -1059,7 +1072,7 @@ func (r *Reader) prepareRow() bool {
 			if r.isRecordSeparator(c) {
 				r.state = rStateStartOfRecord
 				// r.recordIndex++ // not valid in this case because the previous state was not a record
-				return r.prepareRow()
+				continue
 			}
 		}
 	}
