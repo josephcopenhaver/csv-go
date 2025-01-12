@@ -28,12 +28,14 @@ const (
 	asciiFormFeed       = 0x0C
 	utf8NextLine        = 0x85
 	utf8LineSeparator   = 0x2028
+	utf8ByteOrderMarker = 0xEFBBBF
 )
 
 type rState uint8
 
 const (
-	rStateStartOfRecord rState = iota
+	rStateStartOfDoc rState = iota
+	rStateStartOfRecord
 	rStateInQuotedField
 	rStateEndOfQuotedField
 	rStateStartOfField
@@ -55,20 +57,15 @@ func (et posErrType) String() string {
 
 var (
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
-	ErrBadRecordSeparator          = errors.New("record separator can only be one rune long or \"\r\n\"")
-	ErrIncompleteQuotedField       = fmt.Errorf("incomplete quoted field: %w", UnexpectedEOFError{})
+	ErrBadRecordSeparator          = errors.New("record separator can only be one rune long or \"\\r\\n\"")
+	ErrIncompleteQuotedField       = fmt.Errorf("incomplete quoted field: %w", io.ErrUnexpectedEOF)
 	ErrInvalidQuotedFieldEnding    = errors.New("unexpected character found after end of quoted field") // expecting field separator, record separator, quote char, or end of file if field count matches expectations
-	ErrNoHeaderRow                 = fmt.Errorf("no header row: %w", UnexpectedEOFError{})
-	ErrNoRows                      = fmt.Errorf("no rows: %w", UnexpectedEOFError{})
+	ErrNoHeaderRow                 = fmt.Errorf("no header row: %w", io.ErrUnexpectedEOF)
+	ErrNoRows                      = fmt.Errorf("no rows: %w", io.ErrUnexpectedEOF)
+	ErrNoByteOrderMarker           = errors.New("no byte order marker")
 	// config errors
-	ErrNilReader = errors.New("nil reader")
+	ErrNilReader     = errors.New("nil reader")
 )
-
-type UnexpectedEOFError struct{}
-
-func (e UnexpectedEOFError) Error() string {
-	return io.ErrUnexpectedEOF.Error()
-}
 
 type posTracedErr struct {
 	err                                error
@@ -189,17 +186,17 @@ func (readerOpts) RemoveHeaderRow(b bool) ReaderOption {
 	}
 }
 
-// func (readerOpts) RemoveByteOrderMarker(b bool) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.removeByteOrderMarker = b
-// 	}
-// }
+func (readerOpts) RemoveByteOrderMarker(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.removeByteOrderMarker = b
+	}
+}
 
-// func (readerOpts) ErrOnNoByteOrderMarker(b bool) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.errOnNoByteOrderMarker = b
-// 	}
-// }
+func (readerOpts) ErrOnNoByteOrderMarker(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.errOnNoByteOrderMarker = b
+	}
+}
 
 // // MaxNumFields does nothing at the moment except cause a panic
 // func (readerOpts) MaxNumFields(n int) ReaderOption {
@@ -376,40 +373,42 @@ type rCfg struct {
 	borrowRow               bool
 	trsEmitsRecord          bool
 	numFieldsSet            bool
-	// removeByteOrderMarker   bool
-	// errOnNoByteOrderMarker  bool
+	removeByteOrderMarker   bool
+	errOnNoByteOrderMarker  bool
 	//
 	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check?
 }
 
 type Reader struct {
-	scan              func() bool
-	err               error
-	row               func() []string
-	isRecordSeparator func(c rune) bool
-	checkNumFields    func() bool
-	reader            BufferedReader
-	recordSep         [2]rune
-	recordBuf         []byte
-	fieldLengths      []int
-	headers           []string
-	fieldStart        int
-	numFields         int
-	recordIndex       uint
-	fieldIndex        uint
-	byteIndex         uint
-	quote             rune
-	fieldSeparator    rune
-	comment           rune
-	done              bool
-	state             rState
-	recordSepLen      int8
-	quoteSet          bool
-	commentSet        bool
-	trsEmitsRecord    bool
-	trimHeaders       bool
-	removeHeaderRow   bool
-	errorOnNoRows     bool
+	scan                   func() bool
+	err                    error
+	row                    func() []string
+	isRecordSeparator      func(c rune) bool
+	checkNumFields         func() bool
+	reader                 BufferedReader
+	recordSep              [2]rune
+	recordBuf              []byte
+	fieldLengths           []int
+	headers                []string
+	fieldStart             int
+	numFields              int
+	recordIndex            uint
+	fieldIndex             uint
+	byteIndex              uint
+	quote                  rune
+	fieldSeparator         rune
+	comment                rune
+	done                   bool
+	state                  rState
+	recordSepLen           int8
+	quoteSet               bool
+	commentSet             bool
+	trsEmitsRecord         bool
+	trimHeaders            bool
+	removeHeaderRow        bool
+	errorOnNoRows          bool
+	removeByteOrderMarker  bool
+	errOnNoByteOrderMarker bool
 }
 
 func (cfg *rCfg) validate() error {
@@ -509,19 +508,21 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	}
 
 	cr := Reader{
-		quote:           cfg.quote,
-		numFields:       cfg.numFields,
-		fieldSeparator:  cfg.fieldSeparator,
-		comment:         cfg.comment,
-		trsEmitsRecord:  cfg.trsEmitsRecord,
-		quoteSet:        cfg.quoteSet,
-		commentSet:      cfg.commentSet,
-		trimHeaders:     cfg.trimHeaders,
-		removeHeaderRow: cfg.removeHeaderRow,
-		errorOnNoRows:   cfg.errorOnNoRows,
-		headers:         cfg.headers,
-		recordSep:       cfg.recordSep,
-		recordSepLen:    cfg.recordSepLen,
+		quote:                  cfg.quote,
+		numFields:              cfg.numFields,
+		fieldSeparator:         cfg.fieldSeparator,
+		comment:                cfg.comment,
+		trsEmitsRecord:         cfg.trsEmitsRecord,
+		quoteSet:               cfg.quoteSet,
+		commentSet:             cfg.commentSet,
+		trimHeaders:            cfg.trimHeaders,
+		removeHeaderRow:        cfg.removeHeaderRow,
+		errorOnNoRows:          cfg.errorOnNoRows,
+		headers:                cfg.headers,
+		recordSep:              cfg.recordSep,
+		recordSepLen:           cfg.recordSepLen,
+		removeByteOrderMarker:  cfg.removeByteOrderMarker,
+		errOnNoByteOrderMarker: cfg.errOnNoByteOrderMarker,
 	}
 
 	cr.initPipeline(cfg.reader, cfg.borrowRow, cfg.discoverRecordSeparator)
@@ -850,19 +851,28 @@ func (r *Reader) handleEOF() bool {
 	// check if we're in a terminal state otherwise error
 	// there is no new character to process
 	switch r.state {
-	case rStateInQuotedField:
-		r.parsingErr(ErrIncompleteQuotedField)
-		return false
+	case rStateStartOfDoc:
+		if r.errOnNoByteOrderMarker {
+			r.done = true
+			r.ioErr(fmt.Errorf("%w: %w", ErrNoByteOrderMarker, io.EOF))
+			return false
+		}
+
+		r.state = rStateStartOfRecord
+		fallthrough
 	case rStateStartOfRecord:
 		if r.trsEmitsRecord && r.numFields == 1 {
 			r.fieldLengths = append(r.fieldLengths, 0)
 			// r.fieldStart = len(r.recordBuf)
 			if !r.checkNumFields() {
-				r.err = errors.Join(r.err, UnexpectedEOFError{})
+				r.err = errors.Join(r.err, io.ErrUnexpectedEOF)
 				return false
 			}
 			return true
 		}
+		return false
+	case rStateInQuotedField:
+		r.parsingErr(ErrIncompleteQuotedField)
 		return false
 	case rStateInLineComment:
 		return false
@@ -870,7 +880,7 @@ func (r *Reader) handleEOF() bool {
 		r.fieldLengths = append(r.fieldLengths, 0)
 		// r.fieldStart = len(r.recordBuf)
 		if !r.checkNumFields() {
-			r.err = errors.Join(r.err, UnexpectedEOFError{})
+			r.err = errors.Join(r.err, io.ErrUnexpectedEOF)
 			return false
 		}
 		return true
@@ -878,7 +888,7 @@ func (r *Reader) handleEOF() bool {
 		r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
 		r.fieldStart = len(r.recordBuf)
 		if !r.checkNumFields() {
-			r.err = errors.Join(r.err, UnexpectedEOFError{})
+			r.err = errors.Join(r.err, io.ErrUnexpectedEOF)
 			return false
 		}
 		return true
@@ -900,6 +910,16 @@ func (r *Reader) prepareRow() bool {
 			//
 			// handle a non UTF8 byte
 			//
+
+			if rStateStartOfDoc == r.state {
+				if r.errOnNoByteOrderMarker {
+					r.done = true
+					r.parsingErr(ErrNoByteOrderMarker)
+					return false
+				}
+
+				r.state = rStateStartOfRecord
+			}
 
 			if err := r.reader.UnreadRune(); err != nil {
 				panic(err)
@@ -949,6 +969,20 @@ func (r *Reader) prepareRow() bool {
 		}
 
 		switch r.state {
+		case rStateStartOfDoc:
+			if c == utf8ByteOrderMarker {
+				if r.removeByteOrderMarker {
+					r.state = rStateStartOfRecord
+					continue
+				}
+			} else if r.errOnNoByteOrderMarker {
+				r.done = true
+				r.parsingErr(ErrNoByteOrderMarker)
+				return false
+			}
+
+			r.state = rStateStartOfRecord
+			fallthrough
 		case rStateStartOfRecord:
 			switch c {
 			case r.fieldSeparator:
