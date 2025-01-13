@@ -374,27 +374,35 @@ type rCfg struct {
 }
 
 type Reader struct {
-	scan                               func() bool
-	err                                error
-	row                                func() []string
-	isRecordSeparator                  func(c rune) bool
-	checkNumFields                     func() bool
-	reader                             BufferedReader
-	recordSep                          [2]rune
-	recordBuf                          []byte
-	fieldLengths                       []int
-	headers                            []string
-	fieldStart                         int
-	numFields                          int
-	recordIndex                        uint
-	fieldIndex                         uint
-	byteIndex                          uint
-	quote                              rune
-	fieldSeparator                     rune
-	comment                            rune
-	done                               bool
-	state                              rState
+	scan              func() bool
+	err               error
+	row               func() []string
+	isRecordSeparator func(c rune) bool
+	checkNumFields    func() bool
+	reader            BufferedReader
+	recordSep         [2]rune
+	recordBuf         []byte
+	fieldLengths      []int
+	headers           []string
+	fieldStart        int
+	numFields         int
+	recordIndex       uint
+	fieldIndex        uint
+	byteIndex         uint
+	quote             rune
+	fieldSeparator    rune
+	comment           rune
+	done              bool
+	state             rState
+	// afterStartOfRecords is a flag set to communicate when the first records have been observed and potentially emitted
+	//
+	// this is useful for supporting comments after start of records explicitly with disabled being the default
+	//
+	// the recordIndex could also have been used for this purpose but it may have overflow issues for some input types
+	// and keeping its purpose singular and disconnected from parsing management is likely ideal
+	afterStartOfRecords                bool
 	recordSepLen                       int8
+	commentsAllowedAfterStartOfRecords bool
 	quoteSet                           bool
 	commentSet                         bool
 	trsEmitsRecord                     bool
@@ -403,7 +411,6 @@ type Reader struct {
 	errorOnNoRows                      bool
 	removeByteOrderMarker              bool
 	errOnNoByteOrderMarker             bool
-	commentsAllowedAfterStartOfRecords bool
 }
 
 func (cfg *rCfg) validate() error {
@@ -637,6 +644,7 @@ func (r *Reader) nextRuneIsLF() bool {
 
 func (r *Reader) defaultCheckNumFields() bool {
 	if len(r.fieldLengths) == r.numFields {
+		r.afterStartOfRecords = true
 		return true
 	}
 
@@ -1005,7 +1013,7 @@ func (r *Reader) prepareRow() bool {
 				}
 				if r.quoteSet && c == r.quote {
 					r.state = rStateInQuotedField
-				} else if (r.recordIndex == 0 || r.commentsAllowedAfterStartOfRecords) && r.commentSet && c == r.comment {
+				} else if (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) && r.commentSet && c == r.comment {
 					r.state = rStateInLineComment
 				} else {
 					r.recordBuf = append(r.recordBuf, []byte(string(c))...)
