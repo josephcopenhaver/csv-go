@@ -895,19 +895,7 @@ func (r *Reader) handleEOF() bool {
 
 func (r *Reader) prepareRow() bool {
 
-	// TODO: as a micro-optimization
-	//
-	// the break condition check here can actually be added
-	// to the end of the for loop
-	//
-	// there is a possible case where EOF is encountered and there is one rune
-	// to process where there is a loop around
-	//
-	// that case needs thorough handling and edge case testing before we should
-	// seek to optimize away the duplicate done check here. Note that the scan
-	// operation now always starts off with a check of the done flag which makes
-	// this a duplicate read of the variable.
-	for !r.done {
+	for {
 		c, size, rErr := r.reader.ReadRune()
 
 		// advance the position indicator
@@ -981,6 +969,11 @@ func (r *Reader) prepareRow() bool {
 			if c == utf8ByteOrderMarker {
 				if r.removeByteOrderMarker {
 					r.state = rStateStartOfRecord
+					if r.done {
+						// checking just in case EOF was encountered earlier
+						// with a size > 0
+						break
+					}
 					continue
 				}
 			} else if r.errOnNoByteOrderMarker {
@@ -1114,8 +1107,17 @@ func (r *Reader) prepareRow() bool {
 			if r.isRecordSeparator(c) {
 				r.state = rStateStartOfRecord
 				// r.recordIndex++ // not valid in this case because the previous state was not a record
+				if r.done {
+					// checking just in case EOF was encountered earlier
+					// with a size > 0
+					break
+				}
 				continue
 			}
+		}
+
+		if r.done {
+			break
 		}
 	}
 
