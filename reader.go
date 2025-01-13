@@ -11,7 +11,6 @@ import (
 	"unsafe"
 )
 
-// TODO: add an option to strip a starting utf8/utf16 byte order marker
 // TODO: support utf16?
 
 type BufferedReader interface {
@@ -56,6 +55,7 @@ func (et posErrType) String() string {
 }
 
 var (
+	ErrBadConfig                   = errors.New("bad config")
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
 	ErrBadRecordSeparator          = errors.New("record separator can only be one rune long or \"\\r\\n\"")
 	ErrIncompleteQuotedField       = fmt.Errorf("incomplete quoted field: %w", io.ErrUnexpectedEOF)
@@ -63,8 +63,7 @@ var (
 	ErrNoHeaderRow                 = fmt.Errorf("no header row: %w", io.ErrUnexpectedEOF)
 	ErrNoRows                      = fmt.Errorf("no rows: %w", io.ErrUnexpectedEOF)
 	ErrNoByteOrderMarker           = errors.New("no byte order marker")
-	// config errors
-	ErrNilReader     = errors.New("nil reader")
+	ErrNilReader                   = errors.New("nil reader")
 )
 
 type posTracedErr struct {
@@ -107,18 +106,6 @@ func newParsingError(byteIndex, recordIndex, fieldIndex uint, err error) Parsing
 		recordIndex: recordIndex,
 		fieldIndex:  fieldIndex,
 	}}
-}
-
-type ConfigurationError struct {
-	err error
-}
-
-func (e ConfigurationError) Error() string {
-	return e.err.Error()
-}
-
-func (e ConfigurationError) Unwrap() error {
-	return e.err
 }
 
 type ErrFieldCountMismatch struct {
@@ -246,6 +233,12 @@ func (readerOpts) Comment(r rune) ReaderOption {
 	}
 }
 
+func (readerOpts) CommentsAllowedAfterStartOfRecords(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.commentsAllowedAfterStartOfRecords = b
+	}
+}
+
 func (readerOpts) NumFields(n int) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.numFields = n
@@ -352,63 +345,65 @@ func ReaderOpts() readerOpts {
 }
 
 type rCfg struct {
-	headers                 []string
-	reader                  io.Reader
-	recordSep               [2]rune
-	numFields               int
-	maxNumFields            int
-	maxNumRecords           int
-	maxNumRecordBytes       int
-	maxNumBytes             int
-	fieldSeparator          rune
-	quote                   rune
-	comment                 rune
-	recordSepLen            int8
-	quoteSet                bool
-	removeHeaderRow         bool
-	discoverRecordSeparator bool
-	trimHeaders             bool
-	commentSet              bool
-	errorOnNoRows           bool
-	borrowRow               bool
-	trsEmitsRecord          bool
-	numFieldsSet            bool
-	removeByteOrderMarker   bool
-	errOnNoByteOrderMarker  bool
+	headers                            []string
+	reader                             io.Reader
+	recordSep                          [2]rune
+	numFields                          int
+	maxNumFields                       int
+	maxNumRecords                      int
+	maxNumRecordBytes                  int
+	maxNumBytes                        int
+	fieldSeparator                     rune
+	quote                              rune
+	comment                            rune
+	recordSepLen                       int8
+	quoteSet                           bool
+	removeHeaderRow                    bool
+	discoverRecordSeparator            bool
+	trimHeaders                        bool
+	commentSet                         bool
+	errorOnNoRows                      bool
+	borrowRow                          bool
+	trsEmitsRecord                     bool
+	numFieldsSet                       bool
+	removeByteOrderMarker              bool
+	errOnNoByteOrderMarker             bool
+	commentsAllowedAfterStartOfRecords bool
 	//
 	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check?
 }
 
 type Reader struct {
-	scan                   func() bool
-	err                    error
-	row                    func() []string
-	isRecordSeparator      func(c rune) bool
-	checkNumFields         func() bool
-	reader                 BufferedReader
-	recordSep              [2]rune
-	recordBuf              []byte
-	fieldLengths           []int
-	headers                []string
-	fieldStart             int
-	numFields              int
-	recordIndex            uint
-	fieldIndex             uint
-	byteIndex              uint
-	quote                  rune
-	fieldSeparator         rune
-	comment                rune
-	done                   bool
-	state                  rState
-	recordSepLen           int8
-	quoteSet               bool
-	commentSet             bool
-	trsEmitsRecord         bool
-	trimHeaders            bool
-	removeHeaderRow        bool
-	errorOnNoRows          bool
-	removeByteOrderMarker  bool
-	errOnNoByteOrderMarker bool
+	scan                               func() bool
+	err                                error
+	row                                func() []string
+	isRecordSeparator                  func(c rune) bool
+	checkNumFields                     func() bool
+	reader                             BufferedReader
+	recordSep                          [2]rune
+	recordBuf                          []byte
+	fieldLengths                       []int
+	headers                            []string
+	fieldStart                         int
+	numFields                          int
+	recordIndex                        uint
+	fieldIndex                         uint
+	byteIndex                          uint
+	quote                              rune
+	fieldSeparator                     rune
+	comment                            rune
+	done                               bool
+	state                              rState
+	recordSepLen                       int8
+	quoteSet                           bool
+	commentSet                         bool
+	trsEmitsRecord                     bool
+	trimHeaders                        bool
+	removeHeaderRow                    bool
+	errorOnNoRows                      bool
+	removeByteOrderMarker              bool
+	errOnNoByteOrderMarker             bool
+	commentsAllowedAfterStartOfRecords bool
 }
 
 func (cfg *rCfg) validate() error {
@@ -504,25 +499,26 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, ConfigurationError{err}
+		return nil, fmt.Errorf("%w: %w", ErrBadConfig, err)
 	}
 
 	cr := Reader{
-		quote:                  cfg.quote,
-		numFields:              cfg.numFields,
-		fieldSeparator:         cfg.fieldSeparator,
-		comment:                cfg.comment,
-		trsEmitsRecord:         cfg.trsEmitsRecord,
-		quoteSet:               cfg.quoteSet,
-		commentSet:             cfg.commentSet,
-		trimHeaders:            cfg.trimHeaders,
-		removeHeaderRow:        cfg.removeHeaderRow,
-		errorOnNoRows:          cfg.errorOnNoRows,
-		headers:                cfg.headers,
-		recordSep:              cfg.recordSep,
-		recordSepLen:           cfg.recordSepLen,
-		removeByteOrderMarker:  cfg.removeByteOrderMarker,
-		errOnNoByteOrderMarker: cfg.errOnNoByteOrderMarker,
+		quote:                              cfg.quote,
+		numFields:                          cfg.numFields,
+		fieldSeparator:                     cfg.fieldSeparator,
+		comment:                            cfg.comment,
+		trsEmitsRecord:                     cfg.trsEmitsRecord,
+		quoteSet:                           cfg.quoteSet,
+		commentSet:                         cfg.commentSet,
+		trimHeaders:                        cfg.trimHeaders,
+		removeHeaderRow:                    cfg.removeHeaderRow,
+		errorOnNoRows:                      cfg.errorOnNoRows,
+		headers:                            cfg.headers,
+		recordSep:                          cfg.recordSep,
+		recordSepLen:                       cfg.recordSepLen,
+		removeByteOrderMarker:              cfg.removeByteOrderMarker,
+		errOnNoByteOrderMarker:             cfg.errOnNoByteOrderMarker,
+		commentsAllowedAfterStartOfRecords: cfg.commentsAllowedAfterStartOfRecords,
 	}
 
 	cr.initPipeline(cfg.reader, cfg.borrowRow, cfg.discoverRecordSeparator)
@@ -899,6 +895,18 @@ func (r *Reader) handleEOF() bool {
 
 func (r *Reader) prepareRow() bool {
 
+	// TODO: as a micro-optimization
+	//
+	// the break condition check here can actually be added
+	// to the end of the for loop
+	//
+	// there is a possible case where EOF is encountered and there is one rune
+	// to process where there is a loop around
+	//
+	// that case needs thorough handling and edge case testing before we should
+	// seek to optimize away the duplicate done check here. Note that the scan
+	// operation now always starts off with a check of the done flag which makes
+	// this a duplicate read of the variable.
 	for !r.done {
 		c, size, rErr := r.reader.ReadRune()
 
@@ -1004,7 +1012,7 @@ func (r *Reader) prepareRow() bool {
 				}
 				if r.quoteSet && c == r.quote {
 					r.state = rStateInQuotedField
-				} else if r.commentSet && c == r.comment {
+				} else if (r.recordIndex == 0 || r.commentsAllowedAfterStartOfRecords) && r.commentSet && c == r.comment {
 					r.state = rStateInLineComment
 				} else {
 					r.recordBuf = append(r.recordBuf, []byte(string(c))...)
