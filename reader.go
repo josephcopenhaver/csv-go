@@ -11,8 +11,6 @@ import (
 	"unsafe"
 )
 
-// TODO: support utf16?
-
 type BufferedReader interface {
 	io.Reader
 	ReadRune() (r rune, size int, err error)
@@ -369,8 +367,6 @@ type rCfg struct {
 	removeByteOrderMarker              bool
 	errOnNoByteOrderMarker             bool
 	commentsAllowedAfterStartOfRecords bool
-	//
-	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check?
 }
 
 type Reader struct {
@@ -731,12 +727,6 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 		r.checkNumFields = r.checkNumFieldsWithDiscovery
 	}
 
-	// TODO: turn off allowing comments after first record/header line encountered?
-	// TODO: must handle zero columns case in some fashion
-	// TODO: how about ignoring empty newlines encountered before header or data rows?
-	// TODO: how about ignoring multiple empty newlines at the end of the document? (probably
-	// okay to do if expected field count is greater than 1, field content overlapping with a record separator should be quoted)
-
 	if !discoverRecordSeparator {
 		r.updateIsRecordSeparatorImpl()
 	} else {
@@ -977,12 +967,10 @@ func (r *Reader) prepareRow() bool {
 			if c == utf8ByteOrderMarker {
 				if r.removeByteOrderMarker {
 					r.state = rStateStartOfRecord
-					if r.done {
-						// checking just in case EOF was encountered earlier
-						// with a size > 0
-						break
-					}
-					continue
+
+					// checking just in case EOF was encountered earlier
+					// with a size > 0
+					goto CONTINUE_UNLESS_DONE
 				}
 			} else if r.errOnNoByteOrderMarker {
 				r.done = true
@@ -1115,15 +1103,14 @@ func (r *Reader) prepareRow() bool {
 			if r.isRecordSeparator(c) {
 				r.state = rStateStartOfRecord
 				// r.recordIndex++ // not valid in this case because the previous state was not a record
-				if r.done {
-					// checking just in case EOF was encountered earlier
-					// with a size > 0
-					break
-				}
-				continue
+
+				// checking just in case EOF was encountered earlier
+				// with a size > 0
+				goto CONTINUE_UNLESS_DONE
 			}
 		}
 
+	CONTINUE_UNLESS_DONE:
 		if r.done {
 			break
 		}
