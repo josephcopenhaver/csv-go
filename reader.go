@@ -57,6 +57,7 @@ var (
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
 	ErrBadRecordSeparator          = errors.New("record separator can only be one rune long or \"\\r\\n\"")
 	ErrIncompleteQuotedField       = fmt.Errorf("incomplete quoted field: %w", io.ErrUnexpectedEOF)
+	ErrQuoteInUnquotedField        = fmt.Errorf("quote found in unquoted field")
 	ErrInvalidQuotedFieldEnding    = errors.New("unexpected character found after end of quoted field") // expecting field separator, record separator, quote char, or end of file if field count matches expectations
 	ErrNoHeaderRow                 = fmt.Errorf("no header row: %w", io.ErrUnexpectedEOF)
 	ErrNoRows                      = fmt.Errorf("no rows: %w", io.ErrUnexpectedEOF)
@@ -142,7 +143,7 @@ func (readerOpts) Reader(r io.Reader) ReaderOption {
 
 func (readerOpts) ErrorOnNoRows(b bool) ReaderOption {
 	return func(cfg *rCfg) {
-		cfg.errorOnNoRows = b
+		cfg.errOnNoRows = b
 	}
 }
 
@@ -177,9 +178,15 @@ func (readerOpts) RemoveByteOrderMarker(b bool) ReaderOption {
 	}
 }
 
-func (readerOpts) ErrOnNoByteOrderMarker(b bool) ReaderOption {
+func (readerOpts) ErrorOnNoByteOrderMarker(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.errOnNoByteOrderMarker = b
+	}
+}
+
+func (readerOpts) ErrorOnQuotesInUnquotedField(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.errOnQuotesInUnquotedField = b
 	}
 }
 
@@ -360,13 +367,14 @@ type rCfg struct {
 	discoverRecordSeparator            bool
 	trimHeaders                        bool
 	commentSet                         bool
-	errorOnNoRows                      bool
+	errOnNoRows                        bool
 	borrowRow                          bool
 	trsEmitsRecord                     bool
 	numFieldsSet                       bool
 	removeByteOrderMarker              bool
 	errOnNoByteOrderMarker             bool
 	commentsAllowedAfterStartOfRecords bool
+	errOnQuotesInUnquotedField         bool
 }
 
 type Reader struct {
@@ -401,10 +409,11 @@ type Reader struct {
 	commentsAllowedAfterStartOfRecords bool
 	quoteSet                           bool
 	commentSet                         bool
+	errOnQuotesInUnquotedField         bool
 	trsEmitsRecord                     bool
 	trimHeaders                        bool
 	removeHeaderRow                    bool
-	errorOnNoRows                      bool
+	errOnNoRows                        bool
 	removeByteOrderMarker              bool
 	errOnNoByteOrderMarker             bool
 }
@@ -491,10 +500,11 @@ func (cfg *rCfg) validate() error {
 func NewReader(options ...ReaderOption) (*Reader, error) {
 
 	cfg := rCfg{
-		numFields:      -1,
-		fieldSeparator: ',',
-		recordSep:      [2]rune{asciiLineFeed, 0},
-		recordSepLen:   1,
+		numFields:                  -1,
+		fieldSeparator:             ',',
+		recordSep:                  [2]rune{asciiLineFeed, 0},
+		recordSepLen:               1,
+		errOnQuotesInUnquotedField: true,
 	}
 
 	for _, f := range options {
@@ -515,13 +525,14 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		commentSet:                         cfg.commentSet,
 		trimHeaders:                        cfg.trimHeaders,
 		removeHeaderRow:                    cfg.removeHeaderRow,
-		errorOnNoRows:                      cfg.errorOnNoRows,
+		errOnNoRows:                        cfg.errOnNoRows,
 		headers:                            cfg.headers,
 		recordSep:                          cfg.recordSep,
 		recordSepLen:                       cfg.recordSepLen,
 		removeByteOrderMarker:              cfg.removeByteOrderMarker,
 		errOnNoByteOrderMarker:             cfg.errOnNoByteOrderMarker,
 		commentsAllowedAfterStartOfRecords: cfg.commentsAllowedAfterStartOfRecords,
+		errOnQuotesInUnquotedField:         cfg.errOnQuotesInUnquotedField,
 	}
 
 	cr.initPipeline(cfg.reader, cfg.borrowRow, cfg.discoverRecordSeparator)
@@ -807,7 +818,7 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 		}
 	}
 
-	if r.headers == nil && !r.errorOnNoRows {
+	if r.headers == nil && !r.errOnNoRows {
 		return
 	}
 
@@ -821,7 +832,7 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 			if !v && r.err == nil {
 				if !headersHandled {
 					r.parsingErr(ErrNoHeaderRow)
-				} else if r.errorOnNoRows {
+				} else if r.errOnNoRows {
 					r.parsingErr(ErrNoRows)
 				}
 			}
@@ -999,9 +1010,9 @@ func (r *Reader) prepareRow() bool {
 					}
 					return false
 				}
-				if r.quoteSet && c == r.quote {
+				if c == r.quote && r.quoteSet {
 					r.state = rStateInQuotedField
-				} else if (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) && r.commentSet && c == r.comment {
+				} else if c == r.comment && r.commentSet && (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) {
 					r.state = rStateInLineComment
 				} else {
 					r.recordBuf = append(r.recordBuf, []byte(string(c))...)
@@ -1067,7 +1078,7 @@ func (r *Reader) prepareRow() bool {
 					}
 					return false
 				}
-				if r.quoteSet && c == r.quote {
+				if c == r.quote && r.quoteSet {
 					r.state = rStateInQuotedField
 				} else {
 					r.recordBuf = append(r.recordBuf, []byte(string(c))...)
@@ -1094,6 +1105,11 @@ func (r *Reader) prepareRow() bool {
 						r.recordIndex++
 						return true
 					}
+					return false
+				}
+				if c == r.quote && r.quoteSet && r.errOnQuotesInUnquotedField {
+					r.done = true
+					r.parsingErr(ErrQuoteInUnquotedField)
 					return false
 				}
 				r.recordBuf = append(r.recordBuf, []byte(string(c))...)
