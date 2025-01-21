@@ -11,9 +11,6 @@ import (
 	"unsafe"
 )
 
-// TODO: add an option to strip a starting utf8/utf16 byte order marker
-// TODO: support utf16?
-
 type BufferedReader interface {
 	io.Reader
 	ReadRune() (r rune, size int, err error)
@@ -28,12 +25,14 @@ const (
 	asciiFormFeed       = 0x0C
 	utf8NextLine        = 0x85
 	utf8LineSeparator   = 0x2028
+	utf8ByteOrderMarker = 0xEFBBBF
 )
 
 type rState uint8
 
 const (
-	rStateStartOfRecord rState = iota
+	rStateStartOfDoc rState = iota
+	rStateStartOfRecord
 	rStateInQuotedField
 	rStateEndOfQuotedField
 	rStateStartOfField
@@ -54,21 +53,17 @@ func (et posErrType) String() string {
 }
 
 var (
+	ErrBadConfig                   = errors.New("bad config")
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
-	ErrBadRecordSeparator          = errors.New("record separator can only be one rune long or \"\r\n\"")
-	ErrIncompleteQuotedField       = fmt.Errorf("incomplete quoted field: %w", UnexpectedEOFError{})
+	ErrBadRecordSeparator          = errors.New("record separator can only be one rune long or \"\\r\\n\"")
+	ErrIncompleteQuotedField       = fmt.Errorf("incomplete quoted field: %w", io.ErrUnexpectedEOF)
+	ErrQuoteInUnquotedField        = fmt.Errorf("quote found in unquoted field")
 	ErrInvalidQuotedFieldEnding    = errors.New("unexpected character found after end of quoted field") // expecting field separator, record separator, quote char, or end of file if field count matches expectations
-	ErrNoHeaderRow                 = fmt.Errorf("no header row: %w", UnexpectedEOFError{})
-	ErrNoRows                      = fmt.Errorf("no rows: %w", UnexpectedEOFError{})
-	// config errors
-	ErrNilReader = errors.New("nil reader")
+	ErrNoHeaderRow                 = fmt.Errorf("no header row: %w", io.ErrUnexpectedEOF)
+	ErrNoRows                      = fmt.Errorf("no rows: %w", io.ErrUnexpectedEOF)
+	ErrNoByteOrderMarker           = errors.New("no byte order marker")
+	ErrNilReader                   = errors.New("nil reader")
 )
-
-type UnexpectedEOFError struct{}
-
-func (e UnexpectedEOFError) Error() string {
-	return io.ErrUnexpectedEOF.Error()
-}
 
 type posTracedErr struct {
 	err                                error
@@ -112,18 +107,6 @@ func newParsingError(byteIndex, recordIndex, fieldIndex uint, err error) Parsing
 	}}
 }
 
-type ConfigurationError struct {
-	err error
-}
-
-func (e ConfigurationError) Error() string {
-	return e.err.Error()
-}
-
-func (e ConfigurationError) Unwrap() error {
-	return e.err
-}
-
 type ErrFieldCountMismatch struct {
 	exp, act int
 }
@@ -160,7 +143,7 @@ func (readerOpts) Reader(r io.Reader) ReaderOption {
 
 func (readerOpts) ErrorOnNoRows(b bool) ReaderOption {
 	return func(cfg *rCfg) {
-		cfg.errorOnNoRows = b
+		cfg.errOnNoRows = b
 	}
 }
 
@@ -189,17 +172,23 @@ func (readerOpts) RemoveHeaderRow(b bool) ReaderOption {
 	}
 }
 
-// func (readerOpts) RemoveByteOrderMarker(b bool) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.removeByteOrderMarker = b
-// 	}
-// }
+func (readerOpts) RemoveByteOrderMarker(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.removeByteOrderMarker = b
+	}
+}
 
-// func (readerOpts) ErrOnNoByteOrderMarker(b bool) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.errOnNoByteOrderMarker = b
-// 	}
-// }
+func (readerOpts) ErrorOnNoByteOrderMarker(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.errOnNoByteOrderMarker = b
+	}
+}
+
+func (readerOpts) ErrorOnQuotesInUnquotedField(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.errOnQuotesInUnquotedField = b
+	}
+}
 
 // // MaxNumFields does nothing at the moment except cause a panic
 // func (readerOpts) MaxNumFields(n int) ReaderOption {
@@ -246,6 +235,12 @@ func (readerOpts) Comment(r rune) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.comment = r
 		cfg.commentSet = true
+	}
+}
+
+func (readerOpts) CommentsAllowedAfterStartOfRecords(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.commentsAllowedAfterStartOfRecords = b
 	}
 }
 
@@ -355,31 +350,31 @@ func ReaderOpts() readerOpts {
 }
 
 type rCfg struct {
-	headers                 []string
-	reader                  io.Reader
-	recordSep               [2]rune
-	numFields               int
-	maxNumFields            int
-	maxNumRecords           int
-	maxNumRecordBytes       int
-	maxNumBytes             int
-	fieldSeparator          rune
-	quote                   rune
-	comment                 rune
-	recordSepLen            int8
-	quoteSet                bool
-	removeHeaderRow         bool
-	discoverRecordSeparator bool
-	trimHeaders             bool
-	commentSet              bool
-	errorOnNoRows           bool
-	borrowRow               bool
-	trsEmitsRecord          bool
-	numFieldsSet            bool
-	// removeByteOrderMarker   bool
-	// errOnNoByteOrderMarker  bool
-	//
-	// errorOnBadQuotedFieldEndings bool // TODO: support relaxing this check?
+	headers                            []string
+	reader                             io.Reader
+	recordSep                          [2]rune
+	numFields                          int
+	maxNumFields                       int
+	maxNumRecords                      int
+	maxNumRecordBytes                  int
+	maxNumBytes                        int
+	fieldSeparator                     rune
+	quote                              rune
+	comment                            rune
+	recordSepLen                       int8
+	quoteSet                           bool
+	removeHeaderRow                    bool
+	discoverRecordSeparator            bool
+	trimHeaders                        bool
+	commentSet                         bool
+	errOnNoRows                        bool
+	borrowRow                          bool
+	trsEmitsRecord                     bool
+	numFieldsSet                       bool
+	removeByteOrderMarker              bool
+	errOnNoByteOrderMarker             bool
+	commentsAllowedAfterStartOfRecords bool
+	errOnQuotesInUnquotedField         bool
 }
 
 type Reader struct {
@@ -403,13 +398,24 @@ type Reader struct {
 	comment           rune
 	done              bool
 	state             rState
-	recordSepLen      int8
-	quoteSet          bool
-	commentSet        bool
-	trsEmitsRecord    bool
-	trimHeaders       bool
-	removeHeaderRow   bool
-	errorOnNoRows     bool
+	// afterStartOfRecords is a flag set to communicate when the first records have been observed and potentially emitted
+	//
+	// this is useful for supporting comments after start of records explicitly with disabled being the default
+	//
+	// the recordIndex could also have been used for this purpose but it may have overflow issues for some input types
+	// and keeping its purpose singular and disconnected from parsing management is likely ideal
+	afterStartOfRecords                bool
+	recordSepLen                       int8
+	commentsAllowedAfterStartOfRecords bool
+	quoteSet                           bool
+	commentSet                         bool
+	errOnQuotesInUnquotedField         bool
+	trsEmitsRecord                     bool
+	trimHeaders                        bool
+	removeHeaderRow                    bool
+	errOnNoRows                        bool
+	removeByteOrderMarker              bool
+	errOnNoByteOrderMarker             bool
 }
 
 func (cfg *rCfg) validate() error {
@@ -494,10 +500,11 @@ func (cfg *rCfg) validate() error {
 func NewReader(options ...ReaderOption) (*Reader, error) {
 
 	cfg := rCfg{
-		numFields:      -1,
-		fieldSeparator: ',',
-		recordSep:      [2]rune{asciiLineFeed, 0},
-		recordSepLen:   1,
+		numFields:                  -1,
+		fieldSeparator:             ',',
+		recordSep:                  [2]rune{asciiLineFeed, 0},
+		recordSepLen:               1,
+		errOnQuotesInUnquotedField: true,
 	}
 
 	for _, f := range options {
@@ -505,23 +512,27 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, ConfigurationError{err}
+		return nil, fmt.Errorf("%w: %w", ErrBadConfig, err)
 	}
 
 	cr := Reader{
-		quote:           cfg.quote,
-		numFields:       cfg.numFields,
-		fieldSeparator:  cfg.fieldSeparator,
-		comment:         cfg.comment,
-		trsEmitsRecord:  cfg.trsEmitsRecord,
-		quoteSet:        cfg.quoteSet,
-		commentSet:      cfg.commentSet,
-		trimHeaders:     cfg.trimHeaders,
-		removeHeaderRow: cfg.removeHeaderRow,
-		errorOnNoRows:   cfg.errorOnNoRows,
-		headers:         cfg.headers,
-		recordSep:       cfg.recordSep,
-		recordSepLen:    cfg.recordSepLen,
+		quote:                              cfg.quote,
+		numFields:                          cfg.numFields,
+		fieldSeparator:                     cfg.fieldSeparator,
+		comment:                            cfg.comment,
+		trsEmitsRecord:                     cfg.trsEmitsRecord,
+		quoteSet:                           cfg.quoteSet,
+		commentSet:                         cfg.commentSet,
+		trimHeaders:                        cfg.trimHeaders,
+		removeHeaderRow:                    cfg.removeHeaderRow,
+		errOnNoRows:                        cfg.errOnNoRows,
+		headers:                            cfg.headers,
+		recordSep:                          cfg.recordSep,
+		recordSepLen:                       cfg.recordSepLen,
+		removeByteOrderMarker:              cfg.removeByteOrderMarker,
+		errOnNoByteOrderMarker:             cfg.errOnNoByteOrderMarker,
+		commentsAllowedAfterStartOfRecords: cfg.commentsAllowedAfterStartOfRecords,
+		errOnQuotesInUnquotedField:         cfg.errOnQuotesInUnquotedField,
 	}
 
 	cr.initPipeline(cfg.reader, cfg.borrowRow, cfg.discoverRecordSeparator)
@@ -640,6 +651,7 @@ func (r *Reader) nextRuneIsLF() bool {
 
 func (r *Reader) defaultCheckNumFields() bool {
 	if len(r.fieldLengths) == r.numFields {
+		r.afterStartOfRecords = true
 		return true
 	}
 
@@ -726,12 +738,6 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 		r.checkNumFields = r.checkNumFieldsWithDiscovery
 	}
 
-	// TODO: turn off allowing comments after first record/header line encountered?
-	// TODO: must handle zero columns case in some fashion
-	// TODO: how about ignoring empty newlines encountered before header or data rows?
-	// TODO: how about ignoring multiple empty newlines at the end of the document? (probably
-	// okay to do if expected field count is greater than 1, field content overlapping with a record separator should be quoted)
-
 	if !discoverRecordSeparator {
 		r.updateIsRecordSeparatorImpl()
 	} else {
@@ -812,7 +818,7 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 		}
 	}
 
-	if r.headers == nil && !r.errorOnNoRows {
+	if r.headers == nil && !r.errOnNoRows {
 		return
 	}
 
@@ -826,7 +832,7 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 			if !v && r.err == nil {
 				if !headersHandled {
 					r.parsingErr(ErrNoHeaderRow)
-				} else if r.errorOnNoRows {
+				} else if r.errOnNoRows {
 					r.parsingErr(ErrNoRows)
 				}
 			}
@@ -850,19 +856,28 @@ func (r *Reader) handleEOF() bool {
 	// check if we're in a terminal state otherwise error
 	// there is no new character to process
 	switch r.state {
-	case rStateInQuotedField:
-		r.parsingErr(ErrIncompleteQuotedField)
-		return false
+	case rStateStartOfDoc:
+		if r.errOnNoByteOrderMarker {
+			r.done = true
+			r.ioErr(fmt.Errorf("%w: %w", ErrNoByteOrderMarker, io.EOF))
+			return false
+		}
+
+		r.state = rStateStartOfRecord
+		fallthrough
 	case rStateStartOfRecord:
 		if r.trsEmitsRecord && r.numFields == 1 {
 			r.fieldLengths = append(r.fieldLengths, 0)
 			// r.fieldStart = len(r.recordBuf)
 			if !r.checkNumFields() {
-				r.err = errors.Join(r.err, UnexpectedEOFError{})
+				r.err = errors.Join(r.err, io.ErrUnexpectedEOF)
 				return false
 			}
 			return true
 		}
+		return false
+	case rStateInQuotedField:
+		r.parsingErr(ErrIncompleteQuotedField)
 		return false
 	case rStateInLineComment:
 		return false
@@ -870,7 +885,7 @@ func (r *Reader) handleEOF() bool {
 		r.fieldLengths = append(r.fieldLengths, 0)
 		// r.fieldStart = len(r.recordBuf)
 		if !r.checkNumFields() {
-			r.err = errors.Join(r.err, UnexpectedEOFError{})
+			r.err = errors.Join(r.err, io.ErrUnexpectedEOF)
 			return false
 		}
 		return true
@@ -878,7 +893,7 @@ func (r *Reader) handleEOF() bool {
 		r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
 		r.fieldStart = len(r.recordBuf)
 		if !r.checkNumFields() {
-			r.err = errors.Join(r.err, UnexpectedEOFError{})
+			r.err = errors.Join(r.err, io.ErrUnexpectedEOF)
 			return false
 		}
 		return true
@@ -889,7 +904,7 @@ func (r *Reader) handleEOF() bool {
 
 func (r *Reader) prepareRow() bool {
 
-	for !r.done {
+	for {
 		c, size, rErr := r.reader.ReadRune()
 
 		// advance the position indicator
@@ -900,6 +915,16 @@ func (r *Reader) prepareRow() bool {
 			//
 			// handle a non UTF8 byte
 			//
+
+			if rStateStartOfDoc == r.state {
+				if r.errOnNoByteOrderMarker {
+					r.done = true
+					r.parsingErr(ErrNoByteOrderMarker)
+					return false
+				}
+
+				r.state = rStateStartOfRecord
+			}
 
 			if err := r.reader.UnreadRune(); err != nil {
 				panic(err)
@@ -949,6 +974,23 @@ func (r *Reader) prepareRow() bool {
 		}
 
 		switch r.state {
+		case rStateStartOfDoc:
+			if c == utf8ByteOrderMarker {
+				if r.removeByteOrderMarker {
+					r.state = rStateStartOfRecord
+
+					// checking just in case EOF was encountered earlier
+					// with a size > 0
+					goto CONTINUE_UNLESS_DONE
+				}
+			} else if r.errOnNoByteOrderMarker {
+				r.done = true
+				r.parsingErr(ErrNoByteOrderMarker)
+				return false
+			}
+
+			r.state = rStateStartOfRecord
+			fallthrough
 		case rStateStartOfRecord:
 			switch c {
 			case r.fieldSeparator:
@@ -968,9 +1010,9 @@ func (r *Reader) prepareRow() bool {
 					}
 					return false
 				}
-				if r.quoteSet && c == r.quote {
+				if c == r.quote && r.quoteSet {
 					r.state = rStateInQuotedField
-				} else if r.commentSet && c == r.comment {
+				} else if c == r.comment && r.commentSet && (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) {
 					r.state = rStateInLineComment
 				} else {
 					r.recordBuf = append(r.recordBuf, []byte(string(c))...)
@@ -1036,7 +1078,7 @@ func (r *Reader) prepareRow() bool {
 					}
 					return false
 				}
-				if r.quoteSet && c == r.quote {
+				if c == r.quote && r.quoteSet {
 					r.state = rStateInQuotedField
 				} else {
 					r.recordBuf = append(r.recordBuf, []byte(string(c))...)
@@ -1065,6 +1107,11 @@ func (r *Reader) prepareRow() bool {
 					}
 					return false
 				}
+				if c == r.quote && r.quoteSet && r.errOnQuotesInUnquotedField {
+					r.done = true
+					r.parsingErr(ErrQuoteInUnquotedField)
+					return false
+				}
 				r.recordBuf = append(r.recordBuf, []byte(string(c))...)
 				// r.state = rStateInField
 			}
@@ -1072,8 +1119,16 @@ func (r *Reader) prepareRow() bool {
 			if r.isRecordSeparator(c) {
 				r.state = rStateStartOfRecord
 				// r.recordIndex++ // not valid in this case because the previous state was not a record
-				continue
+
+				// checking just in case EOF was encountered earlier
+				// with a size > 0
+				goto CONTINUE_UNLESS_DONE
 			}
+		}
+
+	CONTINUE_UNLESS_DONE:
+		if r.done {
+			break
 		}
 	}
 
