@@ -570,13 +570,17 @@ func (r *Reader) ioErr(err error) {
 }
 
 func (r *Reader) borrowedRow() []string {
-	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields {
+	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
 		return nil
 	}
 
 	row := make([]string, len(r.fieldLengths))
 
 	r.row = func() []string {
+		if len(r.fieldLengths) != r.numFields || r.err != nil {
+			return nil
+		}
+
 		p := 0
 		for i, s := range r.fieldLengths {
 			if s == 0 {
@@ -593,7 +597,7 @@ func (r *Reader) borrowedRow() []string {
 }
 
 func (r *Reader) defaultRow() []string {
-	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields {
+	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
 		return nil
 	}
 
@@ -602,7 +606,7 @@ func (r *Reader) defaultRow() []string {
 }
 
 func (r *Reader) defaultClonedRow() []string {
-	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields {
+	if len(r.fieldLengths) != r.numFields || r.err != nil {
 		return nil
 	}
 
