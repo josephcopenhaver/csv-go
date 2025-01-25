@@ -24,8 +24,7 @@ func main() {
 		panic(err)
 	}
 
-	for cr.Scan() {
-		row := cr.Row()
+	for row := range cr.IntoIter() {
 		println(strings.Join(row, ","))
 	}
 	if err := cr.Err(); err != nil {

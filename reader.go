@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"iter"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -1137,6 +1138,30 @@ func (r *Reader) prepareRow() bool {
 	}
 
 	return r.checkNumFields()
+}
+
+// IntoIter converts the reader state into an iterator.
+// Calling this method more than once returns the same iterator instance.
+//
+// If the reader is configured with BorrowRow(true) then the resulting
+// slice and field strings are only valid to use up until the next
+// iteration and should not be saved to persistent memory.
+//
+// It is best practice to check if Err() returns a non-nil
+// error after fully traversing this iterator.
+//
+// This is just a syntactic sugar method to work with range statements
+// in go1.23 and later.
+func (r *Reader) IntoIter() iter.Seq[[]string] {
+	return r.iter
+}
+
+func (r *Reader) iter(yield func([]string) bool) {
+	for r.scan() {
+		if !yield(r.row()) {
+			return
+		}
+	}
 }
 
 //
