@@ -35,6 +35,7 @@ const (
 	rStateStartOfDoc rState = iota
 	rStateStartOfRecord
 	rStateInQuotedField
+	rStateInQuotedFieldAfterEscape
 	rStateEndOfQuotedField
 	rStateStartOfField
 	rStateInField
@@ -64,6 +65,11 @@ var (
 	ErrNoRows                      = fmt.Errorf("no rows: %w", io.ErrUnexpectedEOF)
 	ErrNoByteOrderMarker           = errors.New("no byte order marker")
 	ErrNilReader                   = errors.New("nil reader")
+	ErrInvalidEscapeInQuotedField  = errors.New("invalid escape sequence in quoted field")
+	ErrUnexpectedQuoteAfterField   = errors.New("unexpected quote after quoted+escaped field")
+
+	errInvalidEscapeInQuotedFieldBadByte = fmt.Errorf("%w: bad byte", ErrInvalidEscapeInQuotedField)
+	errInvalidEscapeInQuotedFieldBadRune = fmt.Errorf("%w: bad rune", ErrInvalidEscapeInQuotedField)
 )
 
 type posTracedErr struct {
@@ -232,6 +238,21 @@ func (readerOpts) Quote(r rune) ReaderOption {
 	}
 }
 
+// Escape is useful for specifying what character
+// is used to escape a quote in a field and the literal
+// escape character itself.
+//
+// This is mainly useful when processing a spark csv
+// file as it does not follow strict rfc4180.
+//
+// So set to '\\' if you have this need.
+func (readerOpts) Escape(r rune) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.escape = r
+		cfg.escapeSet = true
+	}
+}
+
 func (readerOpts) Comment(r rune) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.comment = r
@@ -361,9 +382,11 @@ type rCfg struct {
 	maxNumBytes                        int
 	fieldSeparator                     rune
 	quote                              rune
+	escape                             rune
 	comment                            rune
 	recordSepLen                       int8
 	quoteSet                           bool
+	escapeSet                          bool
 	removeHeaderRow                    bool
 	discoverRecordSeparator            bool
 	trimHeaders                        bool
@@ -395,6 +418,7 @@ type Reader struct {
 	fieldIndex        uint
 	byteIndex         uint
 	quote             rune
+	escape            rune
 	fieldSeparator    rune
 	comment           rune
 	done              bool
@@ -409,6 +433,7 @@ type Reader struct {
 	recordSepLen                       int8
 	commentsAllowedAfterStartOfRecords bool
 	quoteSet                           bool
+	escapeSet                          bool
 	commentSet                         bool
 	errOnQuotesInUnquotedField         bool
 	trsEmitsRecord                     bool
@@ -423,6 +448,12 @@ func (cfg *rCfg) validate() error {
 
 	if cfg.reader == nil {
 		return ErrNilReader
+	}
+
+	// experiment: assumes field separator and record separator chars
+	// are not escaped in spark
+	if cfg.quoteSet && cfg.escapeSet && cfg.quote == cfg.escape {
+		cfg.escapeSet = false
 	}
 
 	if cfg.headers != nil {
@@ -460,7 +491,23 @@ func (cfg *rCfg) validate() error {
 				return errors.New("invalid record separator and field separator combination")
 			}
 			if cfg.commentSet && cfg.recordSep[0] == cfg.comment {
+				return errors.New("invalid record separator and comment combination")
+			}
+			if cfg.escapeSet && cfg.recordSep[0] == cfg.escape {
+				return errors.New("invalid record separator and escape combination")
+			}
+		} else {
+			if cfg.quoteSet && (cfg.quote == '\r' || cfg.quote == '\n') {
 				return errors.New("invalid record separator and quote combination")
+			}
+			if cfg.fieldSeparator == '\r' || cfg.fieldSeparator == '\n' {
+				return errors.New("invalid record separator and field separator combination")
+			}
+			if cfg.commentSet && (cfg.comment == '\r' || cfg.comment == '\n') {
+				return errors.New("invalid record separator and comment combination")
+			}
+			if cfg.escapeSet && (cfg.escape == '\r' || cfg.escape == '\n') {
+				return errors.New("invalid record separator and escape combination")
 			}
 		}
 	}
@@ -483,8 +530,24 @@ func (cfg *rCfg) validate() error {
 		}
 	}
 
-	if cfg.commentSet && !validUtf8Rune(cfg.comment) {
-		return errors.New("invalid comment value")
+	if cfg.commentSet {
+		if !validUtf8Rune(cfg.comment) {
+			return errors.New("invalid comment value")
+		}
+
+		if cfg.escapeSet && cfg.comment == cfg.escape {
+			return errors.New("invalid comment and escape combination")
+		}
+	}
+
+	if cfg.escapeSet {
+		if !validUtf8Rune(cfg.comment) {
+			return errors.New("invalid escape value")
+		}
+
+		if !cfg.quoteSet {
+			return errors.New("escape can only be used when quoting is used and specified")
+		}
 	}
 
 	if cfg.numFieldsSet && cfg.numFields <= 0 {
@@ -518,11 +581,13 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 
 	cr := Reader{
 		quote:                              cfg.quote,
+		escape:                             cfg.escape,
 		numFields:                          cfg.numFields,
 		fieldSeparator:                     cfg.fieldSeparator,
 		comment:                            cfg.comment,
 		trsEmitsRecord:                     cfg.trsEmitsRecord,
 		quoteSet:                           cfg.quoteSet,
+		escapeSet:                          cfg.escapeSet,
 		commentSet:                         cfg.commentSet,
 		trimHeaders:                        cfg.trimHeaders,
 		removeHeaderRow:                    cfg.removeHeaderRow,
@@ -881,7 +946,7 @@ func (r *Reader) handleEOF() bool {
 			return true
 		}
 		return false
-	case rStateInQuotedField:
+	case rStateInQuotedField, rStateInQuotedFieldAfterEscape:
 		r.parsingErr(ErrIncompleteQuotedField)
 		return false
 	case rStateInLineComment:
@@ -951,6 +1016,12 @@ func (r *Reader) prepareRow() bool {
 			// case rStateInQuotedField:
 			// 	r.recordBuf = append(r.recordBuf, b)
 			// 	// r.state = rStateInQuotedField
+			case rStateInQuotedFieldAfterEscape:
+				if rErr == nil {
+					r.done = true
+					r.parsingErr(errInvalidEscapeInQuotedFieldBadByte)
+					return false
+				}
 			case rStateEndOfQuotedField:
 				if rErr == nil {
 					r.done = true
@@ -1015,22 +1086,51 @@ func (r *Reader) prepareRow() bool {
 					}
 					return false
 				}
+
 				if c == r.quote && r.quoteSet {
 					r.state = rStateInQuotedField
-				} else if c == r.comment && r.commentSet && (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) {
-					r.state = rStateInLineComment
-				} else {
-					r.recordBuf = append(r.recordBuf, []byte(string(c))...)
-					r.state = rStateInField
+
+					// checking just in case EOF was encountered earlier
+					// with a size > 0
+					goto CONTINUE_UNLESS_DONE
 				}
+
+				if c == r.comment && r.commentSet && (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) {
+					r.state = rStateInLineComment
+
+					// checking just in case EOF was encountered earlier
+					// with a size > 0
+					goto CONTINUE_UNLESS_DONE
+				}
+
+				r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+				r.state = rStateInField
 			}
 		case rStateInQuotedField:
 			switch c {
 			case r.quote:
 				r.state = rStateEndOfQuotedField
 			default:
+				if c == r.escape && r.escapeSet {
+					r.state = rStateInQuotedFieldAfterEscape
+
+					// checking just in case EOF was encountered earlier
+					// with a size > 0
+					goto CONTINUE_UNLESS_DONE
+				}
+
 				r.recordBuf = append(r.recordBuf, []byte(string(c))...)
 				// r.state = rStateInQuotedField
+			}
+		case rStateInQuotedFieldAfterEscape:
+			switch c {
+			case r.quote, r.escape:
+				r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+				r.state = rStateInQuotedField
+			default:
+				r.done = true
+				r.parsingErr(errInvalidEscapeInQuotedFieldBadRune)
+				return false
 			}
 		case rStateEndOfQuotedField:
 			switch c {
@@ -1043,6 +1143,11 @@ func (r *Reader) prepareRow() bool {
 				r.state = rStateStartOfField
 				r.fieldIndex++
 			case r.quote:
+				if r.escapeSet {
+					r.done = true
+					r.parsingErr(ErrUnexpectedQuoteAfterField)
+					return false
+				}
 				r.recordBuf = append(r.recordBuf, []byte(string(r.quote))...)
 				r.state = rStateInQuotedField
 			default:
@@ -1085,10 +1190,14 @@ func (r *Reader) prepareRow() bool {
 				}
 				if c == r.quote && r.quoteSet {
 					r.state = rStateInQuotedField
-				} else {
-					r.recordBuf = append(r.recordBuf, []byte(string(c))...)
-					r.state = rStateInField
+
+					// checking just in case EOF was encountered earlier
+					// with a size > 0
+					goto CONTINUE_UNLESS_DONE
 				}
+
+				r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+				r.state = rStateInField
 			}
 		case rStateInField:
 			switch c {
@@ -1121,14 +1230,14 @@ func (r *Reader) prepareRow() bool {
 				// r.state = rStateInField
 			}
 		case rStateInLineComment:
-			if r.isRecordSeparator(c) {
-				r.state = rStateStartOfRecord
-				// r.recordIndex++ // not valid in this case because the previous state was not a record
-
+			if !r.isRecordSeparator(c) {
 				// checking just in case EOF was encountered earlier
 				// with a size > 0
 				goto CONTINUE_UNLESS_DONE
 			}
+
+			r.state = rStateStartOfRecord
+			// r.recordIndex++ // not valid in this case because the previous state was not a record
 		}
 
 	CONTINUE_UNLESS_DONE:
