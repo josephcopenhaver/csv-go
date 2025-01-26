@@ -67,9 +67,14 @@ var (
 	ErrNilReader                   = errors.New("nil reader")
 	ErrInvalidEscapeInQuotedField  = errors.New("invalid escape sequence in quoted field")
 	ErrUnexpectedQuoteAfterField   = errors.New("unexpected quote after quoted+escaped field")
+	ErrBadUnreadRuneImpl           = errors.New("UnreadRune failed")
+	// ReadByte should never fail because we're always preceding this call with UnreadRune
+	//
+	// it could happen if someone is trying to read concurrently
+	ErrBadReadByteImpl = errors.New("ReadByte failed")
 
-	errInvalidEscapeInQuotedFieldBadByte = fmt.Errorf("%w: bad byte", ErrInvalidEscapeInQuotedField)
-	errInvalidEscapeInQuotedFieldBadRune = fmt.Errorf("%w: bad rune", ErrInvalidEscapeInQuotedField)
+	errInvalidEscapeInQuotedFieldUnexpectedByte = fmt.Errorf("%w: unexpected non-UTF8 byte following escape", ErrInvalidEscapeInQuotedField)
+	errInvalidEscapeInQuotedFieldUnexpectedRune = fmt.Errorf("%w: unexpected rune following escape", ErrInvalidEscapeInQuotedField)
 )
 
 type posTracedErr struct {
@@ -242,10 +247,18 @@ func (readerOpts) Quote(r rune) ReaderOption {
 // is used to escape a quote in a field and the literal
 // escape character itself.
 //
+// Without specifying this option a quote character is
+// expected to be escaped by it just being doubled while
+// the overall field is wrapped in quote characters.
+//
 // This is mainly useful when processing a spark csv
 // file as it does not follow strict rfc4180.
 //
 // So set to '\\' if you have this need.
+//
+// It is not valid to use this option without specifically
+// setting a quote. Doing so will result in an error being
+// returned on Reader creation.
 func (readerOpts) Escape(r rune) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.escape = r
@@ -402,9 +415,13 @@ type rCfg struct {
 }
 
 type Reader struct {
-	scan              func() bool
-	err               error
-	row               func() []string
+	scan func() bool
+	err  error
+	row  func() []string
+	// isRecordSeparator can set the reader state to errored
+	//
+	// note that it can return true and still set the error state
+	// for the next iteration
 	isRecordSeparator func(c rune) bool
 	checkNumFields    func() bool
 	reader            BufferedReader
@@ -561,6 +578,7 @@ func (cfg *rCfg) validate() error {
 	return nil
 }
 
+// NewReader creates a new instance of a CSV reader which is not safe for concurrent reads.
 func NewReader(options ...ReaderOption) (*Reader, error) {
 
 	cfg := rCfg{
@@ -576,7 +594,7 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrBadConfig, err)
+		return nil, errors.Join(ErrBadConfig, err)
 	}
 
 	cr := Reader{
@@ -689,6 +707,12 @@ func (r *Reader) defaultClonedRow() []string {
 	return row
 }
 
+// nextRuneIsLF can set the reader state to errored
+//
+// note that it can return true and still set the error state
+// for the next iteration
+//
+// if it changes r.err to non-nil then r.done will also be true
 func (r *Reader) nextRuneIsLF() bool {
 	c, size, err := r.reader.ReadRune()
 	if size <= 0 {
@@ -713,7 +737,8 @@ func (r *Reader) nextRuneIsLF() bool {
 	}
 
 	if err := r.reader.UnreadRune(); err != nil {
-		panic(err)
+		r.done = true
+		r.ioErr(errors.Join(ErrBadUnreadRuneImpl, err))
 	}
 
 	return false
@@ -726,7 +751,9 @@ func (r *Reader) defaultCheckNumFields() bool {
 	}
 
 	r.done = true
-	r.parsingErr(fieldCountMismatchErr(r.numFields, len(r.fieldLengths)))
+	if r.err == nil {
+		r.parsingErr(fieldCountMismatchErr(r.numFields, len(r.fieldLengths)))
+	}
 	return false
 }
 
@@ -740,8 +767,13 @@ func (r *Reader) isSingleRuneRecordSeparator(c rune) bool {
 	return c == r.recordSep[0]
 }
 
+// isCRLFRecordSeparator can set the reader state to errored
 func (r *Reader) isCRLFRecordSeparator(c rune) bool {
-	return (c == asciiCarriageReturn && r.nextRuneIsLF())
+	if c != asciiCarriageReturn {
+		return false
+	}
+
+	return r.nextRuneIsLF()
 }
 
 func (r *Reader) updateIsRecordSeparatorImpl() {
@@ -753,6 +785,7 @@ func (r *Reader) updateIsRecordSeparatorImpl() {
 	r.isRecordSeparator = r.isCRLFRecordSeparator
 }
 
+// isRecordSeparatorWithDiscovery can set the reader state to errored
 func (r *Reader) isRecordSeparatorWithDiscovery(c rune) bool {
 	isCarriageReturn, ok := isNewlineRune(c)
 	if !ok {
@@ -854,8 +887,10 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 				}
 
 				if checkHeadersMatch && !matching {
-					r.done = true
-					r.parsingErr(ErrUnexpectedHeaderRowContents)
+					if r.err == nil {
+						r.done = true
+						r.parsingErr(ErrUnexpectedHeaderRowContents)
+					}
 					return false
 				}
 			} else if checkHeadersMatch {
@@ -869,8 +904,10 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 					p += s
 
 					if field != r.headers[i] {
-						r.done = true
-						r.parsingErr(ErrUnexpectedHeaderRowContents)
+						if r.err == nil {
+							r.done = true
+							r.parsingErr(ErrUnexpectedHeaderRowContents)
+						}
 						return false
 					}
 				}
@@ -929,7 +966,7 @@ func (r *Reader) handleEOF() bool {
 	case rStateStartOfDoc:
 		if r.errOnNoByteOrderMarker {
 			r.done = true
-			r.ioErr(fmt.Errorf("%w: %w", ErrNoByteOrderMarker, io.EOF))
+			r.ioErr(errors.Join(ErrNoByteOrderMarker, io.EOF))
 			return false
 		}
 
@@ -997,11 +1034,15 @@ func (r *Reader) prepareRow() bool {
 			}
 
 			if err := r.reader.UnreadRune(); err != nil {
-				panic(err)
+				r.done = true
+				r.ioErr(errors.Join(ErrBadUnreadRuneImpl, err))
+				return false
 			}
 			var b byte
 			if v, err := r.reader.ReadByte(); err != nil {
-				panic(err)
+				r.done = true
+				r.ioErr(errors.Join(ErrBadReadByteImpl, err))
+				return false
 			} else {
 				b = v
 			}
@@ -1017,13 +1058,13 @@ func (r *Reader) prepareRow() bool {
 			// 	r.recordBuf = append(r.recordBuf, b)
 			// 	// r.state = rStateInQuotedField
 			case rStateInQuotedFieldAfterEscape:
-				if rErr == nil {
+				if rErr == nil || errors.Is(rErr, io.EOF) {
 					r.done = true
-					r.parsingErr(errInvalidEscapeInQuotedFieldBadByte)
+					r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedByte)
 					return false
 				}
 			case rStateEndOfQuotedField:
-				if rErr == nil {
+				if rErr == nil || errors.Is(rErr, io.EOF) {
 					r.done = true
 					r.parsingErr(ErrInvalidQuotedFieldEnding)
 					return false
@@ -1129,7 +1170,7 @@ func (r *Reader) prepareRow() bool {
 				r.state = rStateInQuotedField
 			default:
 				r.done = true
-				r.parsingErr(errInvalidEscapeInQuotedFieldBadRune)
+				r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedRune)
 				return false
 			}
 		case rStateEndOfQuotedField:
@@ -1162,6 +1203,16 @@ func (r *Reader) prepareRow() bool {
 					}
 					return false
 				}
+
+				// checking because isRecordSeparator can change the
+				// error state and we're about to try to set it
+				//
+				// if r.err is ever non-nil, then r.done is true so
+				// just need to check it
+				if r.err != nil {
+					return false
+				}
+
 				r.done = true
 				r.parsingErr(ErrInvalidQuotedFieldEnding)
 				return false
@@ -1222,6 +1273,16 @@ func (r *Reader) prepareRow() bool {
 					return false
 				}
 				if c == r.quote && r.quoteSet && r.errOnQuotesInUnquotedField {
+
+					// checking because isRecordSeparator can change the
+					// error state and we're about to try to set it
+					//
+					// if r.err is ever non-nil, then r.done is true so
+					// just need to check it
+					if r.err != nil {
+						return false
+					}
+
 					r.done = true
 					r.parsingErr(ErrQuoteInUnquotedField)
 					return false
