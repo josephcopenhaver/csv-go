@@ -8,11 +8,13 @@ import (
 	"unsafe"
 )
 
-// TODO: add an option to add a starting utf8/utf16 byte order marker
+// TODO: add an option to add a starting utf8 byte order marker
 
 var (
 	ErrRowNilOrEmpty   = errors.New("row is nil or empty")
 	ErrNonUTF8InRecord = errors.New("non-utf8 characters present in record")
+
+	errNonUTF8InRecordNonCRLFMode = fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
 )
 
 type Writer struct {
@@ -151,13 +153,6 @@ func (writerOpts) DiscoverFieldCount(v bool) WriterOption {
 	}
 }
 
-func (writerOpts) FieldCount(v int) WriterOption {
-	return func(cfg *wCfg) {
-		cfg.numFields = v
-		cfg.numFieldsSet = true
-	}
-}
-
 type wCfg struct {
 	headers           []string
 	writer            io.Writer
@@ -250,7 +245,7 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, ConfigurationError{err}
+		return nil, errors.Join(ErrBadConfig, err)
 	}
 
 	var doubleQuote [utf8.UTFMax * 2]byte
@@ -351,7 +346,7 @@ func (w *Writer) doubleQuotesInFieldForCustomFieldSep(v []byte) (int, error) {
 
 			// i += di
 			// continue
-			return -1, fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
+			return -1, errNonUTF8InRecordNonCRLFMode
 		}
 
 		if r == w.quote {
@@ -392,7 +387,7 @@ func (w *Writer) doubleQuotesInFieldForNormalFieldSep(v []byte) (int, error) {
 
 			// i += di
 			// continue
-			return -1, fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
+			return -1, errNonUTF8InRecordNonCRLFMode
 		}
 
 		if r == w.quote {
