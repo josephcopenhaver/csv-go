@@ -13,6 +13,7 @@ import (
 var (
 	ErrRowNilOrEmpty   = errors.New("row is nil or empty")
 	ErrNonUTF8InRecord = errors.New("non-utf8 characters present in record")
+	ErrWriterClosed    = errors.New("writer closed")
 
 	errNonUTF8InRecordNonCRLFMode = fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
 )
@@ -283,6 +284,22 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	}
 
 	return w, nil
+}
+
+// Close should be called after writing all rows
+// successfully to the underlying writer.
+//
+// Close currently always returns nil, but in the future
+// it may not.
+//
+// Should any configuration options require post-flight
+// checks they will be implemented here.
+//
+// It will never attempt to close the underlying writer
+// instance.
+func (w *Writer) Close() error {
+	w.err = ErrWriterClosed
+	return nil
 }
 
 func (w *Writer) writeField(input string) error {
