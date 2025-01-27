@@ -23,6 +23,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer cr.Close()
 
 	for row := range cr.IntoIter() {
 		println(strings.Join(row, ","))
