@@ -349,6 +349,7 @@ func (readerOpts) RecordSeparator(s string) ReaderOption {
 		return func(cfg *rCfg) {
 			cfg.recordSep[0] = r1
 			cfg.recordSepLen = 1
+			cfg.recordSepSet = true
 		}
 	}
 
@@ -368,6 +369,7 @@ func (readerOpts) RecordSeparator(s string) ReaderOption {
 			cfg.recordSep[0] = r1
 			cfg.recordSep[1] = r2
 			cfg.recordSepLen = 2
+			cfg.recordSepSet = true
 		}
 	}
 
@@ -412,6 +414,7 @@ type rCfg struct {
 	errOnNoByteOrderMarker             bool
 	commentsAllowedAfterStartOfRecords bool
 	errOnQuotesInUnquotedField         bool
+	recordSepSet                       bool
 }
 
 type Reader struct {
@@ -423,7 +426,7 @@ type Reader struct {
 	// note that it can return true and still set the error state
 	// for the next iteration
 	isRecordSeparator func(c rune) bool
-	checkNumFields    func() bool
+	checkNumFields    func(errTrailer error) bool
 	reader            BufferedReader
 	recordSep         [2]rune
 	recordBuf         []byte
@@ -490,7 +493,7 @@ func (cfg *rCfg) validate() error {
 
 	{
 		n := cfg.recordSepLen
-		if (n == 0) == (!cfg.discoverRecordSeparator) {
+		if (n == 0 && !cfg.discoverRecordSeparator) || (cfg.discoverRecordSeparator && cfg.recordSepSet) {
 			return errors.New("must specify one and only one of automatic record separator discovery or a specific recordSeparator")
 		}
 
@@ -558,12 +561,12 @@ func (cfg *rCfg) validate() error {
 	}
 
 	if cfg.escapeSet {
-		if !validUtf8Rune(cfg.comment) {
+		if !validUtf8Rune(cfg.escape) {
 			return errors.New("invalid escape value")
 		}
 
 		if !cfg.quoteSet {
-			return errors.New("escape can only be used when quoting is used and specified")
+			return errors.New("escape can only be used when quoting is enabled")
 		}
 	}
 
@@ -646,10 +649,18 @@ func (r *Reader) Scan() bool {
 }
 
 func (r *Reader) parsingErr(err error) {
+	if r.err != nil {
+		return
+	}
+
 	r.err = newParsingError(r.byteIndex, r.recordIndex, r.fieldIndex, err)
 }
 
 func (r *Reader) ioErr(err error) {
+	if r.err != nil {
+		return
+	}
+
 	r.err = newIOError(r.byteIndex, r.recordIndex, r.fieldIndex, err)
 }
 
@@ -744,20 +755,27 @@ func (r *Reader) nextRuneIsLF() bool {
 	return false
 }
 
-func (r *Reader) defaultCheckNumFields() bool {
+func (r *Reader) defaultCheckNumFields(errTrailer error) bool {
 	if len(r.fieldLengths) == r.numFields {
 		r.afterStartOfRecords = true
 		return true
 	}
 
 	r.done = true
-	if r.err == nil {
-		r.parsingErr(fieldCountMismatchErr(r.numFields, len(r.fieldLengths)))
+	if r.err != nil {
+		return false
 	}
+
+	r.parsingErr(fieldCountMismatchErr(r.numFields, len(r.fieldLengths)))
+	if errTrailer != nil {
+		r.err = errors.Join(r.err, errTrailer)
+	}
+
 	return false
 }
 
-func (r *Reader) checkNumFieldsWithDiscovery() bool {
+// errTrailer is unused since we're discovering the row length
+func (r *Reader) checkNumFieldsWithDiscovery(errTrailer error) bool {
 	r.numFields = len(r.fieldLengths)
 	r.checkNumFields = r.defaultCheckNumFields
 	return true
@@ -769,11 +787,7 @@ func (r *Reader) isSingleRuneRecordSeparator(c rune) bool {
 
 // isCRLFRecordSeparator can set the reader state to errored
 func (r *Reader) isCRLFRecordSeparator(c rune) bool {
-	if c != asciiCarriageReturn {
-		return false
-	}
-
-	return r.nextRuneIsLF()
+	return (c == asciiCarriageReturn && r.nextRuneIsLF())
 }
 
 func (r *Reader) updateIsRecordSeparatorImpl() {
@@ -844,6 +858,7 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 	if !discoverRecordSeparator {
 		r.updateIsRecordSeparatorImpl()
 	} else {
+		r.recordSepLen = 0
 		r.isRecordSeparator = r.isRecordSeparatorWithDiscovery
 	}
 
@@ -887,10 +902,8 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 				}
 
 				if checkHeadersMatch && !matching {
-					if r.err == nil {
-						r.done = true
-						r.parsingErr(ErrUnexpectedHeaderRowContents)
-					}
+					r.done = true
+					r.parsingErr(ErrUnexpectedHeaderRowContents)
 					return false
 				}
 			} else if checkHeadersMatch {
@@ -904,10 +917,8 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 					p += s
 
 					if field != r.headers[i] {
-						if r.err == nil {
-							r.done = true
-							r.parsingErr(ErrUnexpectedHeaderRowContents)
-						}
+						r.done = true
+						r.parsingErr(ErrUnexpectedHeaderRowContents)
 						return false
 					}
 				}
@@ -936,7 +947,7 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 		r.scan = func() bool {
 			r.scan = next
 			v := r.scan()
-			if !v && r.err == nil {
+			if !v {
 				if !headersHandled {
 					r.parsingErr(ErrNoHeaderRow)
 				} else if r.errOnNoRows {
@@ -960,13 +971,14 @@ func (r *Reader) fieldNumOverflow() bool {
 
 func (r *Reader) handleEOF() bool {
 
+	// r.done is always true when this function is called
+
 	// check if we're in a terminal state otherwise error
 	// there is no new character to process
 	switch r.state {
 	case rStateStartOfDoc:
 		if r.errOnNoByteOrderMarker {
-			r.done = true
-			r.ioErr(errors.Join(ErrNoByteOrderMarker, io.EOF))
+			r.ioErr(errors.Join(ErrNoByteOrderMarker, io.ErrUnexpectedEOF))
 			return false
 		}
 
@@ -976,11 +988,7 @@ func (r *Reader) handleEOF() bool {
 		if r.trsEmitsRecord && r.numFields == 1 {
 			r.fieldLengths = append(r.fieldLengths, 0)
 			// r.fieldStart = len(r.recordBuf)
-			if !r.checkNumFields() {
-				r.err = errors.Join(r.err, io.ErrUnexpectedEOF)
-				return false
-			}
-			return true
+			return r.checkNumFields(io.ErrUnexpectedEOF)
 		}
 		return false
 	case rStateInQuotedField, rStateInQuotedFieldAfterEscape:
@@ -991,19 +999,11 @@ func (r *Reader) handleEOF() bool {
 	case rStateStartOfField:
 		r.fieldLengths = append(r.fieldLengths, 0)
 		// r.fieldStart = len(r.recordBuf)
-		if !r.checkNumFields() {
-			r.err = errors.Join(r.err, io.ErrUnexpectedEOF)
-			return false
-		}
-		return true
+		return r.checkNumFields(io.ErrUnexpectedEOF)
 	case rStateEndOfQuotedField, rStateInField:
 		r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
 		r.fieldStart = len(r.recordBuf)
-		if !r.checkNumFields() {
-			r.err = errors.Join(r.err, io.ErrUnexpectedEOF)
-			return false
-		}
-		return true
+		return r.checkNumFields(io.ErrUnexpectedEOF)
 	}
 
 	panic("reader in unknown state when EOF encountered")
@@ -1058,15 +1058,39 @@ func (r *Reader) prepareRow() bool {
 			// 	r.recordBuf = append(r.recordBuf, b)
 			// 	// r.state = rStateInQuotedField
 			case rStateInQuotedFieldAfterEscape:
-				if rErr == nil || errors.Is(rErr, io.EOF) {
+				if rErr == nil {
 					r.done = true
 					r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedByte)
 					return false
+				} else if errors.Is(rErr, io.EOF) {
+					r.done = true
+					if r.err == nil {
+						r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedByte)
+						if len([]byte(string(r.quote))) > 1 || len([]byte(string(r.escape))) > 1 {
+							// EOF could have played a role in the parsing error
+							//
+							// so report it as well
+							r.err = errors.Join(r.err, io.ErrUnexpectedEOF)
+						}
+					}
+					return false
 				}
 			case rStateEndOfQuotedField:
-				if rErr == nil || errors.Is(rErr, io.EOF) {
+				if rErr == nil {
 					r.done = true
 					r.parsingErr(ErrInvalidQuotedFieldEnding)
+					return false
+				} else if errors.Is(rErr, io.EOF) {
+					r.done = true
+					if r.err == nil {
+						r.parsingErr(ErrInvalidQuotedFieldEnding)
+						if r.recordSepLen == 0 || (r.recordSepLen == 1 && len([]byte(string(r.recordSep[0]))) > 1) || (!r.escapeSet && len([]byte(string(r.quote))) > 1) || len([]byte(string(r.fieldSeparator))) > 1 {
+							// EOF could have played a role in the parsing error
+							//
+							// so report it as well
+							r.err = errors.Join(r.err, io.ErrUnexpectedEOF)
+						}
+					}
 					return false
 				}
 			case rStateInLineComment:
@@ -1120,7 +1144,7 @@ func (r *Reader) prepareRow() bool {
 					r.fieldLengths = append(r.fieldLengths, 0)
 					// r.fieldStart = len(r.recordBuf)
 					// r.state = rStateStartOfRecord
-					if r.checkNumFields() {
+					if r.checkNumFields(nil) {
 						r.fieldIndex = 0
 						r.recordIndex++
 						return true
@@ -1196,20 +1220,11 @@ func (r *Reader) prepareRow() bool {
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
 					r.fieldStart = len(r.recordBuf)
 					r.state = rStateStartOfRecord
-					if r.checkNumFields() {
+					if r.checkNumFields(nil) {
 						r.fieldIndex = 0
 						r.recordIndex++
 						return true
 					}
-					return false
-				}
-
-				// checking because isRecordSeparator can change the
-				// error state and we're about to try to set it
-				//
-				// if r.err is ever non-nil, then r.done is true so
-				// just need to check it
-				if r.err != nil {
 					return false
 				}
 
@@ -1232,7 +1247,7 @@ func (r *Reader) prepareRow() bool {
 					r.fieldLengths = append(r.fieldLengths, 0)
 					// r.fieldStart = len(r.recordBuf)
 					r.state = rStateStartOfRecord
-					if r.checkNumFields() {
+					if r.checkNumFields(nil) {
 						r.fieldIndex = 0
 						r.recordIndex++
 						return true
@@ -1265,7 +1280,7 @@ func (r *Reader) prepareRow() bool {
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
 					r.fieldStart = len(r.recordBuf)
 					r.state = rStateStartOfRecord
-					if r.checkNumFields() {
+					if r.checkNumFields(nil) {
 						r.fieldIndex = 0
 						r.recordIndex++
 						return true
@@ -1273,16 +1288,6 @@ func (r *Reader) prepareRow() bool {
 					return false
 				}
 				if c == r.quote && r.quoteSet && r.errOnQuotesInUnquotedField {
-
-					// checking because isRecordSeparator can change the
-					// error state and we're about to try to set it
-					//
-					// if r.err is ever non-nil, then r.done is true so
-					// just need to check it
-					if r.err != nil {
-						return false
-					}
-
 					r.done = true
 					r.parsingErr(ErrQuoteInUnquotedField)
 					return false
@@ -1307,7 +1312,7 @@ func (r *Reader) prepareRow() bool {
 		}
 	}
 
-	return r.checkNumFields()
+	return r.checkNumFields(nil)
 }
 
 // IntoIter converts the reader state into an iterator.
