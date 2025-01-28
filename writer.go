@@ -49,6 +49,7 @@ type Writer struct {
 	recordSepLen        int8
 	doubleQuoteByteLen  int8
 	recordSepByteLen    int8
+	errOnNonUTF8        bool
 }
 
 type WriterOption func(*wCfg)
@@ -154,6 +155,12 @@ func (writerOpts) DiscoverFieldCount(v bool) WriterOption {
 	}
 }
 
+func (writerOpts) ErrorOnNonUTF8(v bool) WriterOption {
+	return func(cfg *wCfg) {
+		cfg.errOnNonUTF8 = v
+	}
+}
+
 type wCfg struct {
 	headers           []string
 	writer            io.Writer
@@ -165,6 +172,7 @@ type wCfg struct {
 	quoteSet          bool
 	trimHeaders       bool
 	numFieldsSet      bool
+	errOnNonUTF8      bool
 	recordSepLen      int8
 }
 
@@ -239,6 +247,7 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		recordSep:      [2]rune{asciiLineFeed, 0},
 		recordSepLen:   1,
 		fieldSeparator: ',',
+		errOnNonUTF8:   true,
 	}
 
 	for _, f := range options {
@@ -275,6 +284,7 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		recordSep:          cfg.recordSep,
 		recordSepLen:       cfg.recordSepLen,
 		fieldSep:           cfg.fieldSeparator,
+		errOnNonUTF8:       cfg.errOnNonUTF8,
 	}
 
 	if w.recordSepLen == 2 || isNewlineRuneForWrite(w.recordSep[0]) {
@@ -360,10 +370,12 @@ func (w *Writer) doubleQuotesInFieldForCustomFieldSep(v []byte) (int, error) {
 			return -1, nil
 		}
 		if di == 1 && r == utf8.RuneError {
+			if w.errOnNonUTF8 {
+				return -1, errNonUTF8InRecordNonCRLFMode
+			}
 
-			// i += di
-			// continue
-			return -1, errNonUTF8InRecordNonCRLFMode
+			i += di
+			continue
 		}
 
 		if r == w.quote {
@@ -401,10 +413,12 @@ func (w *Writer) doubleQuotesInFieldForNormalFieldSep(v []byte) (int, error) {
 			return -1, nil
 		}
 		if di == 1 && r == utf8.RuneError {
+			if w.errOnNonUTF8 {
+				return -1, errNonUTF8InRecordNonCRLFMode
+			}
 
-			// i += di
-			// continue
-			return -1, errNonUTF8InRecordNonCRLFMode
+			i += di
+			continue
 		}
 
 		if r == w.quote {
@@ -442,10 +456,12 @@ func (w *Writer) doubleQuotes(v []byte, i int) (int, error) {
 		}
 
 		if di == 1 && r == utf8.RuneError {
+			if w.errOnNonUTF8 {
+				return 0, ErrNonUTF8InRecord
+			}
 
-			// i += di
-			// continue
-			return 0, ErrNonUTF8InRecord
+			i += di
+			continue
 		}
 
 		if r != w.quote {
