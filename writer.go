@@ -161,6 +161,12 @@ func (writerOpts) ErrorOnNonUTF8(v bool) WriterOption {
 	}
 }
 
+// func (writerOpts) Escape(r rune) WriterOption {
+// 	return func(cfg *wCfg) {
+// 		// TODO: implement
+// 	}
+// }
+
 type wCfg struct {
 	headers           []string
 	writer            io.Writer
@@ -216,18 +222,13 @@ func (cfg *wCfg) validate() error {
 		return errors.New("invalid field separator value")
 	}
 
-	if cfg.quoteSet {
-		if !validUtf8Rune(cfg.quote) {
-			return errors.New("invalid quote value")
-		}
-
-		if cfg.fieldSeparator == cfg.quote {
-			return errors.New("invalid field separator and quote combination")
-		}
+	if cfg.quoteSet && !validUtf8Rune(cfg.quote) {
+		return errors.New("invalid quote value")
 	}
 
-	if !cfg.quoteSet {
-		cfg.quote = '"'
+	// quote is a defaulted attribute, so no need to have a 'is set' guard
+	if cfg.fieldSeparator == cfg.quote {
+		return errors.New("invalid field separator and quote combination")
 	}
 
 	if !cfg.numFieldsSet && cfg.headers == nil {
@@ -244,6 +245,7 @@ func (cfg *wCfg) validate() error {
 func NewWriter(options ...WriterOption) (*Writer, error) {
 
 	cfg := wCfg{
+		quote:          '"',
 		recordSep:      [2]rune{asciiLineFeed, 0},
 		recordSepLen:   1,
 		fieldSeparator: ',',
@@ -287,10 +289,20 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		errOnNonUTF8:       cfg.errOnNonUTF8,
 	}
 
-	if w.recordSepLen == 2 || isNewlineRuneForWrite(w.recordSep[0]) {
-		w.doubleQuotesInField = w.doubleQuotesInFieldForNormalFieldSep
-	} else {
-		w.doubleQuotesInField = w.doubleQuotesInFieldForCustomFieldSep
+	// determine the minimal strategy for quoting a field
+	{
+		var runeRequiresQuotes func(r rune) bool
+
+		if w.recordSepLen == 2 || isNewlineRuneForWrite(w.recordSep[0]) {
+			// record sep is a newline char on this path
+			//
+			// so no need to check for it
+			runeRequiresQuotes = w.runeRequiresQuotes
+		} else {
+			runeRequiresQuotes = w.runeRequiresQuotesWithRecordSepCheck
+		}
+
+		w.doubleQuotesInField = w.doubleQuotesInFieldFunc(runeRequiresQuotes)
 	}
 
 	return w, nil
@@ -360,89 +372,49 @@ func (w *Writer) writeField(input string) error {
 	return nil
 }
 
-func (w *Writer) doubleQuotesInFieldForCustomFieldSep(v []byte) (int, error) {
-	var si, i, di int
-	var r rune
+func (w *Writer) doubleQuotesInFieldFunc(runeRequiresQuotes func(rune) bool) func(v []byte) (int, error) {
+	return func(v []byte) (int, error) {
+		var si, i, di int
+		var r rune
 
-	for {
-		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
-			return -1, nil
-		}
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return -1, errNonUTF8InRecordNonCRLFMode
+		for {
+			r, di = utf8.DecodeRune(v[i:])
+			if di == 0 {
+				return -1, nil
+			}
+			if di == 1 && r == utf8.RuneError {
+				if w.errOnNonUTF8 {
+					return -1, errNonUTF8InRecordNonCRLFMode
+				}
+
+				i += di
+				continue
+			}
+
+			if r == w.quote {
+				// TODO: ensure no overlap possible between quote and sep values
+				w.fieldBuf = append(w.fieldBuf, v[:i]...)
+				w.fieldBuf = append(w.fieldBuf, w.doubleQuote[:w.doubleQuoteByteLen]...)
+
+				i += di
+				si = i
+				break
 			}
 
 			i += di
-			continue
-		}
 
-		if r == w.quote {
-			// TODO: ensure no overlap possible between quote and sep values
-			w.fieldBuf = append(w.fieldBuf, v[:i]...)
-			w.fieldBuf = append(w.fieldBuf, w.doubleQuote[:w.doubleQuoteByteLen]...)
-
-			i += di
-			si = i
-			break
-		}
-
-		i += di
-
-		if r == w.fieldSep || isNewlineRuneForWrite(r) || r == w.recordSep[0] {
-			break
-		}
-	}
-
-	si2, err := w.doubleQuotes(v[si:], i-si)
-	if err != nil {
-		return -1, err
-	}
-
-	return si + si2, nil
-}
-
-func (w *Writer) doubleQuotesInFieldForNormalFieldSep(v []byte) (int, error) {
-	var si, i, di int
-	var r rune
-
-	for {
-		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
-			return -1, nil
-		}
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return -1, errNonUTF8InRecordNonCRLFMode
+			if runeRequiresQuotes(r) {
+				break
 			}
-
-			i += di
-			continue
 		}
 
-		if r == w.quote {
-			w.fieldBuf = append(w.fieldBuf, v[:i]...)
-			w.fieldBuf = append(w.fieldBuf, w.doubleQuote[:w.doubleQuoteByteLen]...)
-
-			i += di
-			si = i
-			break
+		si2, err := w.doubleQuotes(v[si:], i-si)
+		if err != nil {
+			return -1, err
 		}
 
-		i += di
-
-		if r == w.fieldSep || isNewlineRuneForWrite(r) {
-			break
-		}
+		return si + si2, nil
 	}
-
-	si2, err := w.doubleQuotes(v[si:], i-si)
-	if err != nil {
-		return -1, err
-	}
-
-	return si + si2, nil
 }
 
 func (w *Writer) doubleQuotes(v []byte, i int) (int, error) {
@@ -533,6 +505,14 @@ func (w *Writer) WriteRow(row []string) (int, error) {
 	}
 
 	return n, nil
+}
+
+func (w *Writer) runeRequiresQuotes(r rune) bool {
+	return r == w.fieldSep || isNewlineRuneForWrite(r)
+}
+
+func (w *Writer) runeRequiresQuotesWithRecordSepCheck(r rune) bool {
+	return w.runeRequiresQuotes(r) || r == w.recordSep[0]
 }
 
 //
