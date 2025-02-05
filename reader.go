@@ -58,6 +58,7 @@ func (et posErrType) String() string {
 }
 
 var (
+	ErrReaderClosed                = errors.New("reader closed")
 	ErrBadConfig                   = errors.New("bad config")
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
 	ErrBadRecordSeparator          = errors.New("record separator can only be one rune long or \"\\r\\n\"")
@@ -628,6 +629,23 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	cr.initPipeline(cfg.reader, cfg.borrowRow, cfg.discoverRecordSeparator)
 
 	return &cr, nil
+}
+
+// Close should be called after reading all rows
+// successfully from the underlying reader and checking
+// the result of r.Err().
+//
+// Close currently always returns nil, but in the future
+// it may not. It is not a substitute for checking r.Err().
+//
+// Should any configuration options require post-flight
+// checks they will be implemented here.
+//
+// It will never attempt to close the underlying reader.
+func (r *Reader) Close() error {
+	r.done = true
+	r.err = ErrReaderClosed
+	return nil
 }
 
 func (r *Reader) Err() error {
