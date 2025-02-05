@@ -26,7 +26,10 @@ const (
 	asciiFormFeed       = 0x0C
 	utf8NextLine        = 0x85
 	utf8LineSeparator   = 0x2028
-	utf8ByteOrderMarker = 0xEFBBBF
+
+	utf8ByteOrderMarker    = 0xEFBBBF
+	utf16ByteOrderMarkerBE = 0xFEFF
+	utf16ByteOrderMarkerLE = 0xFFFE
 )
 
 type rState uint8
@@ -1116,7 +1119,7 @@ func (r *Reader) prepareRow() bool {
 
 		switch r.state {
 		case rStateStartOfDoc:
-			if c == utf8ByteOrderMarker {
+			if isByteOrderMarker(c, size) {
 				if r.removeByteOrderMarker {
 					r.state = rStateStartOfRecord
 
@@ -1359,4 +1362,22 @@ func isNewlineRune(c rune) (isCarriageReturn bool, ok bool) {
 
 func validUtf8Rune(r rune) bool {
 	return r != utf8.RuneError && utf8.ValidRune(r)
+}
+
+// https://en.wikipedia.org/wiki/Byte_order_mark
+func isByteOrderMarker(r rune, size int) bool {
+	switch uint32(r) {
+	case utf8ByteOrderMarker:
+		return size == 3
+	case utf16ByteOrderMarkerLE:
+		return size == 2
+	case (utf16ByteOrderMarkerLE << 16):
+		return size == 4
+	case utf16ByteOrderMarkerBE:
+		// size of 3 would typically indicate variable width charset for utf32
+		// size of 4 would typically indicate all characters are 4 characters wide
+		return 2 <= size && size <= 4
+	default:
+		return false
+	}
 }
