@@ -61,7 +61,7 @@ var (
 	ErrReaderClosed                = errors.New("reader closed")
 	ErrBadConfig                   = errors.New("bad config")
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
-	ErrBadRecordSeparator          = errors.New("record separator can only be one rune long or \"\\r\\n\"")
+	ErrBadRecordSeparator          = errors.New("record separator can only be one valid utf8 rune long or \"\\r\\n\"")
 	ErrIncompleteQuotedField       = fmt.Errorf("incomplete quoted field: %w", io.ErrUnexpectedEOF)
 	ErrQuoteInUnquotedField        = fmt.Errorf("quote found in unquoted field")
 	ErrInvalidQuotedFieldEnding    = errors.New("unexpected character found after end of quoted field") // expecting field separator, record separator, quote char, or end of file if field count matches expectations
@@ -149,22 +149,27 @@ func tooManyFieldsErr(exp int) ErrTooManyFields {
 
 type ReaderOption func(*rCfg)
 
-type readerOpts struct{}
+// ReaderOptions should never be instantiated manually
+//
+// Instead call ReaderOpts()
+//
+// This is only exported to allow godocs to discover the exported methods.
+type ReaderOptions struct{}
 
-func (readerOpts) Reader(r io.Reader) ReaderOption {
+func (ReaderOptions) Reader(r io.Reader) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.reader = r
 	}
 }
 
-func (readerOpts) ErrorOnNoRows(b bool) ReaderOption {
+func (ReaderOptions) ErrorOnNoRows(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.errOnNoRows = b
 	}
 }
 
 // TrimHeaders causes the first row to be recognized as a header row and all values are returned with whitespace trimmed.
-func (readerOpts) TrimHeaders(b bool) ReaderOption {
+func (ReaderOptions) TrimHeaders(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.trimHeaders = b
 	}
@@ -173,7 +178,7 @@ func (readerOpts) TrimHeaders(b bool) ReaderOption {
 // ExpectHeaders causes the first row to be recognized as a header row.
 //
 // If the slice of header values does not match then the reader will error.
-func (readerOpts) ExpectHeaders(h []string) ReaderOption {
+func (ReaderOptions) ExpectHeaders(h []string) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.headers = h
 	}
@@ -182,65 +187,65 @@ func (readerOpts) ExpectHeaders(h []string) ReaderOption {
 // RemoveHeaderRow causes the first row to be recognized as a header row.
 //
 // The row will be skipped over by Scan() and will not be returned by Row().
-func (readerOpts) RemoveHeaderRow(b bool) ReaderOption {
+func (ReaderOptions) RemoveHeaderRow(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.removeHeaderRow = b
 	}
 }
 
-func (readerOpts) RemoveByteOrderMarker(b bool) ReaderOption {
+func (ReaderOptions) RemoveByteOrderMarker(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.removeByteOrderMarker = b
 	}
 }
 
-func (readerOpts) ErrorOnNoByteOrderMarker(b bool) ReaderOption {
+func (ReaderOptions) ErrorOnNoByteOrderMarker(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.errOnNoByteOrderMarker = b
 	}
 }
 
-func (readerOpts) ErrorOnQuotesInUnquotedField(b bool) ReaderOption {
+func (ReaderOptions) ErrorOnQuotesInUnquotedField(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.errOnQuotesInUnquotedField = b
 	}
 }
 
 // // MaxNumFields does nothing at the moment except cause a panic
-// func (readerOpts) MaxNumFields(n int) ReaderOption {
+// func (ReaderOptions) MaxNumFields(n int) ReaderOption {
 // 	return func(cfg *rCfg) {
 // 		cfg.maxNumFields = n
 // 	}
 // }
 
 // // MaxNumBytes does nothing at the moment except cause a panic
-// func (readerOpts) MaxNumBytes(n int) ReaderOption {
+// func (ReaderOptions) MaxNumBytes(n int) ReaderOption {
 // 	return func(cfg *rCfg) {
 // 		cfg.maxNumBytes = n
 // 	}
 // }
 
 // // MaxNumRecords does nothing at the moment except cause a panic
-// func (readerOpts) MaxNumRecords(n int) ReaderOption {
+// func (ReaderOptions) MaxNumRecords(n int) ReaderOption {
 // 	return func(cfg *rCfg) {
 // 		cfg.maxNumRecords = n
 // 	}
 // }
 
 // // MaxNumRecordBytes does nothing at the moment except cause a panic
-// func (readerOpts) MaxNumRecordBytes(n int) ReaderOption {
+// func (ReaderOptions) MaxNumRecordBytes(n int) ReaderOption {
 // 	return func(cfg *rCfg) {
 // 		cfg.maxNumRecordBytes = n
 // 	}
 // }
 
-func (readerOpts) FieldSeparator(r rune) ReaderOption {
+func (ReaderOptions) FieldSeparator(r rune) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.fieldSeparator = r
 	}
 }
 
-func (readerOpts) Quote(r rune) ReaderOption {
+func (ReaderOptions) Quote(r rune) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.quote = r
 		cfg.quoteSet = true
@@ -263,27 +268,27 @@ func (readerOpts) Quote(r rune) ReaderOption {
 // It is not valid to use this option without specifically
 // setting a quote. Doing so will result in an error being
 // returned on Reader creation.
-func (readerOpts) Escape(r rune) ReaderOption {
+func (ReaderOptions) Escape(r rune) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.escape = r
 		cfg.escapeSet = true
 	}
 }
 
-func (readerOpts) Comment(r rune) ReaderOption {
+func (ReaderOptions) Comment(r rune) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.comment = r
 		cfg.commentSet = true
 	}
 }
 
-func (readerOpts) CommentsAllowedAfterStartOfRecords(b bool) ReaderOption {
+func (ReaderOptions) CommentsAllowedAfterStartOfRecords(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.commentsAllowedAfterStartOfRecords = b
 	}
 }
 
-func (readerOpts) NumFields(n int) ReaderOption {
+func (ReaderOptions) NumFields(n int) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.numFields = n
 		cfg.numFieldsSet = true
@@ -311,7 +316,7 @@ func (readerOpts) NumFields(n int) ReaderOption {
 // list that allows empty strings for some use case and the writer used to create the
 // file chooses to not always write the last record followed by a record separator.
 // (treating the record separator like a record terminator)
-func (readerOpts) TerminalRecordSeparatorEmitsRecord(b bool) ReaderOption {
+func (ReaderOptions) TerminalRecordSeparatorEmitsRecord(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.trsEmitsRecord = b
 	}
@@ -322,13 +327,13 @@ func (readerOpts) TerminalRecordSeparatorEmitsRecord(b bool) ReaderOption {
 // Only set to true if the returned row and field strings within it are never used after the next call to Scan.
 //
 // Please consider this to be a micro optimization in most circumstances.
-func (readerOpts) BorrowRow(b bool) ReaderOption {
+func (ReaderOptions) BorrowRow(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.borrowRow = b
 	}
 }
 
-func (readerOpts) RecordSeparator(s string) ReaderOption {
+func (ReaderOptions) RecordSeparator(s string) ReaderOption {
 	if len(s) == 0 {
 		return badRecordSeparatorRConfig
 	}
@@ -380,25 +385,25 @@ func (readerOpts) RecordSeparator(s string) ReaderOption {
 	return badRecordSeparatorRConfig
 }
 
-func (readerOpts) DiscoverRecordSeparator(b bool) ReaderOption {
+func (ReaderOptions) DiscoverRecordSeparator(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.discoverRecordSeparator = b
 	}
 }
 
-func ReaderOpts() readerOpts {
-	return readerOpts{}
+func ReaderOpts() ReaderOptions {
+	return ReaderOptions{}
 }
 
 type rCfg struct {
-	headers                            []string
-	reader                             io.Reader
-	recordSep                          [2]rune
-	numFields                          int
-	maxNumFields                       int
-	maxNumRecords                      int
-	maxNumRecordBytes                  int
-	maxNumBytes                        int
+	headers   []string
+	reader    io.Reader
+	recordSep [2]rune
+	numFields int
+	// maxNumFields                       int
+	// maxNumRecords                      int
+	// maxNumRecordBytes                  int
+	// maxNumBytes                        int
 	fieldSeparator                     rune
 	quote                              rune
 	escape                             rune
@@ -474,8 +479,6 @@ func (cfg *rCfg) validate() error {
 		return ErrNilReader
 	}
 
-	// experiment: assumes field separator and record separator chars
-	// are not escaped in spark
 	if cfg.quoteSet && cfg.escapeSet && cfg.quote == cfg.escape {
 		cfg.escapeSet = false
 	}
@@ -501,13 +504,7 @@ func (cfg *rCfg) validate() error {
 			return errors.New("must specify one and only one of automatic record separator discovery or a specific recordSeparator")
 		}
 
-		if n < 1 || n > 2 || n == 2 && (cfg.recordSep[0] != asciiCarriageReturn || cfg.recordSep[1] != asciiLineFeed) {
-			return errors.New("invalid record separator value")
-		}
 		if n == 1 {
-			if !validUtf8Rune(cfg.recordSep[0]) {
-				return errors.New("invalid record separator value")
-			}
 			if cfg.quoteSet && cfg.recordSep[0] == cfg.quote {
 				return errors.New("invalid record separator and quote combination")
 			}
@@ -578,9 +575,9 @@ func (cfg *rCfg) validate() error {
 		return errors.New("num fields must be greater than zero or not specified")
 	}
 
-	if cfg.maxNumFields != 0 || cfg.maxNumRecordBytes != 0 || cfg.maxNumRecords != 0 || cfg.maxNumBytes != 0 {
-		panic("unimplemented config selections")
-	}
+	// if cfg.maxNumFields != 0 || cfg.maxNumRecordBytes != 0 || cfg.maxNumRecords != 0 || cfg.maxNumBytes != 0 {
+	// 	panic("unimplemented config selections")
+	// }
 
 	return nil
 }

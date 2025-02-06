@@ -1,0 +1,4 @@
+- mocking lib: mockgen from https://github.com/uber-go/mock
+- BDD lib: ginkgo from https://github.com/onsi/ginkgo
+- BDD matcher lib: gomega from https://github.com/onsi/gomega
+- assertions lib (if needed): testify from https://github.com/stretchr/testify
