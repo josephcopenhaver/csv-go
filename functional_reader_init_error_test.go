@@ -3,7 +3,6 @@ package csv_test
 import (
 	"errors"
 	"strings"
-	"testing"
 	"unicode/utf8"
 
 	"github.com/josephcopenhaver/csv-go"
@@ -12,12 +11,8 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestCsvGo(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Csv Suite")
-}
+var _ = Describe("Functional CSV Reader Initialization Error Paths", func() {
 
-var _ = Describe("CSV Reader Initialization Error Paths", func() {
 	Context("when creating a CSV reader without a reader", func() {
 		It("should return an error indicating the reader option is nil and a nil csv reader instance", func() {
 			reader, err := csv.NewReader()

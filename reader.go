@@ -88,7 +88,7 @@ type posTracedErr struct {
 }
 
 func (e posTracedErr) Error() string {
-	return fmt.Sprintf("%s error at byte %d, record %d, field %d: %s", e.errType, e.byteIndex+1, e.recordIndex+1, e.fieldIndex+1, e.err.Error())
+	return fmt.Sprintf("%s error at byte %d, record %d, field %d: %s", e.errType, e.byteIndex, e.recordIndex+1, e.fieldIndex+1, e.err.Error())
 }
 
 func (e posTracedErr) Unwrap() error {
@@ -124,11 +124,11 @@ func newParsingError(byteIndex, recordIndex, fieldIndex uint, err error) Parsing
 }
 
 type ErrFieldCountMismatch struct {
-	exp, act int
+	Expected, Actual int
 }
 
 func (e ErrFieldCountMismatch) Error() string {
-	return fmt.Sprintf("expected %d fields but found %d instead", e.exp, e.act)
+	return fmt.Sprintf("expected %d fields but found %d instead", e.Expected, e.Actual)
 }
 
 func fieldCountMismatchErr(exp, act int) ErrFieldCountMismatch {
@@ -136,11 +136,11 @@ func fieldCountMismatchErr(exp, act int) ErrFieldCountMismatch {
 }
 
 type ErrTooManyFields struct {
-	exp int
+	Expected int
 }
 
 func (e ErrTooManyFields) Error() string {
-	return fmt.Sprintf("more than %d fields found in record", e.exp)
+	return fmt.Sprintf("more than %d field(s) found in record", e.Expected)
 }
 
 func tooManyFieldsErr(exp int) ErrTooManyFields {
@@ -324,9 +324,10 @@ func (ReaderOptions) TerminalRecordSeparatorEmitsRecord(b bool) ReaderOption {
 
 // BorrowRow alters the row function to return the underlying string slice every time it is called rather than a copy.
 //
-// Only set to true if the returned row and field strings within it are never used after the next call to Scan.
+// Only set to true if the returned row slice and field strings within it are never used after the next call to Scan. Consider copying the slice and at least copy the strings within it via strings.Copy().
 //
-// Please consider this to be a micro optimization in most circumstances.
+// Please consider this to be a micro optimization in most circumstances just because is tightens the usage
+// contract of the returned row in ways most would not normally consider.
 func (ReaderOptions) BorrowRow(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.borrowRow = b
