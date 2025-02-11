@@ -668,19 +668,15 @@ func (r *Reader) Scan() bool {
 }
 
 func (r *Reader) parsingErr(err error) {
-	if r.err != nil {
-		return
+	if r.err == nil {
+		r.err = newParsingError(r.byteIndex, r.recordIndex, r.fieldIndex, err)
 	}
-
-	r.err = newParsingError(r.byteIndex, r.recordIndex, r.fieldIndex, err)
 }
 
 func (r *Reader) ioErr(err error) {
-	if r.err != nil {
-		return
+	if r.err == nil {
+		r.err = newIOError(r.byteIndex, r.recordIndex, r.fieldIndex, err)
 	}
-
-	r.err = newIOError(r.byteIndex, r.recordIndex, r.fieldIndex, err)
 }
 
 func (r *Reader) borrowedRow() []string {
@@ -781,13 +777,11 @@ func (r *Reader) defaultCheckNumFields(errTrailer error) bool {
 	}
 
 	r.done = true
-	if r.err != nil {
-		return false
-	}
-
-	r.parsingErr(fieldCountMismatchErr(r.numFields, len(r.fieldLengths)))
-	if errTrailer != nil {
-		r.err = errors.Join(r.err, errTrailer)
+	if r.err == nil {
+		r.parsingErr(fieldCountMismatchErr(r.numFields, len(r.fieldLengths)))
+		if errTrailer != nil {
+			r.err = errors.Join(r.err, errTrailer)
+		}
 	}
 
 	return false
@@ -1135,7 +1129,7 @@ func (r *Reader) prepareRow() bool {
 
 		switch r.state {
 		case rStateStartOfDoc:
-			if isByteOrderMarker(c, size) {
+			if isByteOrderMarker(uint32(c), size) {
 				if r.removeByteOrderMarker {
 					r.state = rStateStartOfRecord
 
@@ -1380,8 +1374,12 @@ func validUtf8Rune(r rune) bool {
 	return r != utf8.RuneError && utf8.ValidRune(r)
 }
 
+// TODO: write tess that cover inputs that span the isByteOrderMarker cases
+//
+// it is likely not all code paths are possible in the current implementation
+
 // https://en.wikipedia.org/wiki/Byte_order_mark
-func isByteOrderMarker(r rune, size int) bool {
+func isByteOrderMarker(r uint32, size int) bool {
 	switch uint32(r) {
 	case utf8ByteOrderMarker:
 		return size == 3
