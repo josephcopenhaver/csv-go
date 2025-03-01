@@ -237,7 +237,6 @@ func TestFunctionalReaderIOErrorPaths(t *testing.T) {
 			// was uncovered
 			iterErrStr: csv.ErrIO.Error() + " at byte 4, record 1, field 2: " + errors.Join(csv.ErrBadUnreadRuneImpl, unreadErr).Error(),
 		},
-
 		{
 			when: "ReadRune returns an error and a byte on the first read",
 			then: "error",

@@ -10,6 +10,11 @@ import (
 	"github.com/josephcopenhaver/csv-go"
 )
 
+const (
+	utf8LineSeparatorRune rune = 0x2028
+	utf8LineSeparator          = string(utf8LineSeparatorRune)
+)
+
 func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 
 	tcs := []functionalReaderTestCase{
@@ -169,6 +174,132 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNoByteOrderMarker},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 0, record 0, field 0: " + csv.ErrNoByteOrderMarker.Error(),
+		},
+		{
+			when: "implicit error on newline in field where CR in middle of field",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("h\ri")),
+				csv.ReaderOpts().RecordSeparator("\n"),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 1: " + csv.ErrNewlineInUnquotedField.Error() + ": carriage return",
+		},
+		{
+			when: "explicit error on newline in field where CR in middle of field",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("h\ri")),
+				csv.ReaderOpts().RecordSeparator("\n"),
+				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(true),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 1: " + csv.ErrNewlineInUnquotedField.Error() + ": carriage return",
+		},
+		{
+			when: "implicit error on newline in field where LF in middle of field",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("h\ni")),
+				csv.ReaderOpts().RecordSeparator(utf8LineSeparator),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 1: " + csv.ErrNewlineInUnquotedField.Error() + ": line feed",
+		},
+		{
+			when: "explicit error on newline in field where LF in middle of field",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("h\ni")),
+				csv.ReaderOpts().RecordSeparator(utf8LineSeparator),
+				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(true),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 1: " + csv.ErrNewlineInUnquotedField.Error() + ": line feed",
+		},
+		{
+			when: "implicit error on newline in field where CR at start of record",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("\r")),
+				csv.ReaderOpts().RecordSeparator("\n"),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 1, record 1, field 1: " + csv.ErrNewlineInUnquotedField.Error() + ": carriage return",
+		},
+		{
+			when: "explicit error on newline in field where CR at start of record",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("\r")),
+				csv.ReaderOpts().RecordSeparator("\n"),
+				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(true),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 1, record 1, field 1: " + csv.ErrNewlineInUnquotedField.Error() + ": carriage return",
+		},
+		{
+			when: "implicit error on newline in field where LF at start of record",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("\n")),
+				csv.ReaderOpts().RecordSeparator(utf8LineSeparator),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 1, record 1, field 1: " + csv.ErrNewlineInUnquotedField.Error() + ": line feed",
+		},
+		{
+			when: "explicit error on newline in field where LF at start of record",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("\n")),
+				csv.ReaderOpts().RecordSeparator(utf8LineSeparator),
+				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(true),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 1, record 1, field 1: " + csv.ErrNewlineInUnquotedField.Error() + ": line feed",
+		},
+		{
+			when: "implicit error on newline in field where CR at start of second field",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader(",\r")),
+				csv.ReaderOpts().RecordSeparator("\n"),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 2: " + csv.ErrNewlineInUnquotedField.Error() + ": carriage return",
+		},
+		{
+			when: "explicit error on newline in field where CR at start of second field",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader(",\r")),
+				csv.ReaderOpts().RecordSeparator("\n"),
+				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(true),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 2: " + csv.ErrNewlineInUnquotedField.Error() + ": carriage return",
+		},
+		{
+			when: "implicit error on newline in field where LF at start of second field",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader(",\n")),
+				csv.ReaderOpts().RecordSeparator(utf8LineSeparator),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 2: " + csv.ErrNewlineInUnquotedField.Error() + ": line feed",
+		},
+		{
+			when: "explicit error on newline in field where LF at start of second field",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader(",\n")),
+				csv.ReaderOpts().RecordSeparator(utf8LineSeparator),
+				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(true),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 2: " + csv.ErrNewlineInUnquotedField.Error() + ": line feed",
 		},
 	}
 

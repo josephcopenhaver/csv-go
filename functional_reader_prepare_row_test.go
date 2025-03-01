@@ -265,6 +265,65 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 			},
 			rows: [][]string{{"a"}, {"#neat2"}, {"3"}},
 		},
+		{
+			when: "explicit error on newline in field is off where CR in middle of field",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("h\ri")),
+				csv.ReaderOpts().RecordSeparator("\n"),
+				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(false),
+			},
+			rows: [][]string{{"h\ri"}},
+		},
+		{
+			when: "explicit error on newline in field is off where LF in middle of field",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("h\ni")),
+				csv.ReaderOpts().RecordSeparator(string(utf8LineSeparator)),
+				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(false),
+			},
+			rows: [][]string{{"h\ni"}},
+		},
+		{
+			when: "explicit error on newline in field is off where CR at start of record",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("\r")),
+				csv.ReaderOpts().RecordSeparator("\n"),
+				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(false),
+			},
+			rows: [][]string{{"\r"}},
+		},
+		{
+			when: "explicit error on newline in field is off where LF at start of record",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("\n")),
+				csv.ReaderOpts().RecordSeparator(string(utf8LineSeparator)),
+				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(false),
+			},
+			rows: [][]string{{"\n"}},
+		},
+		{
+			when: "explicit error on newline in field is off where CR at start of second field",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader(",\r")),
+				csv.ReaderOpts().RecordSeparator("\n"),
+				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(false),
+			},
+			rows: [][]string{{"", "\r"}},
+		},
+		{
+			when: "explicit error on newline in field is off where LF at start of second field",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader(",\n")),
+				csv.ReaderOpts().RecordSeparator(string(utf8LineSeparator)),
+				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(false),
+			},
+			rows: [][]string{{"", "\n"}},
+		},
 	}
 
 	for _, tc := range tcs {
