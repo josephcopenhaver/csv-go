@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	utf8LineSeparatorRune rune = 0x2028
-	utf8LineSeparator          = string(utf8LineSeparatorRune)
+	utf8LineSeparator = "\u2028"
 )
 
 func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
@@ -300,6 +299,16 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 2: " + csv.ErrNewlineInUnquotedField.Error() + ": line feed",
+		},
+		{
+			when: "expecting only one column but record starts with field separator",
+			then: "error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader(",")),
+				csv.ReaderOpts().NumFields(1),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 1, record 1, field 1: " + csv.ErrTooManyFields.Error() + ": field count exceeds 1",
 		},
 	}
 
