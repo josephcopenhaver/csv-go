@@ -1,0 +1,377 @@
+package csv_test
+
+import (
+	"bytes"
+	"errors"
+	"fmt"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/josephcopenhaver/csv-go"
+	"github.com/stretchr/testify/assert"
+)
+
+type functionalReaderTestCase struct {
+	when, then                string
+	newOpts                   []csv.ReaderOption
+	newReaderErrAs            []any
+	newReaderErrAsNot         []any
+	newReaderErrIs            []error
+	newReaderErrIsNot         []error
+	newReaderErrStr           string
+	newReaderErrStrMsgAndArgs []any
+	iterErrAs                 []any
+	iterErrAsNot              []any
+	iterErrIs                 []error
+	iterErrIsNot              []error
+	iterErrStr                string
+	iterErrStrMsgAndArgs      []any
+	hadRowsMsgAndArgs         []any
+	rows                      [][]string
+	forEachRow                func(*testing.T, []string)
+	afterTest                 func(*testing.T)
+	numRows                   int
+	hasNewReaderErr           bool
+	hasIterErr                bool
+	hadRows                   bool
+	skipScan                  bool
+}
+
+func (tc *functionalReaderTestCase) Run(t *testing.T) {
+	assert.NotEmpty(t, tc.when)
+	t.Helper()
+
+	f := func(t *testing.T) {
+		is := assert.New(t)
+
+		var cr *csv.Reader
+		{
+			v, err := csv.NewReader(tc.newOpts...)
+			if tc.hasNewReaderErr || len(tc.newReaderErrIs) > 0 || len(tc.newReaderErrAs) > 0 || tc.newReaderErrStr != "" {
+				is.NotNil(t, err)
+				is.Nil(t, v)
+
+				for _, terr := range tc.newReaderErrIs {
+					is.ErrorIs(err, terr)
+				}
+
+				for i := range tc.newReaderErrAs {
+					v := tc.newReaderErrAs[i]
+					is.True(errors.As(err, &v))
+				}
+
+				for _, target := range tc.newReaderErrIsNot {
+					is.False(errors.Is(err, target))
+				}
+
+				for i := range tc.newReaderErrAsNot {
+					v := tc.newReaderErrAsNot[i]
+					is.False(errors.As(err, &v))
+				}
+
+				if tc.newReaderErrStr != "" {
+					is.Equal(tc.newReaderErrStr, err.Error(), tc.newReaderErrStrMsgAndArgs...)
+				}
+
+				if tc.afterTest != nil {
+					tc.afterTest(t)
+				}
+				return
+			} else {
+				is.Nil(err)
+				is.NotNil(v)
+			}
+
+			cr = v
+		}
+
+		// until scan is called, should return nil
+		// rows and nil error
+		is.Nil(cr.Row())
+		is.Nil(cr.Err())
+
+		var hadRows bool
+		numRows := -1
+		if !tc.skipScan {
+			for cr.Scan() {
+				hadRows = true
+				numRows += 1
+				is.Less(numRows, len(tc.rows))
+				if numRows >= len(tc.rows) {
+					break
+				}
+				expRow := tc.rows[numRows]
+				row := cr.Row()
+				if expRow == nil {
+					is.Nil(row)
+				} else {
+					is.True(slices.Equal(expRow, row), "row %d did not meet expectations", numRows)
+				}
+				if tc.forEachRow != nil {
+					tc.forEachRow(t, row)
+				}
+			}
+		}
+		numRows += 1
+
+		err := cr.Err()
+		if tc.hasIterErr || len(tc.iterErrIs) > 0 || len(tc.iterErrAs) > 0 || tc.iterErrStr != "" {
+			is.NotNil(err)
+
+			for _, terr := range tc.iterErrIs {
+				is.ErrorIs(err, terr)
+			}
+
+			for i := range tc.iterErrAs {
+				v := tc.iterErrAs[i]
+				is.True(errors.As(err, &v))
+			}
+
+			for _, target := range tc.iterErrIsNot {
+				is.False(errors.Is(err, target))
+			}
+
+			for i := range tc.iterErrAsNot {
+				v := tc.iterErrAsNot[i]
+				is.False(errors.As(err, &v))
+			}
+
+			if tc.iterErrStr != "" && err != nil {
+				is.Equal(tc.iterErrStr, err.Error(), tc.iterErrStrMsgAndArgs...)
+			}
+		} else {
+			is.Nil(err)
+		}
+
+		// shorthand; rows were specified but counts and existence were not
+		//
+		// can infer what the count should be and they should exist
+		if tc.numRows == 0 && !tc.hadRows && len(tc.rows) > 0 {
+			tc.numRows = len(tc.rows)
+			tc.hadRows = true
+		}
+
+		is.Equal(tc.hadRows, hadRows, tc.hadRowsMsgAndArgs...)
+		is.Equal(tc.numRows, numRows)
+
+		is.Nil(cr.Close())
+
+		// once closed, Err should always return false
+		is.Equal(csv.ErrReaderClosed, cr.Err())
+
+		// once closed, Scan should always return false
+		is.False(cr.Scan())
+
+		// once closed, Row should always return nil
+		is.Nil(cr.Row())
+
+		if tc.afterTest != nil {
+			tc.afterTest(t)
+		}
+	}
+
+	var name string
+	if tc.then == "" {
+		name = "then no error should occur"
+	} else {
+		name = "then " + tc.then
+	}
+
+	t.Run("when "+tc.when, func(t *testing.T) {
+		t.Helper()
+
+		t.Run(name, f)
+	})
+}
+
+func TestFunctionalReaderOKPaths(t *testing.T) {
+	tcs := []functionalReaderTestCase{
+		func() functionalReaderTestCase {
+			var expAddress string
+			forEachRow := func() func(*testing.T, []string) {
+				var expLen int
+				var expCap int
+				var handler func(*testing.T, []string)
+				handler = func(t *testing.T, row []string) {
+					t.Helper()
+
+					handler = func(t *testing.T, row []string) {
+						t.Helper()
+
+						actual := fmt.Sprintf("%p", row)
+						assert.Equal(t, expAddress, actual)
+						assert.Equal(t, expLen, len(row))
+						assert.Equal(t, expCap, cap(row))
+					}
+					expAddress = fmt.Sprintf("%p", row)
+					expLen = len(row)
+					expCap = cap(row)
+					assert.Equal(t, expCap, expLen)
+				}
+				return func(t *testing.T, row []string) {
+					t.Helper()
+
+					handler(t, row)
+				}
+			}()
+			return functionalReaderTestCase{
+				when: "borrowing rows",
+				then: "the same slice reference should be returned each iteration",
+				newOpts: []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("a,b,c\n,,3")),
+					csv.ReaderOpts().BorrowRow(true),
+				},
+				rows:       [][]string{strings.Split("a,b,c", ","), strings.Split(",,3", ",")},
+				forEachRow: forEachRow,
+				afterTest: func(t *testing.T) {
+					t.Helper()
+
+					assert.NotEmpty(t, expAddress)
+				},
+			}
+		}(),
+		{
+			when: "there are empty fields in a row",
+			then: "rows should have empty fields",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader(",,3")),
+			},
+			rows: [][]string{strings.Split(",,3", ",")},
+		},
+		{
+			when: "when record sep is CRLF",
+			then: "rows should parse fine if document uses CRLF",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("a,b,c\r\n1,2,3")),
+				csv.ReaderOpts().RecordSeparator("\r\n"),
+			},
+			rows: [][]string{strings.Split("a,b,c", ","), strings.Split("1,2,3", ",")},
+		},
+		{
+			when: "when record sep is being discovered and first row ends in CR",
+			then: "row should parse without error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("a,b\r")),
+				csv.ReaderOpts().DiscoverRecordSeparator(true),
+			},
+			rows: [][]string{strings.Split("a,b", ",")},
+		},
+		{
+			when: "reader is discovering the record sep and first row has one column and ends in CR+short-multibyte+EOF",
+			then: "now one row should be returned and error should be raised to the .Err method",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(bytes.NewReader(append([]byte("a\r"), 0xC0))),
+				csv.ReaderOpts().DiscoverRecordSeparator(true),
+			},
+			rows: [][]string{{"a"}, {string([]byte{0xC0})}},
+		},
+		{
+			when: "reader is discovering the record sep and it is CRLF",
+			then: "now rows should be returned and error should be raised to the .Err method",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("a,b\r\nc,d")),
+				csv.ReaderOpts().DiscoverRecordSeparator(true),
+			},
+			rows: [][]string{strings.Split("a,b", ","), strings.Split("c,d", ",")},
+		},
+		{
+			when: "reader is discovering the record sep and it is LF",
+			then: "now rows should be returned and error should be raised to the .Err method",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("a,b\nc,d")),
+				csv.ReaderOpts().DiscoverRecordSeparator(true),
+			},
+			rows: [][]string{strings.Split("a,b", ","), strings.Split("c,d", ",")},
+		},
+		{
+			when: "erroring on no rows, expecting headers, and document is not empty",
+			then: "header row should be returned with data row",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("a,b,c\n1,2,3")),
+				csv.ReaderOpts().ErrorOnNoRows(true),
+				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b,c", ",")),
+			},
+			rows: [][]string{strings.Split("a,b,c", ","), strings.Split("1,2,3", ",")},
+		},
+		{
+			when: "erroring on no rows, removing the first header row, and document is not empty",
+			then: "header row should not be returned",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("a,b,c\n1,2,3")),
+				csv.ReaderOpts().ErrorOnNoRows(true),
+				csv.ReaderOpts().RemoveHeaderRow(true),
+			},
+			rows: [][]string{strings.Split("1,2,3", ",")},
+		},
+		{
+			when: "erroring on no rows, whitespace-trimming the header row values, and document is not empty",
+			then: "trimmed header row should be returned with data row",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader(" a , b , c \n1,2,3")),
+				csv.ReaderOpts().ErrorOnNoRows(true),
+				csv.ReaderOpts().TrimHeaders(true),
+			},
+			rows: [][]string{strings.Split("a,b,c", ","), strings.Split("1,2,3", ",")},
+		},
+		{
+			when: "whitespace-trimming the header row values, one header is all whitespace, but expecting headers to begin and end with whitespace",
+			then: "should return trimmed header row and data row",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader(" a ,  , c \n1,2,3")),
+				csv.ReaderOpts().ExpectHeaders(strings.Split(" a ,  , c ", ",")),
+				csv.ReaderOpts().TrimHeaders(true),
+			},
+			rows: [][]string{strings.Split("a,,c", ","), strings.Split("1,2,3", ",")},
+		},
+		{
+			when: "header expected where one value is empty",
+			then: "should return header row and data row",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("a,,c\n1,2,3")),
+				csv.ReaderOpts().ExpectHeaders(strings.Split("a,,c", ",")),
+			},
+			rows: [][]string{strings.Split("a,,c", ","), strings.Split("1,2,3", ",")},
+		},
+		{
+			when: "terminal record separator emits record but there is not one with one column",
+			then: "returns one row",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("a")),
+				csv.ReaderOpts().TerminalRecordSeparatorEmitsRecord(true),
+			},
+			rows: [][]string{{"a"}},
+		},
+		{
+			when: "terminal record separator emits record and there is one with one column",
+			then: "returns two rows",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("a\n")),
+				csv.ReaderOpts().TerminalRecordSeparatorEmitsRecord(true),
+			},
+			rows: [][]string{{"a"}, {""}},
+		},
+		{
+			when: "terminal record separator emits record but there is not one with two columns",
+			then: "returns one row",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("a,b")),
+				csv.ReaderOpts().TerminalRecordSeparatorEmitsRecord(true),
+			},
+			rows: [][]string{{"a", "b"}},
+		},
+		{
+			when: "terminal record separator emits record and there is one with two columns",
+			then: "returns one row as it is only applicable to one column datasets",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("a,b\n")),
+				csv.ReaderOpts().TerminalRecordSeparatorEmitsRecord(true),
+			},
+			rows: [][]string{{"a", "b"}},
+		},
+	}
+
+	for _, tc := range tcs {
+		tc.Run(t)
+	}
+}

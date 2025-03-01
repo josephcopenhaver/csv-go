@@ -1,0 +1,3 @@
+- mocking lib: mockgen from https://github.com/uber-go/mock
+- BDD is leveraged as a style rather than a testing framework; this allows us to stay in-line with standard go ecosystem and play nice overall
+- assertions lib: testify from https://github.com/stretchr/testify
