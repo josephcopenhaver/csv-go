@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"iter"
-	"slices"
 	"strings"
 	"unicode/utf8"
 	"unsafe"
@@ -658,24 +657,29 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	var headers []string
 	if len(cfg.headers) > 0 {
 		headers = make([]string, len(cfg.headers))
+		strLens := make([]int, len(cfg.headers))
+
+		var buf []byte
 		if cfg.trimHeaders {
 			for i := range cfg.headers {
 				v := strings.TrimSpace(cfg.headers[i])
-				if len(v) == 0 {
-					headers[i] = ""
-					continue
-				}
-				headers[i] = strings.Clone(v)
+				strLens[i] = len(v)
+				buf = append(buf, []byte(v)...)
 			}
 		} else {
 			for i := range cfg.headers {
 				v := cfg.headers[i]
-				if len(v) == 0 {
-					headers[i] = ""
-					continue
-				}
-				headers[i] = strings.Clone(v)
+				strLens[i] = len(v)
+				buf = append(buf, []byte(v)...)
 			}
+		}
+
+		strBuf := string(buf)
+
+		var p int
+		for i, s := range strLens {
+			headers[i] = strBuf[p : p+s]
+			p += s
 		}
 	}
 
@@ -794,7 +798,7 @@ func (r *Reader) borrowedRow() []string {
 			return nil
 		}
 
-		p := 0
+		var p int
 		for i, s := range r.fieldLengths {
 			if s == 0 {
 				row[i] = ""
@@ -803,6 +807,7 @@ func (r *Reader) borrowedRow() []string {
 			row[i] = unsafe.String(&r.recordBuf[p], s)
 			p += s
 		}
+
 		return row
 	}
 
@@ -823,16 +828,15 @@ func (r *Reader) defaultClonedRow() []string {
 		return nil
 	}
 
-	p := 0
 	row := make([]string, len(r.fieldLengths))
+	strBuf := string(r.recordBuf)
+
+	var p int
 	for i, s := range r.fieldLengths {
-		if s == 0 {
-			row[i] = ""
-			continue
-		}
-		row[i] = strings.Clone(unsafe.String(&r.recordBuf[p], s))
+		row[i] = strBuf[p : p+s]
 		p += s
 	}
+
 	return row
 }
 
@@ -894,7 +898,6 @@ func (r *Reader) nextRuneIsLF() (bool, bool) {
 
 func (r *Reader) defaultCheckNumFields(errTrailer error) bool {
 	if len(r.fieldLengths) == r.numFields {
-		r.afterStartOfRecords = true
 		return true
 	}
 
@@ -908,6 +911,16 @@ func (r *Reader) defaultCheckNumFields(errTrailer error) bool {
 		if errTrailer != nil {
 			r.err = errors.Join(r.err, errTrailer)
 		}
+	}
+
+	return false
+}
+
+func (r *Reader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool {
+	if r.defaultCheckNumFields(errTrailer) {
+		r.afterStartOfRecords = true
+		r.checkNumFields = r.defaultCheckNumFields
+		return true
 	}
 
 	return false
@@ -1035,10 +1048,12 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 		r.row = r.defaultRow
 	}
 
-	if r.numFields != -1 {
-		r.checkNumFields = r.defaultCheckNumFields
-	} else {
+	if r.numFields == -1 {
 		r.checkNumFields = r.checkNumFieldsWithDiscovery
+	} else if r.commentSet {
+		r.checkNumFields = r.checkNumFieldsWithStartOfRecordTracking
+	} else {
+		r.checkNumFields = r.defaultCheckNumFields
 	}
 
 	if !discoverRecordSeparator {
@@ -1064,16 +1079,13 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 			}
 
 			if r.trimHeaders {
-				headerBytes := slices.Clone(r.recordBuf)
+				headersStr := string(r.recordBuf)
 				r.recordBuf = r.recordBuf[:0]
 
 				var p int
 				matching := checkHeadersMatch
 				for i, s := range r.fieldLengths {
-					var field string
-					if s > 0 {
-						field = unsafe.String(&headerBytes[p], s)
-					}
+					field := headersStr[p : p+s]
 					p += s
 
 					field = strings.TrimSpace(field)
@@ -1296,6 +1308,9 @@ func (r *Reader) prepareRow() bool {
 				r.fieldLengths = append(r.fieldLengths, 0)
 				// field start is unchanged because the last one was zero length
 				// r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return false
+				}
 				r.state = rStateStartOfField
 				r.fieldIndex++
 
@@ -1562,7 +1577,7 @@ func (r *Reader) prepareRow() bool {
 		// 	break
 		// }
 
-		// note required because all code paths that would set this value
+		// not required because all code paths that would set this value
 		// end in early returns rather than continued iterations
 		//
 		// these paths include calls to:
