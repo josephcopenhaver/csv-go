@@ -6,7 +6,7 @@ main() {
     local n="$(go tool cover -func coverage.out | grep -E '^total:' | sed -E 's/^.*\s+([0-9\.]+)\s*%.*$/\1/ ; s/100.0*$/100/')"
 
     local color='red'
-    if [[ $n == "100" ]]; then
+    if [[ "$n" == "100" ]]; then
         # color='green'
         color='rgb%2852%2C208%2C88%29'
     else
