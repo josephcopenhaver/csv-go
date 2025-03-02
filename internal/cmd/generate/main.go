@@ -2,9 +2,9 @@
 package main
 
 // - [x] errOnNewlineInUnquotedField
-// - [ ] errOnQuotesInUnquotedField
+// - [x] errOnQuotesInUnquotedField
 // - [x] quoteSet
-// - [ ] escapeSet
+// - [x] escapeSet
 // - [ ] multi-record-sep
 // - [ ] single-record-sep
 // - [ ] comment
@@ -99,17 +99,31 @@ func main() {
 		t := parse(tsPrepareRow)
 
 		type cfg struct {
-			QuoteEnabled bool
-			ErrNLInUF    bool
+			QuoteEnabled  bool
+			ErrNLInUF     bool
+			ErrQInUF      bool // only utilized on positive path via {{if and .QuoteEnabled .ErrQInUF}}
+			EscapeEnabled bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{QuoteEnabled: false, ErrNLInUF: true},
-			{QuoteEnabled: true, ErrNLInUF: true},
-			{QuoteEnabled: false, ErrNLInUF: false},
-			{QuoteEnabled: true, ErrNLInUF: false},
+			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: true},
+			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: true},
+			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: true},
+			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: true},
+			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: true},
+			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: true},
+			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: true},
+			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: true},
+			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: false},
+			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: false},
+			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: false},
+			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: false},
+			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: false},
+			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: false},
+			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: false},
+			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: false},
 		})
 	}
 

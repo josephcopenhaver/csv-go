@@ -704,17 +704,65 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	}
 
 	// cr.prepareRow = cr.defaultPrepareRow
-	if cfg.quoteSet {
-		if cfg.errOnNewlineInUnquotedField {
-			cr.prepareRow = cr.prepareRow_quoteEnabled_errOnNLInUFEnabled
+	if cfg.escapeSet {
+		if cfg.errOnQuotesInUnquotedField {
+			if cfg.quoteSet {
+				if cfg.errOnNewlineInUnquotedField {
+					cr.prepareRow = cr.prepareRow_quoteEnabled_errOnNLInUFEnabled_errOnQuoteInUFEnabled_escapeEnabled
+				} else {
+					cr.prepareRow = cr.prepareRow_quoteEnabled_errOnNLInUFDisabled_errOnQuoteInUFEnabled_escapeEnabled
+				}
+			} else {
+				if cfg.errOnNewlineInUnquotedField {
+					cr.prepareRow = cr.prepareRow_quoteDisabled_errOnNLInUFEnabled_errOnQuoteInUFEnabled_escapeEnabled
+				} else {
+					cr.prepareRow = cr.prepareRow_quoteDisabled_errOnNLInUFDisabled_errOnQuoteInUFEnabled_escapeEnabled
+				}
+			}
 		} else {
-			cr.prepareRow = cr.prepareRow_quoteEnabled_errOnNLInUFDisabled
+			if cfg.quoteSet {
+				if cfg.errOnNewlineInUnquotedField {
+					cr.prepareRow = cr.prepareRow_quoteEnabled_errOnNLInUFEnabled_errOnQuoteInUFDisabled_escapeEnabled
+				} else {
+					cr.prepareRow = cr.prepareRow_quoteEnabled_errOnNLInUFDisabled_errOnQuoteInUFDisabled_escapeEnabled
+				}
+			} else {
+				if cfg.errOnNewlineInUnquotedField {
+					cr.prepareRow = cr.prepareRow_quoteDisabled_errOnNLInUFEnabled_errOnQuoteInUFDisabled_escapeEnabled
+				} else {
+					cr.prepareRow = cr.prepareRow_quoteDisabled_errOnNLInUFDisabled_errOnQuoteInUFDisabled_escapeEnabled
+				}
+			}
 		}
 	} else {
-		if cfg.errOnNewlineInUnquotedField {
-			cr.prepareRow = cr.prepareRow_quoteDisabled_errOnNLInUFEnabled
+		if cfg.errOnQuotesInUnquotedField {
+			if cfg.quoteSet {
+				if cfg.errOnNewlineInUnquotedField {
+					cr.prepareRow = cr.prepareRow_quoteEnabled_errOnNLInUFEnabled_errOnQuoteInUFEnabled_escapeDisabled
+				} else {
+					cr.prepareRow = cr.prepareRow_quoteEnabled_errOnNLInUFDisabled_errOnQuoteInUFEnabled_escapeDisabled
+				}
+			} else {
+				if cfg.errOnNewlineInUnquotedField {
+					cr.prepareRow = cr.prepareRow_quoteDisabled_errOnNLInUFEnabled_errOnQuoteInUFEnabled_escapeDisabled
+				} else {
+					cr.prepareRow = cr.prepareRow_quoteDisabled_errOnNLInUFDisabled_errOnQuoteInUFEnabled_escapeDisabled
+				}
+			}
 		} else {
-			cr.prepareRow = cr.prepareRow_quoteDisabled_errOnNLInUFDisabled
+			if cfg.quoteSet {
+				if cfg.errOnNewlineInUnquotedField {
+					cr.prepareRow = cr.prepareRow_quoteEnabled_errOnNLInUFEnabled_errOnQuoteInUFDisabled_escapeDisabled
+				} else {
+					cr.prepareRow = cr.prepareRow_quoteEnabled_errOnNLInUFDisabled_errOnQuoteInUFDisabled_escapeDisabled
+				}
+			} else {
+				if cfg.errOnNewlineInUnquotedField {
+					cr.prepareRow = cr.prepareRow_quoteDisabled_errOnNLInUFEnabled_errOnQuoteInUFDisabled_escapeDisabled
+				} else {
+					cr.prepareRow = cr.prepareRow_quoteDisabled_errOnNLInUFDisabled_errOnQuoteInUFDisabled_escapeDisabled
+				}
+			}
 		}
 	}
 

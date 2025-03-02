@@ -1,4 +1,4 @@
-func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_errOnNLInUF{{if .ErrNLInUF}}En{{else}}Dis{{end}}abled() bool {
+func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_errOnNLInUF{{if .ErrNLInUF}}En{{else}}Dis{{end}}abled_errOnQuoteInUF{{if .ErrQInUF}}En{{else}}Dis{{end}}abled_escape{{if .EscapeEnabled}}En{{else}}Dis{{end}}abled() bool {
 
 	for {
 		c, size, rErr := r.reader.ReadRune()
@@ -52,11 +52,11 @@ func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_e
 			{{if .QuoteEnabled}}// case rStateInQuotedField:
 			// 	r.recordBuf = append(r.recordBuf, b)
 			// 	// r.state = rStateInQuotedField
-			case rStateInQuotedFieldAfterEscape:
+			{{if .EscapeEnabled}}case rStateInQuotedFieldAfterEscape:
 				r.done = true
 				r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedByte)
 				return false
-			case rStateEndOfQuotedField:
+			{{end}}case rStateEndOfQuotedField:
 				r.done = true
 				r.parsingErr(ErrInvalidQuotedFieldEnding)
 				return false
@@ -256,8 +256,8 @@ func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_e
 				return false
 			}
 
-			{{if .QuoteEnabled}}
-			if c == r.quote && r.errOnQuotesInUnquotedField {
+			{{if and .QuoteEnabled .ErrQInUF}}
+			if c == r.quote {
 				r.done = true
 				r.parsingErr(ErrQuoteInUnquotedField)
 				return false
@@ -283,15 +283,15 @@ func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_e
 			case r.quote:
 				r.state = rStateEndOfQuotedField
 			default:
-				if c == r.escape && r.escapeSet {
+				{{if .EscapeEnabled}}if c == r.escape {
 					r.state = rStateInQuotedFieldAfterEscape
 					continue
 				}
 
-				r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+				{{end}}r.recordBuf = append(r.recordBuf, []byte(string(c))...)
 				// r.state = rStateInQuotedField
 			}
-		case rStateInQuotedFieldAfterEscape:
+		{{if .EscapeEnabled}}case rStateInQuotedFieldAfterEscape:
 			switch c {
 			case r.quote, r.escape:
 				r.recordBuf = append(r.recordBuf, []byte(string(c))...)
@@ -301,7 +301,7 @@ func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_e
 				r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedRune)
 				return false
 			}
-		case rStateEndOfQuotedField:
+		{{end}}case rStateEndOfQuotedField:
 			switch c {
 			case r.fieldSeparator:
 				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
@@ -312,12 +312,11 @@ func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_e
 				r.state = rStateStartOfField
 				r.fieldIndex++
 			case r.quote:
-				if r.escapeSet {
-					r.done = true
-					r.parsingErr(ErrUnexpectedQuoteAfterField)
-					return false
-				}
-				r.recordBuf = append(r.recordBuf, []byte(string(r.quote))...)
+				{{if .EscapeEnabled}}
+				r.done = true
+				r.parsingErr(ErrUnexpectedQuoteAfterField)
+				return false
+				{{end}}r.recordBuf = append(r.recordBuf, []byte(string(r.quote))...)
 				r.state = rStateInQuotedField
 			default:
 				isRecSep, immediateErr := r.isRecordSeparator(c)
