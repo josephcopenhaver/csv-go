@@ -5,9 +5,9 @@ package main
 // - [x] errOnQuotesInUnquotedField
 // - [x] quoteSet
 // - [x] escapeSet
+// - [x] comment
 // - [ ] multi-record-sep
 // - [ ] single-record-sep
-// - [ ] comment
 
 import (
 	"bytes"
@@ -99,31 +99,48 @@ func main() {
 		t := parse(tsPrepareRow)
 
 		type cfg struct {
-			QuoteEnabled  bool
-			ErrNLInUF     bool
-			ErrQInUF      bool // only utilized on positive path via {{if and .QuoteEnabled .ErrQInUF}}
-			EscapeEnabled bool
+			QuoteEnabled   bool
+			ErrNLInUF      bool
+			ErrQInUF       bool // only utilized on positive path via {{if and .QuoteEnabled .ErrQInUF}}
+			EscapeEnabled  bool
+			CommentEnabled bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: true},
-			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: true},
-			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: true},
-			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: true},
-			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: true},
-			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: true},
-			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: true},
-			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: true},
-			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: false},
-			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: false},
-			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: false},
-			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: false},
-			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: false},
-			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: false},
-			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: false},
-			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: false},
+			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: true, CommentEnabled: true},
+			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: true, CommentEnabled: true},
+			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: true, CommentEnabled: true},
+			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: true, CommentEnabled: true},
+			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: true, CommentEnabled: true},
+			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: true, CommentEnabled: true},
+			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: true, CommentEnabled: true},
+			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: true, CommentEnabled: true},
+			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: false, CommentEnabled: true},
+			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: false, CommentEnabled: true},
+			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: false, CommentEnabled: true},
+			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: false, CommentEnabled: true},
+			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: false, CommentEnabled: true},
+			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: false, CommentEnabled: true},
+			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: false, CommentEnabled: true},
+			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: false, CommentEnabled: true},
+			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: true, CommentEnabled: false},
+			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: true, CommentEnabled: false},
+			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: true, CommentEnabled: false},
+			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: true, CommentEnabled: false},
+			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: true, CommentEnabled: false},
+			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: true, CommentEnabled: false},
+			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: true, CommentEnabled: false},
+			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: true, CommentEnabled: false},
+			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: false, CommentEnabled: false},
+			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: true, EscapeEnabled: false, CommentEnabled: false},
+			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: false, CommentEnabled: false},
+			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: true, EscapeEnabled: false, CommentEnabled: false},
+			{QuoteEnabled: false, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: false, CommentEnabled: false},
+			{QuoteEnabled: true, ErrNLInUF: true, ErrQInUF: false, EscapeEnabled: false, CommentEnabled: false},
+			{QuoteEnabled: false, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: false, CommentEnabled: false},
+			{QuoteEnabled: true, ErrNLInUF: false, ErrQInUF: false, EscapeEnabled: false, CommentEnabled: false},
 		})
 	}
 

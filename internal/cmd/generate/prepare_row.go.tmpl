@@ -1,4 +1,4 @@
-func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_errOnNLInUF{{if .ErrNLInUF}}En{{else}}Dis{{end}}abled_errOnQuoteInUF{{if .ErrQInUF}}En{{else}}Dis{{end}}abled_escape{{if .EscapeEnabled}}En{{else}}Dis{{end}}abled() bool {
+func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_errOnNLInUF{{if .ErrNLInUF}}En{{else}}Dis{{end}}abled_errOnQuoteInUF{{if .ErrQInUF}}En{{else}}Dis{{end}}abled_escape{{if .EscapeEnabled}}En{{else}}Dis{{end}}abled_comment{{if .CommentEnabled}}En{{else}}Dis{{end}}abled() bool {
 
 	for {
 		c, size, rErr := r.reader.ReadRune()
@@ -60,8 +60,7 @@ func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_e
 				r.done = true
 				r.parsingErr(ErrInvalidQuotedFieldEnding)
 				return false
-			{{end}}case rStateInLineComment:
-				// r.state = rStateInLineComment
+			{{end}}
 			}
 
 			if rErr == nil {
@@ -139,7 +138,8 @@ func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_e
 			}
 
 			{{end}}
-			if c == r.comment && r.commentSet && (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) {
+            {{if .CommentEnabled}}
+			if c == r.comment && (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) {
 				r.state = rStateInLineComment
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -152,7 +152,7 @@ func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_e
 				continue
 			}
 
-			{{if .ErrNLInUF}}
+			{{end}}{{if .ErrNLInUF}}
 			switch c {
 			case '\r':
 				r.done = true
@@ -339,7 +339,7 @@ func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_e
 				r.parsingErr(ErrInvalidQuotedFieldEnding)
 				return false
 			}
-		{{end}}case rStateInLineComment:
+		{{end}}{{if .CommentEnabled}}case rStateInLineComment:
 			isRecSep, immediateErr := r.isRecordSeparator(c)
 			if immediateErr {
 				return false
@@ -353,7 +353,7 @@ func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_e
 				}
 			}
 
-			continue
+			continue{{end}}
 		}
 
 		// not required because all code paths that would set this value
