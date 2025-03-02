@@ -63,7 +63,7 @@ var (
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
 	ErrBadRecordSeparator          = errors.New("record separator can only be one valid utf8 rune long or \"\\r\\n\"")
 	ErrIncompleteQuotedField       = fmt.Errorf("incomplete quoted field: %w", io.ErrUnexpectedEOF)
-	ErrQuoteInUnquotedField        = fmt.Errorf("quote found in unquoted field")
+	ErrQuoteInUnquotedField        = errors.New("quote found in unquoted field")
 	ErrInvalidQuotedFieldEnding    = errors.New("unexpected character found after end of quoted field") // expecting field separator, record separator, quote char, or end of file if field count matches expectations
 	ErrNoHeaderRow                 = fmt.Errorf("no header row: %w", io.ErrUnexpectedEOF)
 	ErrNoRows                      = fmt.Errorf("no rows: %w", io.ErrUnexpectedEOF)
