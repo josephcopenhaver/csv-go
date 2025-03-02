@@ -1,13 +1,13 @@
 //go:generate go run main.go
 package main
 
-// errOnNewlineInUnquotedField
-// errOnQuotesInUnquotedField
-// quoteSet
-// escapeSet
-// multi-record-sep
-// single-record-sep
-// comment
+// - [x] errOnNewlineInUnquotedField
+// - [ ] errOnQuotesInUnquotedField
+// - [x] quoteSet
+// - [ ] escapeSet
+// - [ ] multi-record-sep
+// - [ ] single-record-sep
+// - [ ] comment
 
 import (
 	"bytes"
@@ -99,12 +99,17 @@ func main() {
 		t := parse(tsPrepareRow)
 
 		type cfg struct {
+			QuoteEnabled bool
+			ErrNLInUF    bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{},
+			{QuoteEnabled: false, ErrNLInUF: true},
+			{QuoteEnabled: true, ErrNLInUF: true},
+			{QuoteEnabled: false, ErrNLInUF: false},
+			{QuoteEnabled: true, ErrNLInUF: false},
 		})
 	}
 

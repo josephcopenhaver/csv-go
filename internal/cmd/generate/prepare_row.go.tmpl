@@ -1,4 +1,4 @@
-func (r *Reader) defaultPrepareRow() bool {
+func (r *Reader) prepareRow_quote{{if .QuoteEnabled}}En{{else}}Dis{{end}}abled_errOnNLInUF{{if .ErrNLInUF}}En{{else}}Dis{{end}}abled() bool {
 
 	for {
 		c, size, rErr := r.reader.ReadRune()
@@ -46,10 +46,10 @@ func (r *Reader) defaultPrepareRow() bool {
 			case rStateStartOfRecord, rStateStartOfField:
 				r.recordBuf = append(r.recordBuf, b)
 				r.state = rStateInField
-			case rStateInField, rStateInQuotedField:
+			case rStateInField{{if .QuoteEnabled}}, rStateInQuotedField{{end}}:
 				r.recordBuf = append(r.recordBuf, b)
 				// r.state = rStateInField
-			// case rStateInQuotedField:
+			{{if .QuoteEnabled}}// case rStateInQuotedField:
 			// 	r.recordBuf = append(r.recordBuf, b)
 			// 	// r.state = rStateInQuotedField
 			case rStateInQuotedFieldAfterEscape:
@@ -60,7 +60,7 @@ func (r *Reader) defaultPrepareRow() bool {
 				r.done = true
 				r.parsingErr(ErrInvalidQuotedFieldEnding)
 				return false
-			case rStateInLineComment:
+			{{end}}case rStateInLineComment:
 				// r.state = rStateInLineComment
 			}
 
@@ -124,7 +124,8 @@ func (r *Reader) defaultPrepareRow() bool {
 				return false
 			}
 
-			if c == r.quote && r.quoteSet {
+			{{if .QuoteEnabled}}
+			if c == r.quote {
 				r.state = rStateInQuotedField
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -137,6 +138,7 @@ func (r *Reader) defaultPrepareRow() bool {
 				continue
 			}
 
+			{{end}}
 			if c == r.comment && r.commentSet && (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) {
 				r.state = rStateInLineComment
 
@@ -150,21 +152,19 @@ func (r *Reader) defaultPrepareRow() bool {
 				continue
 			}
 
+			{{if .ErrNLInUF}}
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
-					r.done = true
-					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
-					return false
-				}
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
-					r.done = true
-					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
-					return false
-				}
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
 			}
 
+			{{end}}
 			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
 			r.state = rStateInField
 		case rStateStartOfField:
@@ -198,7 +198,8 @@ func (r *Reader) defaultPrepareRow() bool {
 				return false
 			}
 
-			if c == r.quote && r.quoteSet {
+			{{if .QuoteEnabled}}
+			if c == r.quote {
 				r.state = rStateInQuotedField
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -211,21 +212,19 @@ func (r *Reader) defaultPrepareRow() bool {
 				continue
 			}
 
+			{{end}}{{if .ErrNLInUF}}
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
-					r.done = true
-					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
-					return false
-				}
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
-					r.done = true
-					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
-					return false
-				}
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
 			}
 
+			{{end}}
 			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
 			r.state = rStateInField
 		case rStateInField:
@@ -257,30 +256,29 @@ func (r *Reader) defaultPrepareRow() bool {
 				return false
 			}
 
-			if c == r.quote && r.quoteSet && r.errOnQuotesInUnquotedField {
+			{{if .QuoteEnabled}}
+			if c == r.quote && r.errOnQuotesInUnquotedField {
 				r.done = true
 				r.parsingErr(ErrQuoteInUnquotedField)
 				return false
 			}
 
+			{{end}}{{if .ErrNLInUF}}
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
-					r.done = true
-					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
-					return false
-				}
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
-					r.done = true
-					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
-					return false
-				}
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
 			}
 
+			{{end}}
 			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
 			// r.state = rStateInField
-		case rStateInQuotedField:
+		{{if .QuoteEnabled}}case rStateInQuotedField:
 			switch c {
 			case r.quote:
 				r.state = rStateEndOfQuotedField
@@ -342,7 +340,7 @@ func (r *Reader) defaultPrepareRow() bool {
 				r.parsingErr(ErrInvalidQuotedFieldEnding)
 				return false
 			}
-		case rStateInLineComment:
+		{{end}}case rStateInLineComment:
 			isRecSep, immediateErr := r.isRecordSeparator(c)
 			if immediateErr {
 				return false

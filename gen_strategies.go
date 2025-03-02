@@ -8,7 +8,288 @@ import (
 	"unicode/utf8"
 )
 
-func (r *Reader) defaultPrepareRow() bool {
+func (r *Reader) prepareRow_quoteDisabled_errOnNLInUFEnabled() bool {
+
+	for {
+		c, size, rErr := r.reader.ReadRune()
+		if size > 0 && rErr != nil {
+			r.done = true
+			r.ioErr(errors.Join(ErrBadReadRuneImpl, rErr))
+			return false
+		}
+
+		// advance the position indicator
+		r.byteIndex += uint64(size)
+
+		if size == 1 && c == utf8.RuneError {
+
+			//
+			// handle a non UTF8 byte
+			//
+
+			if rStateStartOfDoc == r.state {
+				if r.errOnNoByteOrderMarker {
+					r.byteIndex -= 1 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+					r.done = true
+					r.parsingErr(ErrNoByteOrderMarker)
+					return false
+				}
+
+				r.state = rStateStartOfRecord
+			}
+
+			if err := r.reader.UnreadRune(); err != nil {
+				r.done = true
+				r.ioErr(errors.Join(ErrBadUnreadRuneImpl, err))
+				return false
+			}
+			var b byte
+			if v, err := r.reader.ReadByte(); err != nil {
+				r.done = true
+				r.ioErr(errors.Join(ErrBadReadByteImpl, err))
+				return false
+			} else {
+				b = v
+			}
+
+			switch r.state {
+			case rStateStartOfRecord, rStateStartOfField:
+				r.recordBuf = append(r.recordBuf, b)
+				r.state = rStateInField
+			case rStateInField:
+				r.recordBuf = append(r.recordBuf, b)
+				// r.state = rStateInField
+			case rStateInLineComment:
+				// r.state = rStateInLineComment
+			}
+
+			if rErr == nil {
+				continue
+			}
+		}
+		if rErr != nil {
+			r.done = true
+			if errors.Is(rErr, io.EOF) {
+				return r.handleEOF()
+			}
+			r.ioErr(rErr)
+			return false
+		}
+
+		switch r.state {
+		case rStateStartOfDoc:
+			if isByteOrderMarker(uint32(c), size) {
+				if r.removeByteOrderMarker {
+					r.state = rStateStartOfRecord
+					continue
+				}
+			} else if r.errOnNoByteOrderMarker {
+				r.byteIndex -= 1 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+				r.done = true
+				r.parsingErr(ErrNoByteOrderMarker)
+				return false
+			}
+
+			r.state = rStateStartOfRecord
+			fallthrough
+		case rStateStartOfRecord:
+			if c == r.fieldSeparator {
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return false
+				}
+				r.state = rStateStartOfField
+				r.fieldIndex++
+
+				continue
+			}
+
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return false
+			}
+			if isRecSep {
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				// r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false
+			}
+
+			if c == r.comment && r.commentSet && (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) {
+				r.state = rStateInLineComment
+
+				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+				//
+				//
+				// // checking if EOF was signaled from within the isRecordSeparator call before continue
+				// if r.eof {
+				// 	break
+				// }
+				continue
+			}
+
+			switch c {
+			case '\r':
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
+			case '\n':
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
+			}
+
+			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+			r.state = rStateInField
+		case rStateStartOfField:
+			if c == r.fieldSeparator {
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return false
+				}
+				// r.state = rStateStartOfField
+				r.fieldIndex++
+
+				continue
+			}
+
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return false
+			}
+			if isRecSep {
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false
+			}
+
+			switch c {
+			case '\r':
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
+			case '\n':
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
+			}
+
+			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+			r.state = rStateInField
+		case rStateInField:
+			if c == r.fieldSeparator {
+				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+				r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return false
+				}
+				r.state = rStateStartOfField
+				r.fieldIndex++
+
+				continue
+			}
+
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return false
+			}
+			if isRecSep {
+				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+				r.fieldStart = len(r.recordBuf)
+				r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false
+			}
+
+			switch c {
+			case '\r':
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
+			case '\n':
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
+			}
+
+			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+			// r.state = rStateInField
+		case rStateInLineComment:
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return false
+			}
+			if isRecSep {
+				r.state = rStateStartOfRecord
+				// r.recordIndex++ // not valid in this case because the previous state was not a record
+
+				if r.eof {
+					return false
+				}
+			}
+
+			continue
+		}
+
+		// not required because all code paths that would set this value
+		// end in early returns rather than continued iterations
+		//
+		//
+		// if r.eof {
+		// 	break
+		// }
+
+		// not required because all code paths that would set this value
+		// end in early returns rather than continued iterations
+		//
+		// these paths include calls to:
+		// - nextRuneIsLF()
+		// - fieldNumOverflow()
+		// - checkFields()
+		//
+		// and every path in prepareRow() that sets `r.done = <true-expression>`
+		//
+		//
+		// if r.done {
+		// 	break
+		// }
+
+		// now, because all code paths that would call break are definitely not viable
+		// there does not need to be anything after this loop all exit points are returns
+	}
+
+	// no longer required because all loop exit points are returns, no breaks
+	//
+	//
+	// var errTrailer error
+	// if r.eof {
+	// 	errTrailer = io.ErrUnexpectedEOF
+	// }
+	// return r.checkNumFields(errTrailer)
+}
+
+func (r *Reader) prepareRow_quoteEnabled_errOnNLInUFEnabled() bool {
 
 	for {
 		c, size, rErr := r.reader.ReadRune()
@@ -134,7 +415,7 @@ func (r *Reader) defaultPrepareRow() bool {
 				return false
 			}
 
-			if c == r.quote && r.quoteSet {
+			if c == r.quote {
 				r.state = rStateInQuotedField
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -162,17 +443,13 @@ func (r *Reader) defaultPrepareRow() bool {
 
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
-					r.done = true
-					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
-					return false
-				}
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
-					r.done = true
-					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
-					return false
-				}
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
 			}
 
 			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
@@ -208,7 +485,7 @@ func (r *Reader) defaultPrepareRow() bool {
 				return false
 			}
 
-			if c == r.quote && r.quoteSet {
+			if c == r.quote {
 				r.state = rStateInQuotedField
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -223,17 +500,13 @@ func (r *Reader) defaultPrepareRow() bool {
 
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
-					r.done = true
-					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
-					return false
-				}
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
-					r.done = true
-					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
-					return false
-				}
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
 			}
 
 			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
@@ -267,7 +540,7 @@ func (r *Reader) defaultPrepareRow() bool {
 				return false
 			}
 
-			if c == r.quote && r.quoteSet && r.errOnQuotesInUnquotedField {
+			if c == r.quote && r.errOnQuotesInUnquotedField {
 				r.done = true
 				r.parsingErr(ErrQuoteInUnquotedField)
 				return false
@@ -275,17 +548,614 @@ func (r *Reader) defaultPrepareRow() bool {
 
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
-					r.done = true
-					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
-					return false
-				}
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
-					r.done = true
-					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				r.done = true
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
+			}
+
+			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+			// r.state = rStateInField
+		case rStateInQuotedField:
+			switch c {
+			case r.quote:
+				r.state = rStateEndOfQuotedField
+			default:
+				if c == r.escape && r.escapeSet {
+					r.state = rStateInQuotedFieldAfterEscape
+					continue
+				}
+
+				r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+				// r.state = rStateInQuotedField
+			}
+		case rStateInQuotedFieldAfterEscape:
+			switch c {
+			case r.quote, r.escape:
+				r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+				r.state = rStateInQuotedField
+			default:
+				r.done = true
+				r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedRune)
+				return false
+			}
+		case rStateEndOfQuotedField:
+			switch c {
+			case r.fieldSeparator:
+				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+				r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
 					return false
 				}
+				r.state = rStateStartOfField
+				r.fieldIndex++
+			case r.quote:
+				if r.escapeSet {
+					r.done = true
+					r.parsingErr(ErrUnexpectedQuoteAfterField)
+					return false
+				}
+				r.recordBuf = append(r.recordBuf, []byte(string(r.quote))...)
+				r.state = rStateInQuotedField
+			default:
+				isRecSep, immediateErr := r.isRecordSeparator(c)
+				if immediateErr {
+					return false
+				}
+				if isRecSep {
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+					r.fieldStart = len(r.recordBuf)
+					r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
+					return false
+				}
+
+				r.done = true
+				r.parsingErr(ErrInvalidQuotedFieldEnding)
+				return false
+			}
+		case rStateInLineComment:
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return false
+			}
+			if isRecSep {
+				r.state = rStateStartOfRecord
+				// r.recordIndex++ // not valid in this case because the previous state was not a record
+
+				if r.eof {
+					return false
+				}
+			}
+
+			continue
+		}
+
+		// not required because all code paths that would set this value
+		// end in early returns rather than continued iterations
+		//
+		//
+		// if r.eof {
+		// 	break
+		// }
+
+		// not required because all code paths that would set this value
+		// end in early returns rather than continued iterations
+		//
+		// these paths include calls to:
+		// - nextRuneIsLF()
+		// - fieldNumOverflow()
+		// - checkFields()
+		//
+		// and every path in prepareRow() that sets `r.done = <true-expression>`
+		//
+		//
+		// if r.done {
+		// 	break
+		// }
+
+		// now, because all code paths that would call break are definitely not viable
+		// there does not need to be anything after this loop all exit points are returns
+	}
+
+	// no longer required because all loop exit points are returns, no breaks
+	//
+	//
+	// var errTrailer error
+	// if r.eof {
+	// 	errTrailer = io.ErrUnexpectedEOF
+	// }
+	// return r.checkNumFields(errTrailer)
+}
+
+func (r *Reader) prepareRow_quoteDisabled_errOnNLInUFDisabled() bool {
+
+	for {
+		c, size, rErr := r.reader.ReadRune()
+		if size > 0 && rErr != nil {
+			r.done = true
+			r.ioErr(errors.Join(ErrBadReadRuneImpl, rErr))
+			return false
+		}
+
+		// advance the position indicator
+		r.byteIndex += uint64(size)
+
+		if size == 1 && c == utf8.RuneError {
+
+			//
+			// handle a non UTF8 byte
+			//
+
+			if rStateStartOfDoc == r.state {
+				if r.errOnNoByteOrderMarker {
+					r.byteIndex -= 1 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+					r.done = true
+					r.parsingErr(ErrNoByteOrderMarker)
+					return false
+				}
+
+				r.state = rStateStartOfRecord
+			}
+
+			if err := r.reader.UnreadRune(); err != nil {
+				r.done = true
+				r.ioErr(errors.Join(ErrBadUnreadRuneImpl, err))
+				return false
+			}
+			var b byte
+			if v, err := r.reader.ReadByte(); err != nil {
+				r.done = true
+				r.ioErr(errors.Join(ErrBadReadByteImpl, err))
+				return false
+			} else {
+				b = v
+			}
+
+			switch r.state {
+			case rStateStartOfRecord, rStateStartOfField:
+				r.recordBuf = append(r.recordBuf, b)
+				r.state = rStateInField
+			case rStateInField:
+				r.recordBuf = append(r.recordBuf, b)
+				// r.state = rStateInField
+			case rStateInLineComment:
+				// r.state = rStateInLineComment
+			}
+
+			if rErr == nil {
+				continue
+			}
+		}
+		if rErr != nil {
+			r.done = true
+			if errors.Is(rErr, io.EOF) {
+				return r.handleEOF()
+			}
+			r.ioErr(rErr)
+			return false
+		}
+
+		switch r.state {
+		case rStateStartOfDoc:
+			if isByteOrderMarker(uint32(c), size) {
+				if r.removeByteOrderMarker {
+					r.state = rStateStartOfRecord
+					continue
+				}
+			} else if r.errOnNoByteOrderMarker {
+				r.byteIndex -= 1 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+				r.done = true
+				r.parsingErr(ErrNoByteOrderMarker)
+				return false
+			}
+
+			r.state = rStateStartOfRecord
+			fallthrough
+		case rStateStartOfRecord:
+			if c == r.fieldSeparator {
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return false
+				}
+				r.state = rStateStartOfField
+				r.fieldIndex++
+
+				continue
+			}
+
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return false
+			}
+			if isRecSep {
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				// r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false
+			}
+
+			if c == r.comment && r.commentSet && (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) {
+				r.state = rStateInLineComment
+
+				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+				//
+				//
+				// // checking if EOF was signaled from within the isRecordSeparator call before continue
+				// if r.eof {
+				// 	break
+				// }
+				continue
+			}
+
+			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+			r.state = rStateInField
+		case rStateStartOfField:
+			if c == r.fieldSeparator {
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return false
+				}
+				// r.state = rStateStartOfField
+				r.fieldIndex++
+
+				continue
+			}
+
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return false
+			}
+			if isRecSep {
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false
+			}
+
+			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+			r.state = rStateInField
+		case rStateInField:
+			if c == r.fieldSeparator {
+				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+				r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return false
+				}
+				r.state = rStateStartOfField
+				r.fieldIndex++
+
+				continue
+			}
+
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return false
+			}
+			if isRecSep {
+				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+				r.fieldStart = len(r.recordBuf)
+				r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false
+			}
+
+			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+			// r.state = rStateInField
+		case rStateInLineComment:
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return false
+			}
+			if isRecSep {
+				r.state = rStateStartOfRecord
+				// r.recordIndex++ // not valid in this case because the previous state was not a record
+
+				if r.eof {
+					return false
+				}
+			}
+
+			continue
+		}
+
+		// not required because all code paths that would set this value
+		// end in early returns rather than continued iterations
+		//
+		//
+		// if r.eof {
+		// 	break
+		// }
+
+		// not required because all code paths that would set this value
+		// end in early returns rather than continued iterations
+		//
+		// these paths include calls to:
+		// - nextRuneIsLF()
+		// - fieldNumOverflow()
+		// - checkFields()
+		//
+		// and every path in prepareRow() that sets `r.done = <true-expression>`
+		//
+		//
+		// if r.done {
+		// 	break
+		// }
+
+		// now, because all code paths that would call break are definitely not viable
+		// there does not need to be anything after this loop all exit points are returns
+	}
+
+	// no longer required because all loop exit points are returns, no breaks
+	//
+	//
+	// var errTrailer error
+	// if r.eof {
+	// 	errTrailer = io.ErrUnexpectedEOF
+	// }
+	// return r.checkNumFields(errTrailer)
+}
+
+func (r *Reader) prepareRow_quoteEnabled_errOnNLInUFDisabled() bool {
+
+	for {
+		c, size, rErr := r.reader.ReadRune()
+		if size > 0 && rErr != nil {
+			r.done = true
+			r.ioErr(errors.Join(ErrBadReadRuneImpl, rErr))
+			return false
+		}
+
+		// advance the position indicator
+		r.byteIndex += uint64(size)
+
+		if size == 1 && c == utf8.RuneError {
+
+			//
+			// handle a non UTF8 byte
+			//
+
+			if rStateStartOfDoc == r.state {
+				if r.errOnNoByteOrderMarker {
+					r.byteIndex -= 1 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+					r.done = true
+					r.parsingErr(ErrNoByteOrderMarker)
+					return false
+				}
+
+				r.state = rStateStartOfRecord
+			}
+
+			if err := r.reader.UnreadRune(); err != nil {
+				r.done = true
+				r.ioErr(errors.Join(ErrBadUnreadRuneImpl, err))
+				return false
+			}
+			var b byte
+			if v, err := r.reader.ReadByte(); err != nil {
+				r.done = true
+				r.ioErr(errors.Join(ErrBadReadByteImpl, err))
+				return false
+			} else {
+				b = v
+			}
+
+			switch r.state {
+			case rStateStartOfRecord, rStateStartOfField:
+				r.recordBuf = append(r.recordBuf, b)
+				r.state = rStateInField
+			case rStateInField, rStateInQuotedField:
+				r.recordBuf = append(r.recordBuf, b)
+				// r.state = rStateInField
+			// case rStateInQuotedField:
+			// 	r.recordBuf = append(r.recordBuf, b)
+			// 	// r.state = rStateInQuotedField
+			case rStateInQuotedFieldAfterEscape:
+				r.done = true
+				r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedByte)
+				return false
+			case rStateEndOfQuotedField:
+				r.done = true
+				r.parsingErr(ErrInvalidQuotedFieldEnding)
+				return false
+			case rStateInLineComment:
+				// r.state = rStateInLineComment
+			}
+
+			if rErr == nil {
+				continue
+			}
+		}
+		if rErr != nil {
+			r.done = true
+			if errors.Is(rErr, io.EOF) {
+				return r.handleEOF()
+			}
+			r.ioErr(rErr)
+			return false
+		}
+
+		switch r.state {
+		case rStateStartOfDoc:
+			if isByteOrderMarker(uint32(c), size) {
+				if r.removeByteOrderMarker {
+					r.state = rStateStartOfRecord
+					continue
+				}
+			} else if r.errOnNoByteOrderMarker {
+				r.byteIndex -= 1 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+				r.done = true
+				r.parsingErr(ErrNoByteOrderMarker)
+				return false
+			}
+
+			r.state = rStateStartOfRecord
+			fallthrough
+		case rStateStartOfRecord:
+			if c == r.fieldSeparator {
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return false
+				}
+				r.state = rStateStartOfField
+				r.fieldIndex++
+
+				continue
+			}
+
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return false
+			}
+			if isRecSep {
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				// r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false
+			}
+
+			if c == r.quote {
+				r.state = rStateInQuotedField
+
+				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+				//
+				//
+				// // checking if EOF was signaled from within the isRecordSeparator call before continue
+				// if r.eof {
+				// 	break
+				// }
+				continue
+			}
+
+			if c == r.comment && r.commentSet && (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) {
+				r.state = rStateInLineComment
+
+				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+				//
+				//
+				// // checking if EOF was signaled from within the isRecordSeparator call before continue
+				// if r.eof {
+				// 	break
+				// }
+				continue
+			}
+
+			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+			r.state = rStateInField
+		case rStateStartOfField:
+			if c == r.fieldSeparator {
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return false
+				}
+				// r.state = rStateStartOfField
+				r.fieldIndex++
+
+				continue
+			}
+
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return false
+			}
+			if isRecSep {
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false
+			}
+
+			if c == r.quote {
+				r.state = rStateInQuotedField
+
+				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+				//
+				//
+				// // checking if EOF was signaled from within the isRecordSeparator call before continue
+				// if r.eof {
+				// 	break
+				// }
+				continue
+			}
+
+			r.recordBuf = append(r.recordBuf, []byte(string(c))...)
+			r.state = rStateInField
+		case rStateInField:
+			if c == r.fieldSeparator {
+				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+				r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return false
+				}
+				r.state = rStateStartOfField
+				r.fieldIndex++
+
+				continue
+			}
+
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return false
+			}
+			if isRecSep {
+				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+				r.fieldStart = len(r.recordBuf)
+				r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false
+			}
+
+			if c == r.quote && r.errOnQuotesInUnquotedField {
+				r.done = true
+				r.parsingErr(ErrQuoteInUnquotedField)
+				return false
 			}
 
 			r.recordBuf = append(r.recordBuf, []byte(string(c))...)

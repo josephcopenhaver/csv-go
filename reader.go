@@ -483,11 +483,9 @@ type Reader struct {
 	afterStartOfRecords                bool
 	recordSepLen                       int8
 	commentsAllowedAfterStartOfRecords bool
-	quoteSet                           bool
 	escapeSet                          bool
 	commentSet                         bool
 	errOnQuotesInUnquotedField         bool
-	errOnNewlineInUnquotedField        bool
 	trsEmitsRecord                     bool
 	trimHeaders                        bool
 	removeHeaderRow                    bool
@@ -691,7 +689,6 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		fieldSeparator:                     cfg.fieldSeparator,
 		comment:                            cfg.comment,
 		trsEmitsRecord:                     cfg.trsEmitsRecord,
-		quoteSet:                           cfg.quoteSet,
 		escapeSet:                          cfg.escapeSet,
 		commentSet:                         cfg.commentSet,
 		trimHeaders:                        cfg.trimHeaders,
@@ -704,10 +701,22 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		errOnNoByteOrderMarker:             cfg.errOnNoByteOrderMarker,
 		commentsAllowedAfterStartOfRecords: cfg.commentsAllowedAfterStartOfRecords,
 		errOnQuotesInUnquotedField:         cfg.errOnQuotesInUnquotedField,
-		errOnNewlineInUnquotedField:        cfg.errOnNewlineInUnquotedField,
 	}
 
-	cr.prepareRow = cr.defaultPrepareRow
+	// cr.prepareRow = cr.defaultPrepareRow
+	if cfg.quoteSet {
+		if cfg.errOnNewlineInUnquotedField {
+			cr.prepareRow = cr.prepareRow_quoteEnabled_errOnNLInUFEnabled
+		} else {
+			cr.prepareRow = cr.prepareRow_quoteEnabled_errOnNLInUFDisabled
+		}
+	} else {
+		if cfg.errOnNewlineInUnquotedField {
+			cr.prepareRow = cr.prepareRow_quoteDisabled_errOnNLInUFEnabled
+		} else {
+			cr.prepareRow = cr.prepareRow_quoteDisabled_errOnNLInUFDisabled
+		}
+	}
 
 	cr.initPipeline(cfg.reader, cfg.borrowRow, cfg.discoverRecordSeparator)
 
