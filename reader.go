@@ -63,7 +63,7 @@ var (
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
 	ErrBadRecordSeparator          = errors.New("record separator can only be one valid utf8 rune long or \"\\r\\n\"")
 	ErrIncompleteQuotedField       = fmt.Errorf("incomplete quoted field: %w", io.ErrUnexpectedEOF)
-	ErrQuoteInUnquotedField        = fmt.Errorf("quote found in unquoted field")
+	ErrQuoteInUnquotedField        = errors.New("quote found in unquoted field")
 	ErrInvalidQuotedFieldEnding    = errors.New("unexpected character found after end of quoted field") // expecting field separator, record separator, quote char, or end of file if field count matches expectations
 	ErrNoHeaderRow                 = fmt.Errorf("no header row: %w", io.ErrUnexpectedEOF)
 	ErrNoRows                      = fmt.Errorf("no rows: %w", io.ErrUnexpectedEOF)
@@ -1229,7 +1229,7 @@ func (r *Reader) prepareRow() bool {
 
 			if rStateStartOfDoc == r.state {
 				if r.errOnNoByteOrderMarker {
-					r.byteIndex -= 1 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
 					r.done = true
 					r.parsingErr(ErrNoByteOrderMarker)
 					return false
@@ -1270,8 +1270,8 @@ func (r *Reader) prepareRow() bool {
 				r.done = true
 				r.parsingErr(ErrInvalidQuotedFieldEnding)
 				return false
-			case rStateInLineComment:
-				// r.state = rStateInLineComment
+				// case rStateInLineComment:
+				// 	// r.state = rStateInLineComment
 			}
 
 			if rErr == nil {
@@ -1295,7 +1295,7 @@ func (r *Reader) prepareRow() bool {
 					continue
 				}
 			} else if r.errOnNoByteOrderMarker {
-				r.byteIndex -= 1 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+				r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
 				r.done = true
 				r.parsingErr(ErrNoByteOrderMarker)
 				return false

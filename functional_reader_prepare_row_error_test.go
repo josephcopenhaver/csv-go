@@ -310,6 +310,20 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 1, record 1, field 1: " + csv.ErrTooManyFields.Error() + ": field count exceeds 1",
 		},
+		{
+			when: "BOM required but doc starts with another multibyte rune instead",
+			then: "error at byte 0 - no BOM",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader(func() string {
+					faceWithColdSweat := 0x1F613
+					return string(rune(faceWithColdSweat))
+				}())),
+				csv.ReaderOpts().RemoveByteOrderMarker(true),
+				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNoByteOrderMarker},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 0, record 0, field 0: " + csv.ErrNoByteOrderMarker.Error(),
+		},
 	}
 
 	for i := range tcs {
