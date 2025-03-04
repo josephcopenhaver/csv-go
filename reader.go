@@ -470,8 +470,6 @@ type Reader struct {
 	escape            rune
 	fieldSeparator    rune
 	comment           rune
-	done              bool
-	eof               bool
 	state             rState
 	// afterStartOfRecords is a flag set to communicate when the first records have been observed and potentially emitted
 	//
@@ -493,6 +491,7 @@ type Reader struct {
 	errOnNoRows                        bool
 	removeByteOrderMarker              bool
 	errOnNoByteOrderMarker             bool
+	done                               bool
 }
 
 func (cfg *rCfg) validate() error {
@@ -723,7 +722,7 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 //
 // It will never attempt to close the underlying reader.
 func (r *Reader) Close() error {
-	r.done = true
+	r.setDone()
 	r.err = ErrReaderClosed
 	r.zeroRecordBuffers()
 	return nil
@@ -862,20 +861,25 @@ func (r *Reader) nextRuneIsLF() (bool, bool) {
 			// will be conveyed, so lets not set the error state in that case before the state machine
 			// gets that chance
 			if r.recordSepLen == 2 && r.state != rStateEndOfQuotedField {
-				r.done = true
+				r.setDone()
 				r.parsingErr(ErrUnsafeCRFileEnd)
 				return false, true
 			}
 
-			r.eof = true
+			// set done on next scan
+			// due to the EOF encountered
+			r.scan = func() bool {
+				r.setDone()
+				return false
+			}
 			return false, false
 		} else {
-			r.done = true
+			r.setDone()
 			r.ioErr(err)
 			return false, true
 		}
 	} else if err != nil {
-		r.done = true
+		r.setDone()
 		r.ioErr(errors.Join(ErrBadReadRuneImpl, err))
 		return false, true
 	}
@@ -888,7 +892,7 @@ func (r *Reader) nextRuneIsLF() (bool, bool) {
 	}
 
 	if err := r.reader.UnreadRune(); err != nil {
-		r.done = true
+		r.setDone()
 		r.ioErr(errors.Join(ErrBadUnreadRuneImpl, err))
 		return false, true
 	}
@@ -905,7 +909,7 @@ func (r *Reader) defaultCheckNumFields(errTrailer error) bool {
 	//
 	// so if we're here, then we're missing some fields in this record
 
-	r.done = true
+	r.setDone()
 	if r.err == nil {
 		r.parsingErr(notEnoughFieldsErr(r.numFields, len(r.fieldLengths)))
 		if errTrailer != nil {
@@ -1020,14 +1024,6 @@ func (r *Reader) zeroRecordBuffers() {
 }
 
 func (r *Reader) defaultScan() bool {
-	if r.done {
-		return false
-	}
-
-	if r.eof {
-		r.done = true
-		return false
-	}
 
 	r.resetRecordBuffers()
 
@@ -1035,6 +1031,10 @@ func (r *Reader) defaultScan() bool {
 }
 
 func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparator bool) {
+
+	if !(r.removeByteOrderMarker || r.errOnNoByteOrderMarker) {
+		r.state = rStateStartOfRecord
+	}
 
 	if v, ok := reader.(BufferedReader); ok {
 		r.reader = v
@@ -1099,7 +1099,7 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 				}
 
 				if checkHeadersMatch && !matching {
-					r.done = true
+					r.setDone()
 					r.parsingErr(ErrUnexpectedHeaderRowContents)
 					return false
 				}
@@ -1114,7 +1114,7 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 					p += s
 
 					if field != r.headers[i] {
-						r.done = true
+						r.setDone()
 						r.parsingErr(ErrUnexpectedHeaderRowContents)
 						return false
 					}
@@ -1158,7 +1158,7 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 
 func (r *Reader) fieldNumOverflow() bool {
 	if len(r.fieldLengths) == r.numFields {
-		r.done = true
+		r.setDone()
 		r.parsingErr(tooManyFieldsErr(r.numFields))
 		return true
 	}
@@ -1213,7 +1213,7 @@ func (r *Reader) prepareRow() bool {
 	for {
 		c, size, rErr := r.reader.ReadRune()
 		if size > 0 && rErr != nil {
-			r.done = true
+			r.setDone()
 			r.ioErr(errors.Join(ErrBadReadRuneImpl, rErr))
 			return false
 		}
@@ -1230,7 +1230,7 @@ func (r *Reader) prepareRow() bool {
 			if rStateStartOfDoc == r.state {
 				if r.errOnNoByteOrderMarker {
 					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
-					r.done = true
+					r.setDone()
 					r.parsingErr(ErrNoByteOrderMarker)
 					return false
 				}
@@ -1239,13 +1239,13 @@ func (r *Reader) prepareRow() bool {
 			}
 
 			if err := r.reader.UnreadRune(); err != nil {
-				r.done = true
+				r.setDone()
 				r.ioErr(errors.Join(ErrBadUnreadRuneImpl, err))
 				return false
 			}
 			var b byte
 			if v, err := r.reader.ReadByte(); err != nil {
-				r.done = true
+				r.setDone()
 				r.ioErr(errors.Join(ErrBadReadByteImpl, err))
 				return false
 			} else {
@@ -1263,11 +1263,11 @@ func (r *Reader) prepareRow() bool {
 			// 	r.recordBuf = append(r.recordBuf, b)
 			// 	// r.state = rStateInQuotedField
 			case rStateInQuotedFieldAfterEscape:
-				r.done = true
+				r.setDone()
 				r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedByte)
 				return false
 			case rStateEndOfQuotedField:
-				r.done = true
+				r.setDone()
 				r.parsingErr(ErrInvalidQuotedFieldEnding)
 				return false
 				// case rStateInLineComment:
@@ -1279,7 +1279,7 @@ func (r *Reader) prepareRow() bool {
 			}
 		}
 		if rErr != nil {
-			r.done = true
+			r.setDone()
 			if errors.Is(rErr, io.EOF) {
 				return r.handleEOF()
 			}
@@ -1296,7 +1296,7 @@ func (r *Reader) prepareRow() bool {
 				}
 			} else if r.errOnNoByteOrderMarker {
 				r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
-				r.done = true
+				r.setDone()
 				r.parsingErr(ErrNoByteOrderMarker)
 				return false
 			}
@@ -1363,13 +1363,13 @@ func (r *Reader) prepareRow() bool {
 			switch c {
 			case '\r':
 				if r.errOnNewlineInUnquotedField {
-					r.done = true
+					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
 					return false
 				}
 			case '\n':
 				if r.errOnNewlineInUnquotedField {
-					r.done = true
+					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
 					return false
 				}
@@ -1424,13 +1424,13 @@ func (r *Reader) prepareRow() bool {
 			switch c {
 			case '\r':
 				if r.errOnNewlineInUnquotedField {
-					r.done = true
+					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
 					return false
 				}
 			case '\n':
 				if r.errOnNewlineInUnquotedField {
-					r.done = true
+					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
 					return false
 				}
@@ -1468,7 +1468,7 @@ func (r *Reader) prepareRow() bool {
 			}
 
 			if c == r.quote && r.quoteSet && r.errOnQuotesInUnquotedField {
-				r.done = true
+				r.setDone()
 				r.parsingErr(ErrQuoteInUnquotedField)
 				return false
 			}
@@ -1476,13 +1476,13 @@ func (r *Reader) prepareRow() bool {
 			switch c {
 			case '\r':
 				if r.errOnNewlineInUnquotedField {
-					r.done = true
+					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
 					return false
 				}
 			case '\n':
 				if r.errOnNewlineInUnquotedField {
-					r.done = true
+					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
 					return false
 				}
@@ -1509,7 +1509,7 @@ func (r *Reader) prepareRow() bool {
 				r.recordBuf = append(r.recordBuf, []byte(string(c))...)
 				r.state = rStateInQuotedField
 			default:
-				r.done = true
+				r.setDone()
 				r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedRune)
 				return false
 			}
@@ -1525,7 +1525,7 @@ func (r *Reader) prepareRow() bool {
 				r.fieldIndex++
 			case r.quote:
 				if r.escapeSet {
-					r.done = true
+					r.setDone()
 					r.parsingErr(ErrUnexpectedQuoteAfterField)
 					return false
 				}
@@ -1548,7 +1548,7 @@ func (r *Reader) prepareRow() bool {
 					return false
 				}
 
-				r.done = true
+				r.setDone()
 				r.parsingErr(ErrInvalidQuotedFieldEnding)
 				return false
 			}
@@ -1560,10 +1560,6 @@ func (r *Reader) prepareRow() bool {
 			if isRecSep {
 				r.state = rStateStartOfRecord
 				// r.recordIndex++ // not valid in this case because the previous state was not a record
-
-				if r.eof {
-					return false
-				}
 			}
 
 			continue
@@ -1604,6 +1600,17 @@ func (r *Reader) prepareRow() bool {
 	// 	errTrailer = io.ErrUnexpectedEOF
 	// }
 	// return r.checkNumFields(errTrailer)
+}
+
+func (r *Reader) setDone() {
+	if r.done {
+		return
+	}
+	r.done = true
+
+	r.scan = func() bool {
+		return false
+	}
 }
 
 // IntoIter converts the reader state into an iterator.

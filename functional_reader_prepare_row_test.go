@@ -324,6 +324,32 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 			},
 			rows: [][]string{{"", "\n"}},
 		},
+		{
+			when: "BOM removal enabled and EOF is the first event encountered",
+			then: "no error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().RemoveByteOrderMarker(true),
+			},
+		},
+		{
+			when: "BOM removal enabled then normal-rune+EOF",
+			then: "no error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(strings.NewReader("A")),
+				csv.ReaderOpts().RemoveByteOrderMarker(true),
+			},
+			rows: [][]string{{"A"}},
+		},
+		{
+			when: "BOM removal enabled then normal-rune+EOF",
+			then: "no error",
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Reader(bytes.NewReader([]byte{0xC0})),
+				csv.ReaderOpts().RemoveByteOrderMarker(true),
+			},
+			rows: [][]string{{string([]byte{0xC0})}},
+		},
 	}
 
 	for _, tc := range tcs {
