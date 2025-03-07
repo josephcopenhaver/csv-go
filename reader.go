@@ -175,8 +175,11 @@ func (ReaderOptions) Reader(r io.Reader) ReaderOption {
 }
 
 // ClearFreedDataMemory ensures that whenever a shared memory buffer
-// that contains data does out of scope that zero values are written
+// that contains data goes out of scope that zero values are written
 // to every byte within the buffer.
+//
+// This may significantly degrade performance and is recommended only
+// for sensitive data or long-lived processes.
 func (ReaderOptions) ClearFreedDataMemory(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.clearMemoryAfterFree = b
@@ -1253,11 +1256,16 @@ func (r *Reader) appendRecBuf(b ...byte) {
 
 	r.recordBuf = append(r.recordBuf, b...)
 
-	if cap(r.recordBuf) == cap(oldRef) {
+	if cap(oldRef) == 0 {
 		return
 	}
 
 	oldRef = oldRef[:cap(oldRef)]
+
+	if &oldRef[0] == &r.recordBuf[0] {
+		return
+	}
+
 	for i := range oldRef {
 		oldRef[i] = 0
 	}
