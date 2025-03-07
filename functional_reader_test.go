@@ -59,10 +59,11 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 
 			var cr *csv.Reader
 			{
-				opts := slices.Clone(tc.newOpts)
+				opts := tc.newOpts
 				if f := tc.newOptsF; f != nil {
-					opts = append(opts, f()...)
+					opts = append(slices.Clone(f()), opts...)
 				}
+
 				v, err := csv.NewReader(opts...)
 				if tc.hasNewReaderErr || len(tc.newReaderErrIs) > 0 || len(tc.newReaderErrAs) > 0 || tc.newReaderErrStr != "" {
 					is.NotNil(t, err)
