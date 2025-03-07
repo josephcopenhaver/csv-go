@@ -15,8 +15,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "reader errors on no rows and file is zero length",
 			then: "should return a specific error when .Err() is called and contain no rows",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("")),
 				csv.ReaderOpts().ErrorOnNoRows(true),
 			},
 			iterErrIs:         []error{csv.ErrParsing, csv.ErrNoRows, io.ErrUnexpectedEOF},
@@ -26,8 +30,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "reader errors on no BOM and file is zero length",
 			then: "should return a specific error when .Err() is called and contain no rows",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("")),
 				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),
 			},
 			iterErrIs:         []error{csv.ErrParsing, csv.ErrNoByteOrderMarker, io.ErrUnexpectedEOF},
@@ -37,8 +45,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "read file contains quotes in unquoted field",
 			then: "should return a specific error when .Err() is called and contain no rows",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("1,2\",3")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("1,2\",3")),
 				csv.ReaderOpts().Quote('"'),
 				csv.ReaderOpts().ErrorOnQuotesInUnquotedField(true),
 			},
@@ -49,8 +61,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "reader errors on no rows with zero length file and row-borrow-disabled reader",
 			then: "should return a specific error when .Err() is called and contain no rows",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("")),
 				csv.ReaderOpts().ErrorOnNoRows(true),
 				csv.ReaderOpts().BorrowRow(false),
 			},
@@ -61,8 +77,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "reader errors on no rows with zero length file and row-borrow-enabled reader",
 			then: "should return a specific error when .Err() is called and contain no rows",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("")),
 				csv.ReaderOpts().ErrorOnNoRows(true),
 				csv.ReaderOpts().BorrowRow(true),
 			},
@@ -73,8 +93,10 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "reader has row misalignment: 1 then 2 fields",
 			then: "should return an error when trying to read the second row",
-			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("1\n2,3")),
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("1\n2,3")),
+				}
 			},
 			rows: [][]string{
 				{"1"},
@@ -85,8 +107,10 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "reader has row misalignment: 2 then 1 fields with eof",
 			then: "should return an error when trying to read the second row",
-			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("1,2\n3")),
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("1,2\n3")),
+				}
 			},
 			rows: [][]string{
 				{"1", "2"},
@@ -97,8 +121,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "reader has one row of two cols with NumFields=1",
 			then: "should return an error when trying to read the second row",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("1,2")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("1,2")),
 				csv.ReaderOpts().NumFields(1),
 			},
 			iterErrIs:         []error{csv.ErrParsing, csv.ErrFieldCount, csv.ErrTooManyFields},
@@ -109,8 +137,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "reader has row misalignment: 1 then 2 fields with NumFields=2",
 			then: "should return an error when trying to read the second row",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("1\n2,3")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("1\n2,3")),
 				csv.ReaderOpts().NumFields(2),
 			},
 			iterErrIs:         []error{csv.ErrParsing, csv.ErrFieldCount, csv.ErrNotEnoughFields},
@@ -121,8 +153,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "reader has comment: then row misalignment: 1 then 2 fields with NumFields=2",
 			then: "should return an error when trying to read the second row",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("#\n1\n2,3")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("#\n1\n2,3")),
 				csv.ReaderOpts().Comment('#'),
 				csv.ReaderOpts().NumFields(2),
 			},
@@ -134,8 +170,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "when record sep is CRLF",
 			then: "an error should be thrown if EOF is thrown before LF part of CRLF",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("a,b,c\r")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("a,b,c\r")),
 				csv.ReaderOpts().RecordSeparator("\r\n"),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrUnsafeCRFileEnd, io.ErrUnexpectedEOF},
@@ -144,8 +184,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "reader is discovering the record sep and first row has two columns and ends in CR+short-multibyte+EOF",
 			then: "one row should be returned and error should be raised to the .Err method",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(bytes.NewReader(append([]byte("a,b\r"), 0xC0))),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(bytes.NewReader(append([]byte("a,b\r"), 0xC0))),
 				csv.ReaderOpts().DiscoverRecordSeparator(true),
 			},
 			rows:       [][]string{strings.Split("a,b", ",")},
@@ -155,8 +199,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "erroring on no rows, expecting headers, but document is empty",
 			then: "should receive no header row error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("")),
 				csv.ReaderOpts().ErrorOnNoRows(true),
 				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b", ",")),
 			},
@@ -166,8 +214,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "erroring on no rows, removing the first header row, but document is empty",
 			then: "should receive no header row error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("")),
 				csv.ReaderOpts().ErrorOnNoRows(true),
 				csv.ReaderOpts().RemoveHeaderRow(true),
 			},
@@ -177,8 +229,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "erroring on no rows, whitespace-trimming the header row values, but document is empty",
 			then: "should receive no header row error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("")),
 				csv.ReaderOpts().ErrorOnNoRows(true),
 				csv.ReaderOpts().TrimHeaders(true),
 			},
@@ -188,8 +244,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "whitespace-trimming the header row values, but expecting 3 not 2 headers via ExpectHeaders call",
 			then: "should error not enough fields",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(" a , b \n1,2,3")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(" a , b \n1,2,3")),
 				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b,c", ",")),
 				csv.ReaderOpts().TrimHeaders(true),
 			},
@@ -199,8 +259,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "whitespace-trimming the header row values, but expecting 2 not 3 headers via ExpectHeaders call",
 			then: "should error too many fields",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(" a , b, c \n1,2,3")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(" a , b, c \n1,2,3")),
 				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b", ",")),
 				csv.ReaderOpts().TrimHeaders(true),
 			},
@@ -210,8 +274,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "whitespace-trimming the header row values, they do not match",
 			then: "should error unexpected header row contents",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(" a , b \n1,2")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(" a , b \n1,2")),
 				csv.ReaderOpts().ExpectHeaders(strings.Split("a,c", ",")),
 				csv.ReaderOpts().TrimHeaders(true),
 			},
@@ -221,8 +289,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "not whitespace-trimming the header row values by default, they do not match because of whitespace",
 			then: "should error unexpected header row contents",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(" a , b \n1,2")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(" a , b \n1,2")),
 				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b", ",")),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrUnexpectedHeaderRowContents},
@@ -231,8 +303,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "not whitespace-trimming the header row values, they do not match because of whitespace",
 			then: "should error unexpected header row contents",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(" a , b \n1,2")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(" a , b \n1,2")),
 				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b", ",")),
 				csv.ReaderOpts().TrimHeaders(false),
 			},
@@ -242,8 +318,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "erroring on no rows, there are 2 columns expecting a header row, and there is only a header row",
 			then: "should error that there are no rows returned",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("a,b")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("a,b")),
 				csv.ReaderOpts().RemoveHeaderRow(true),
 				csv.ReaderOpts().ErrorOnNoRows(true),
 			},
@@ -253,8 +333,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "erroring on no rows, there is 1 column expecting a header row, and there is only a header row",
 			then: "should error that there are no rows returned",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("a")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("a")),
 				csv.ReaderOpts().RemoveHeaderRow(true),
 				csv.ReaderOpts().ErrorOnNoRows(true),
 			},
@@ -264,8 +348,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "CRLF record sep enabled and comment line ends file with CR",
 			then: "returns parsing error ErrUnsafeCRFileEnd",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("# neat\r")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("# neat\r")),
 				csv.ReaderOpts().Comment('#'),
 				csv.ReaderOpts().RecordSeparator("\r\n"),
 			},
@@ -275,8 +363,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "comments after start of records and support explicitly disabled",
 			then: "error processing second row because it is a comment interpreted as one field",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("#neat1\na,b,c\n#neat2\n1,2,3")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("#neat1\na,b,c\n#neat2\n1,2,3")),
 				csv.ReaderOpts().Comment('#'),
 				csv.ReaderOpts().CommentsAllowedAfterStartOfRecords(false),
 			},
@@ -286,8 +378,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "comments after start of records and support explicitly disabled and numFields=3",
 			then: "error processing second row because it is a comment interpreted as one field",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("#neat1\na,b,c\n#neat2\n1,2,3")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("#neat1\na,b,c\n#neat2\n1,2,3")),
 				csv.ReaderOpts().Comment('#'),
 				csv.ReaderOpts().CommentsAllowedAfterStartOfRecords(false),
 				csv.ReaderOpts().NumFields(3),
@@ -298,8 +394,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "comments after start of records and support implicitly disabled",
 			then: "error processing second row because it is a comment interpreted as one field",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("#neat1\na,b,c\n#neat2\n1,2,3")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("#neat1\na,b,c\n#neat2\n1,2,3")),
 				csv.ReaderOpts().Comment('#'),
 			},
 			rows:       [][]string{strings.Split("a,b,c", ",")},
@@ -308,8 +408,12 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		{
 			when: "comments after start of records and support implicitly disabled and numFields=3",
 			then: "error processing second row because it is a comment interpreted as one field",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("#neat1\na,b,c\n#neat2\n1,2,3")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("#neat1\na,b,c\n#neat2\n1,2,3")),
 				csv.ReaderOpts().Comment('#'),
 				csv.ReaderOpts().NumFields(3),
 			},

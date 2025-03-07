@@ -158,10 +158,12 @@ func TestFunctionalReaderIOErrorPaths(t *testing.T) {
 		{
 			when: "reader raises an error",
 			then: "error should be raised to the .Err method unless EOF",
-			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(&errReader{
-					err: readErr,
-				}),
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(&errReader{
+						err: readErr,
+					}),
+				}
 			},
 			iterErrIs:  []error{csv.ErrIO, readErr},
 			iterErrStr: csv.ErrIO.Error() + " at byte 0, record 0, field 0: " + readErr.Error(),
@@ -169,13 +171,17 @@ func TestFunctionalReaderIOErrorPaths(t *testing.T) {
 		{
 			when: "reader has record sep of CRLF and a non EOF error is thrown before LF",
 			then: "error should be raised to the .Err method",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(&errReader{
+						t:        t,
+						reader:   strings.NewReader("a,b\r"),
+						numBytes: 4,
+						err:      readErr,
+					}),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(&errReader{
-					t:        t,
-					reader:   strings.NewReader("a,b\r"),
-					numBytes: 4,
-					err:      readErr,
-				}),
 				csv.ReaderOpts().RecordSeparator("\r\n"),
 			},
 			iterErrIs:  []error{csv.ErrIO, readErr},
@@ -184,13 +190,17 @@ func TestFunctionalReaderIOErrorPaths(t *testing.T) {
 		{
 			when: "reader has record sep of CRLF and a non EOF error is thrown as LF is read",
 			then: "now rows should be returned and error should be raised to the .Err method",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(newErrBufferedReader(errReader{
+						t:        t,
+						reader:   strings.NewReader("a,b\r\n"),
+						numBytes: 5,
+						err:      readErr,
+					})),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(newErrBufferedReader(errReader{
-					t:        t,
-					reader:   strings.NewReader("a,b\r\n"),
-					numBytes: 5,
-					err:      readErr,
-				})),
 				csv.ReaderOpts().RecordSeparator("\r\n"),
 			},
 			iterErrIs: []error{csv.ErrIO, csv.ErrBadReadRuneImpl, readErr},
@@ -201,13 +211,17 @@ func TestFunctionalReaderIOErrorPaths(t *testing.T) {
 		{
 			when: "reader has record sep of CRLF and an EOF error is thrown as LF is read",
 			then: "now rows should be returned and error should be raised to the .Err method",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(newErrBufferedReader(errReader{
+						t:        t,
+						reader:   strings.NewReader("a,b\r\n"),
+						numBytes: 5,
+						err:      io.EOF,
+					})),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(newErrBufferedReader(errReader{
-					t:        t,
-					reader:   strings.NewReader("a,b\r\n"),
-					numBytes: 5,
-					err:      io.EOF,
-				})),
 				csv.ReaderOpts().RecordSeparator("\r\n"),
 			},
 			iterErrIs: []error{csv.ErrIO, csv.ErrBadReadRuneImpl, io.EOF},
@@ -218,18 +232,22 @@ func TestFunctionalReaderIOErrorPaths(t *testing.T) {
 		{
 			when: "reader is discovering the record sep and first row ends in CR+short-multibyte and UnreadRune implementation is bad",
 			then: "now rows should be returned and error should be raised to the .Err method",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(func() *errBufferedReader {
+						ebr := newErrBufferedReader(errReader{
+							t:        t,
+							reader:   bytes.NewReader(append([]byte("a,b\r"), 0xC0)),
+							numBytes: 5,
+						})
+
+						ebr.unreadRune = func() error { return unreadErr }
+
+						return ebr
+					}()),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(func() *errBufferedReader {
-					ebr := newErrBufferedReader(errReader{
-						t:        t,
-						reader:   bytes.NewReader(append([]byte("a,b\r"), 0xC0)),
-						numBytes: 5,
-					})
-
-					ebr.unreadRune = func() error { return unreadErr }
-
-					return ebr
-				}()),
 				csv.ReaderOpts().DiscoverRecordSeparator(true),
 			},
 			iterErrIs: []error{csv.ErrIO, csv.ErrBadUnreadRuneImpl, unreadErr},
@@ -240,15 +258,17 @@ func TestFunctionalReaderIOErrorPaths(t *testing.T) {
 		{
 			when: "ReadRune returns an error and a byte on the first read",
 			then: "error",
-			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(func() *errBufferedReader {
-					return newErrBufferedReader(errReader{
-						t:        t,
-						reader:   strings.NewReader("1"),
-						numBytes: 1,
-						err:      io.EOF,
-					})
-				}()),
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(func() *errBufferedReader {
+						return newErrBufferedReader(errReader{
+							t:        t,
+							reader:   strings.NewReader("1"),
+							numBytes: 1,
+							err:      io.EOF,
+						})
+					}()),
+				}
 			},
 			iterErrIs:  []error{csv.ErrIO, csv.ErrBadReadRuneImpl, io.EOF},
 			iterErrStr: csv.ErrIO.Error() + " at byte 0, record 0, field 0: " + errors.Join(csv.ErrBadReadRuneImpl, io.EOF).Error(),
@@ -256,19 +276,21 @@ func TestFunctionalReaderIOErrorPaths(t *testing.T) {
 		{
 			when: "incomplete utf8 rune and UnreadRune returns an error",
 			then: "error",
-			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(func() *errBufferedReader {
-					ebr := newErrBufferedReader(errReader{
-						t:        t,
-						reader:   bytes.NewReader([]byte{0xC0}),
-						numBytes: 2,
-						err:      io.EOF,
-					})
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(func() *errBufferedReader {
+						ebr := newErrBufferedReader(errReader{
+							t:        t,
+							reader:   bytes.NewReader([]byte{0xC0}),
+							numBytes: 2,
+							err:      io.EOF,
+						})
 
-					ebr.unreadRune = func() error { return io.ErrClosedPipe }
+						ebr.unreadRune = func() error { return io.ErrClosedPipe }
 
-					return ebr
-				}()),
+						return ebr
+					}()),
+				}
 			},
 			iterErrIs:  []error{csv.ErrIO, csv.ErrBadUnreadRuneImpl, io.ErrClosedPipe},
 			iterErrStr: csv.ErrIO.Error() + " at byte 1, record 1, field 1: " + errors.Join(csv.ErrBadUnreadRuneImpl, io.ErrClosedPipe).Error(),
@@ -276,19 +298,21 @@ func TestFunctionalReaderIOErrorPaths(t *testing.T) {
 		{
 			when: "incomplete utf8 rune and ReadByte returns an error after UnreadRune",
 			then: "error",
-			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(func() *errBufferedReader {
-					ebr := newErrBufferedReader(errReader{
-						t:        t,
-						reader:   bytes.NewReader([]byte{0xC0}),
-						numBytes: 2,
-						err:      io.EOF,
-					})
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(func() *errBufferedReader {
+						ebr := newErrBufferedReader(errReader{
+							t:        t,
+							reader:   bytes.NewReader([]byte{0xC0}),
+							numBytes: 2,
+							err:      io.EOF,
+						})
 
-					ebr.readByte = func() (byte, error) { return 0, io.ErrClosedPipe }
+						ebr.readByte = func() (byte, error) { return 0, io.ErrClosedPipe }
 
-					return ebr
-				}()),
+						return ebr
+					}()),
+				}
 			},
 			iterErrIs:  []error{csv.ErrIO, csv.ErrBadReadByteImpl, io.ErrClosedPipe},
 			iterErrStr: csv.ErrIO.Error() + " at byte 1, record 1, field 1: " + errors.Join(csv.ErrBadReadByteImpl, io.ErrClosedPipe).Error(),
@@ -296,15 +320,19 @@ func TestFunctionalReaderIOErrorPaths(t *testing.T) {
 		{
 			when: "record sep is CRLF and record start has CR then reader errors",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(func() *errBufferedReader {
+						return newErrBufferedReader(errReader{
+							t:        t,
+							reader:   bytes.NewReader([]byte{'\r'}),
+							numBytes: 2,
+							err:      io.ErrClosedPipe,
+						})
+					}()),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(func() *errBufferedReader {
-					return newErrBufferedReader(errReader{
-						t:        t,
-						reader:   bytes.NewReader([]byte{'\r'}),
-						numBytes: 2,
-						err:      io.ErrClosedPipe,
-					})
-				}()),
 				csv.ReaderOpts().RecordSeparator("\r\n"),
 			},
 			iterErrIs:  []error{csv.ErrIO, io.ErrClosedPipe},
@@ -313,15 +341,19 @@ func TestFunctionalReaderIOErrorPaths(t *testing.T) {
 		{
 			when: "record sep is CRLF, two quote chars, CR and ReadRune errors",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(func() *errBufferedReader {
+						return newErrBufferedReader(errReader{
+							t:        t,
+							reader:   strings.NewReader("\"\"\r"),
+							numBytes: 4,
+							err:      io.ErrClosedPipe,
+						})
+					}()),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(func() *errBufferedReader {
-					return newErrBufferedReader(errReader{
-						t:        t,
-						reader:   strings.NewReader("\"\"\r"),
-						numBytes: 4,
-						err:      io.ErrClosedPipe,
-					})
-				}()),
 				csv.ReaderOpts().Quote('"'),
 				csv.ReaderOpts().RecordSeparator("\r\n"),
 			},
@@ -331,15 +363,19 @@ func TestFunctionalReaderIOErrorPaths(t *testing.T) {
 		{
 			when: "record sep is CRLF, reader errors after comma+CR",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(func() *errBufferedReader {
+						return newErrBufferedReader(errReader{
+							t:        t,
+							reader:   strings.NewReader(",\r"),
+							numBytes: 3,
+							err:      io.ErrClosedPipe,
+						})
+					}()),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(func() *errBufferedReader {
-					return newErrBufferedReader(errReader{
-						t:        t,
-						reader:   strings.NewReader(",\r"),
-						numBytes: 3,
-						err:      io.ErrClosedPipe,
-					})
-				}()),
 				csv.ReaderOpts().RecordSeparator("\r\n"),
 			},
 			iterErrIs:  []error{csv.ErrIO, io.ErrClosedPipe},

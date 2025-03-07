@@ -21,6 +21,11 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go.ver }}
+      - name: verify golang files are consistently formatted and generated
+        run: |
+          [ `git status --porcelain=1 | wc -l` -eq 0 ] || (2>&1 echo "failed to establish that files were unchanged before running go-generate check" ; exit 1)
+          go generate ./...
+          [ `git status --porcelain=1 | wc -l` -eq 0 ] || (2>&1 echo "files changed after running go-generate" ; exit 1)
       - name: test without race
         run: go test ./...
       - name: test with race

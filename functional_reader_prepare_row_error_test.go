@@ -20,8 +20,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "EOF in quoted field",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(`"hi th`)),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(`"hi th`)),
 				csv.ReaderOpts().Quote('"'),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrIncompleteQuotedField, io.ErrUnexpectedEOF},
@@ -30,8 +34,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "EOF in quoted field after escape",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(`"\"hi there\`)),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(`"\"hi there\`)),
 				csv.ReaderOpts().Quote('"'),
 				csv.ReaderOpts().Escape('\\'),
 			},
@@ -41,8 +49,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "in quoted field reader ends in incomplete utf8 rune after enabled escape rune",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(bytes.NewReader(append([]byte(`"\"hi there\`), 0xC0))),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(bytes.NewReader(append([]byte(`"\"hi there\`), 0xC0))),
 				csv.ReaderOpts().Quote('"'),
 				csv.ReaderOpts().Escape('\\'),
 			},
@@ -52,8 +64,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "at end of quoted field reader ends in incomplete utf8 rune ",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(bytes.NewReader(append([]byte(`"hi there"`), 0xC0))),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(bytes.NewReader(append([]byte(`"hi there"`), 0xC0))),
 				csv.ReaderOpts().Quote('"'),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidQuotedFieldEnding},
@@ -62,8 +78,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "BOM is required but reader is empty",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("")),
 				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNoByteOrderMarker},
@@ -72,8 +92,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "numFields=2 and record start is CR",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\n")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("\n")),
 				csv.ReaderOpts().NumFields(2),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNotEnoughFields},
@@ -82,8 +106,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "escape set, quote set, and an invalid character follows the escape character",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(`"\"\x`)),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(`"\"\x`)),
 				csv.ReaderOpts().Quote('"'),
 				csv.ReaderOpts().Escape('\\'),
 			},
@@ -93,8 +121,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "numFields=1, first column is quoted, second column is unquoted",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(`"",`)),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(`"",`)),
 				csv.ReaderOpts().Quote('"'),
 				csv.ReaderOpts().NumFields(1),
 			},
@@ -104,8 +136,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "three quote chars and escape is set",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(`"""`)),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(`"""`)),
 				csv.ReaderOpts().Quote('"'),
 				csv.ReaderOpts().Escape('\\'),
 			},
@@ -115,8 +151,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "numFields=2, two quote chars, LF, then EOF",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\"\"\n")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("\"\"\n")),
 				csv.ReaderOpts().Quote('"'),
 				csv.ReaderOpts().NumFields(2),
 			},
@@ -126,8 +166,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "numFields=2, two quote chars, then x+EOF",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\"\"x")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("\"\"x")),
 				csv.ReaderOpts().Quote('"'),
 				csv.ReaderOpts().NumFields(2),
 			},
@@ -137,8 +181,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "numFields=2 comma comma",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(",,")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(",,")),
 				csv.ReaderOpts().NumFields(2),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
@@ -147,8 +195,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "numFields=3 and comma+LF",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(",\n")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(",\n")),
 				csv.ReaderOpts().NumFields(3),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNotEnoughFields},
@@ -157,8 +209,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "BOM is required but missing and there is an incomplete utf8 rune+EOF",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(bytes.NewReader([]byte{0xC0})),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(bytes.NewReader([]byte{0xC0})),
 				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNoByteOrderMarker},
@@ -167,8 +223,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "BOM is required but missing on a normal row",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("hi")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("hi")),
 				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNoByteOrderMarker},
@@ -177,8 +237,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "implicit error on newline in field where CR in middle of field",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("h\ri")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("h\ri")),
 				csv.ReaderOpts().RecordSeparator("\n"),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
@@ -187,8 +251,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "explicit error on newline in field where CR in middle of field",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("h\ri")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("h\ri")),
 				csv.ReaderOpts().RecordSeparator("\n"),
 				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(true),
 			},
@@ -198,8 +266,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "implicit error on newline in field where LF in middle of field",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("h\ni")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("h\ni")),
 				csv.ReaderOpts().RecordSeparator(utf8LineSeparator),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
@@ -208,8 +280,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "explicit error on newline in field where LF in middle of field",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("h\ni")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("h\ni")),
 				csv.ReaderOpts().RecordSeparator(utf8LineSeparator),
 				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(true),
 			},
@@ -219,8 +295,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "implicit error on newline in field where CR at start of record",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\r")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("\r")),
 				csv.ReaderOpts().RecordSeparator("\n"),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
@@ -229,8 +309,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "explicit error on newline in field where CR at start of record",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\r")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("\r")),
 				csv.ReaderOpts().RecordSeparator("\n"),
 				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(true),
 			},
@@ -240,8 +324,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "implicit error on newline in field where LF at start of record",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\n")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("\n")),
 				csv.ReaderOpts().RecordSeparator(utf8LineSeparator),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
@@ -250,8 +338,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "explicit error on newline in field where LF at start of record",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\n")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader("\n")),
 				csv.ReaderOpts().RecordSeparator(utf8LineSeparator),
 				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(true),
 			},
@@ -261,8 +353,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "implicit error on newline in field where CR at start of second field",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(",\r")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(",\r")),
 				csv.ReaderOpts().RecordSeparator("\n"),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
@@ -271,8 +367,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "explicit error on newline in field where CR at start of second field",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(",\r")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(",\r")),
 				csv.ReaderOpts().RecordSeparator("\n"),
 				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(true),
 			},
@@ -282,8 +382,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "implicit error on newline in field where LF at start of second field",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(",\n")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(",\n")),
 				csv.ReaderOpts().RecordSeparator(utf8LineSeparator),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNewlineInUnquotedField},
@@ -292,8 +396,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "explicit error on newline in field where LF at start of second field",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(",\n")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(",\n")),
 				csv.ReaderOpts().RecordSeparator(utf8LineSeparator),
 				csv.ReaderOpts().ErrorOnNewlineInUnquotedField(true),
 			},
@@ -303,8 +411,12 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "expecting only one column but record starts with field separator",
 			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(",")),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(",")),
 				csv.ReaderOpts().NumFields(1),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
@@ -313,11 +425,15 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 		{
 			when: "BOM required but doc starts with another multibyte rune instead",
 			then: "error at byte 0 - no BOM",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(func() string {
+						faceWithColdSweat := 0x1F613
+						return string(rune(faceWithColdSweat))
+					}())),
+				}
+			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Reader(strings.NewReader(func() string {
-					faceWithColdSweat := 0x1F613
-					return string(rune(faceWithColdSweat))
-				}())),
 				csv.ReaderOpts().RemoveByteOrderMarker(true),
 				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),
 			},
