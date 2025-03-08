@@ -300,4 +300,31 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			assert.Nil(t, cr)
 		})
 	})
+
+	t.Run("when creating a CSV reader and specifying a buffer of negative length", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().InitialRecordBufferSize(-1),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`initial record buffer size must be greater than or equal to zero`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader and specifying both a buffer length and a buffer", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().InitialRecordBufferSize(1024*4),
+				csv.ReaderOpts().InitialRecordBuffer(nil),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`initial record buffer size cannot be specified when also setting the initial record buffer`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
 }
