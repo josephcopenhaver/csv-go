@@ -210,6 +210,25 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 			tc.newOpts = append(v, csv.ReaderOpts().ClearFreedDataMemory(true))
 		}))
 	})
+
+	t.Run("when initRecBuffSize=4096 and "+tc.when, func(t *testing.T) {
+		t.Helper()
+
+		t.Run(name, f(func(tc *functionalReaderTestCase) {
+			v := slices.Clone(tc.newOpts)
+			tc.newOpts = append(v, csv.ReaderOpts().InitialRecordBufferSize(1024*4))
+		}))
+	})
+
+	t.Run("when initRecBuff=[4096]byte and "+tc.when, func(t *testing.T) {
+		t.Helper()
+
+		t.Run(name, f(func(tc *functionalReaderTestCase) {
+			v := slices.Clone(tc.newOpts)
+			buf := make([]byte, 1024*4)
+			tc.newOpts = append(v, csv.ReaderOpts().InitialRecordBuffer(buf))
+		}))
+	})
 }
 
 func TestFunctionalReaderOKPaths(t *testing.T) {

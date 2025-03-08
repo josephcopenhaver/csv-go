@@ -175,8 +175,11 @@ func (ReaderOptions) Reader(r io.Reader) ReaderOption {
 }
 
 // ClearFreedDataMemory ensures that whenever a shared memory buffer
-// that contains data does out of scope that zero values are written
+// that contains data goes out of scope that zero values are written
 // to every byte within the buffer.
+//
+// This may significantly degrade performance and is recommended only
+// for sensitive data or long-lived processes.
 func (ReaderOptions) ClearFreedDataMemory(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.clearMemoryAfterFree = b
@@ -419,12 +422,46 @@ func (ReaderOptions) DiscoverRecordSeparator(b bool) ReaderOption {
 	}
 }
 
+// InitialRecordBufferSize is a hint to pre-allocate record buffer space once
+// and reduce the number of re-allocations when processing a reader.
+//
+// Please consider this to be a micro optimization in most circumstances just
+// because it's not likely that most users will know the maximum total record
+// size they wish to target / be under and it's generally a better practice
+// to leave these details to the go runtime to coordinate via standard
+// garbage collection.
+func (ReaderOptions) InitialRecordBufferSize(v int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.initialRecordBufferSize = v
+		cfg.initialRecordBufferSizeSet = true
+	}
+}
+
+// InitialRecordBuffer is a hint to pre-allocate record buffer space once
+// externally and pipe it in to reduce the number of re-allocations when
+// processing a reader and reuse it at a later time after the reader is closed.
+//
+// This option should generally not be used. It only exists to assist with
+// processing large numbers of CSV files should memory be a clear constraint.
+// There is no guarantee this buffer will always be used till the end of the
+// csv Reader's lifecycle.
+//
+// Please consider this to be a micro optimization in most circumstances just because is tightens the usage
+// contract of the csv Reader in ways most would not normally consider.
+func (ReaderOptions) InitialRecordBuffer(v []byte) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.recordBuf = v
+		cfg.recordBufSet = true
+	}
+}
+
 func ReaderOpts() ReaderOptions {
 	return ReaderOptions{}
 }
 
 type rCfg struct {
 	headers   []string
+	recordBuf []byte
 	reader    io.Reader
 	recordSep [2]rune
 	numFields int
@@ -432,6 +469,7 @@ type rCfg struct {
 	// maxNumRecords                      int
 	// maxNumRecordBytes                  int
 	// maxNumBytes                        int
+	initialRecordBufferSize            int
 	fieldSeparator                     rune
 	quote                              rune
 	escape                             rune
@@ -454,6 +492,8 @@ type rCfg struct {
 	errOnNewlineInUnquotedField        bool
 	recordSepSet                       bool
 	clearMemoryAfterFree               bool
+	initialRecordBufferSizeSet         bool
+	recordBufSet                       bool
 }
 
 type Reader struct {
@@ -510,6 +550,14 @@ func (cfg *rCfg) validate() error {
 
 	if cfg.reader == nil {
 		return ErrNilReader
+	}
+
+	if cfg.initialRecordBufferSizeSet && cfg.recordBufSet {
+		return errors.New("initial record buffer size cannot be specified when also setting the initial record buffer")
+	}
+
+	if cfg.initialRecordBufferSizeSet && cfg.initialRecordBufferSize < 0 {
+		return errors.New("initial record buffer size must be greater than or equal to zero")
 	}
 
 	if cfg.quoteSet && cfg.escapeSet && cfg.quote == cfg.escape {
@@ -708,6 +756,7 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		removeHeaderRow:                    cfg.removeHeaderRow,
 		errOnNoRows:                        cfg.errOnNoRows,
 		headers:                            headers,
+		recordBuf:                          cfg.recordBuf[:0],
 		recordSep:                          cfg.recordSep,
 		recordSepLen:                       cfg.recordSepLen,
 		removeByteOrderMarker:              cfg.removeByteOrderMarker,
@@ -717,7 +766,7 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		errOnNewlineInUnquotedField:        cfg.errOnNewlineInUnquotedField,
 	}
 
-	cr.initPipeline(cfg.reader, cfg.borrowRow, cfg.discoverRecordSeparator, cfg.clearMemoryAfterFree)
+	cr.initPipeline(cfg.reader, cfg.initialRecordBufferSize, cfg.borrowRow, cfg.discoverRecordSeparator, cfg.clearMemoryAfterFree)
 
 	return &cr, nil
 }
@@ -1051,7 +1100,7 @@ func (r *Reader) defaultScan() bool {
 	return r.prepareRow()
 }
 
-func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparator, clearMemoryAfterFree bool) {
+func (r *Reader) initPipeline(reader io.Reader, initialRecordBufferSize int, borrowRow, discoverRecordSeparator, clearMemoryAfterFree bool) {
 
 	if clearMemoryAfterFree {
 		r.prepareRow = r.prepareRow_memclearEnabled
@@ -1059,6 +1108,10 @@ func (r *Reader) initPipeline(reader io.Reader, borrowRow, discoverRecordSeparat
 	} else {
 		r.prepareRow = r.prepareRow_memclearDisabled
 		r.close = r.defaultClose
+	}
+
+	if initialRecordBufferSize > 0 {
+		r.recordBuf = make([]byte, 0, initialRecordBufferSize)
 	}
 
 	if !(r.removeByteOrderMarker || r.errOnNoByteOrderMarker) {
@@ -1253,11 +1306,16 @@ func (r *Reader) appendRecBuf(b ...byte) {
 
 	r.recordBuf = append(r.recordBuf, b...)
 
-	if cap(r.recordBuf) == cap(oldRef) {
+	if cap(oldRef) == 0 {
 		return
 	}
 
 	oldRef = oldRef[:cap(oldRef)]
+
+	if &oldRef[0] == &r.recordBuf[0] {
+		return
+	}
+
 	for i := range oldRef {
 		oldRef[i] = 0
 	}
