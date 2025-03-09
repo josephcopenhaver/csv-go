@@ -20,9 +20,12 @@ func main() {
 	}
 
 	if _, err := cw.WriteHeader(
-		csv.WriteHeaderOpts().Headers([]string{"first", "second"}),
 		csv.WriteHeaderOpts().CommentRune('#'),
-		csv.WriteHeaderOpts().CommentLines("hello", "aloha"),
+		csv.WriteHeaderOpts().CommentLines(
+			"hello",
+			"aloha",
+		),
+		csv.WriteHeaderOpts().Headers("first", "second"),
 	); err != nil {
 		panic(err)
 	}

@@ -3,24 +3,19 @@ package csv
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 	"unicode/utf8"
 	"unsafe"
 )
 
-// TODO: add an option to add a starting utf8 byte order marker
-
 var (
-	ErrRowNilOrEmpty   = errors.New("row is nil or empty")
-	ErrNonUTF8InRecord = errors.New("non-utf8 characters present in record")
-	ErrWriterClosed    = errors.New("writer closed")
-	ErrHeaderWritten   = errors.New("header already written")
-
-	ErrNonUTF8InComment = errors.New("TODO") // TODO
-
-	errNonUTF8InRecordNonCRLFMode = fmt.Errorf("non-CRLF mode: %w", ErrNonUTF8InRecord)
+	ErrRowNilOrEmpty             = errors.New("row is nil or empty")
+	ErrNonUTF8InRecord           = errors.New("non-utf8 characters in record")
+	ErrNonUTF8InComment          = errors.New("non-utf8 characters in comment")
+	ErrWriterClosed              = errors.New("writer closed")
+	ErrHeaderWritten             = errors.New("header already written")
+	ErrInvalidFieldCountInRecord = errors.New("invalid field count in record")
 )
 
 type wCfg struct {
@@ -149,7 +144,7 @@ func (cfg *wCfg) validate() error {
 		return errors.New("writer must not be nil")
 	}
 
-	if cfg.recordSepLen == -1 {
+	if cfg.recordSepLen == 0 {
 		return ErrBadRecordSeparator
 	}
 
@@ -192,8 +187,9 @@ func (cfg *wCfg) validate() error {
 }
 
 type Writer struct {
-	writeRow func(row []string) (int, error)
-	// scanField will scan the input byte slice
+	writeDoubleQuotesForRecord func()
+	writeRow                   func(row []string) (int, error)
+	// processField will scan the input byte slice
 	//
 	// if the slice contains a quote character then it is escaped
 	// and the writes occur to the w.fieldBuf slice.
@@ -214,8 +210,10 @@ type Writer struct {
 	// A portion of the input slice may need to still be copied to the record buffer
 	// as well after calling this function. That slice starts at the returned index.
 	processField            func([]byte) (int, error)
+	processFirstField       func([]byte) (int, error)
 	fieldBuf                []byte
 	recordBuf               []byte
+	twoQuotes               [utf8.UTFMax * 2]byte
 	escapedQuote            [utf8.UTFMax * 2]byte
 	escapedEscape           [utf8.UTFMax * 2]byte
 	recordSepBytes          [utf8.UTFMax]byte
@@ -225,12 +223,14 @@ type Writer struct {
 	quote, fieldSep, escape rune
 	recordSep               [2]rune
 	recordSepLen            int8
+	twoQuotesByteLen        int8
 	escapedQuoteByteLen     int8
 	escapedEscapeByteLen    int8
 	recordSepByteLen        int8
 	escapeSet               bool
 	errOnNonUTF8            bool
-	headersWritten          bool
+	headerWritten           bool
+	recordWritten           bool
 }
 
 func NewWriter(options ...WriterOption) (*Writer, error) {
@@ -252,10 +252,11 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		return nil, errors.Join(ErrBadConfig, err)
 	}
 
+	var twoQuotes [utf8.UTFMax * 2]byte
 	var escapedQuote [utf8.UTFMax * 2]byte
 	var escapedEscape [utf8.UTFMax * 2]byte
 	var recordSepBytes [utf8.UTFMax]byte
-	var escapedQuoteByteLen, escapedEscapeByteLen, recordSepByteLen int8
+	var escapedQuoteByteLen, escapedEscapeByteLen, recordSepByteLen, twoQuotesByteLen int8
 	if cfg.escapeSet {
 		n := utf8.EncodeRune(escapedQuote[:], cfg.escape)
 		n += utf8.EncodeRune(escapedQuote[n:], cfg.quote)
@@ -278,9 +279,18 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		recordSepByteLen = int8(n)
 	}
 
+	{
+		n := utf8.EncodeRune(twoQuotes[:], cfg.quote)
+		copy(twoQuotes[n:], twoQuotes[:n])
+		n <<= 1
+		twoQuotesByteLen = int8(n)
+	}
+
 	w := &Writer{
 		numFields:            cfg.numFields,
 		writer:               cfg.writer,
+		twoQuotes:            twoQuotes,
+		twoQuotesByteLen:     twoQuotesByteLen,
 		escapedEscape:        escapedEscape,
 		escapedEscapeByteLen: escapedEscapeByteLen,
 		escapedQuote:         escapedQuote,
@@ -296,9 +306,15 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		escapeSet:            cfg.escapeSet,
 	}
 
-	w.processField = w.processFieldFunc()
+	w.writeDoubleQuotesForRecord = w.defaultWriteDoubleQuotesForRecord
+	w.processField = w.processFieldFunc(false)
+	w.processFirstField = w.processField
 
-	w.writeRow = w.defaultWriteRow
+	w.writeRow = func(row []string) (int, error) {
+		w.writeRow = w.defaultWriteRow
+		w.headerWritten = true
+		return w.writeRow(row)
+	}
 
 	return w, nil
 }
@@ -327,6 +343,7 @@ type whCfg struct {
 	headersSet      bool
 	commentRuneSet  bool
 	commentLinesSet bool
+	includeBOM      bool
 }
 
 type WriteHeaderOption func(*whCfg)
@@ -343,7 +360,7 @@ func (WriteHeaderOptions) TrimHeaders(b bool) WriteHeaderOption {
 	}
 }
 
-func (WriteHeaderOptions) Headers(h []string) WriteHeaderOption {
+func (WriteHeaderOptions) Headers(h ...string) WriteHeaderOption {
 	return func(cfg *whCfg) {
 		cfg.headers = h
 		cfg.headersSet = true
@@ -361,6 +378,12 @@ func (WriteHeaderOptions) CommentLines(s ...string) WriteHeaderOption {
 	return func(cfg *whCfg) {
 		cfg.commentLines = s
 		cfg.commentLinesSet = true
+	}
+}
+
+func (WriteHeaderOptions) IncludeByteOrderMarker(b bool) WriteHeaderOption {
+	return func(cfg *whCfg) {
+		cfg.includeBOM = b
 	}
 }
 
@@ -393,7 +416,7 @@ func (cfg *whCfg) validate(w *Writer) error {
 	}
 
 	if cfg.commentLinesSet && !cfg.commentRuneSet {
-		return errors.New("comment lines require a comment rune as well")
+		return errors.New("comment lines require a comment rune")
 	}
 
 	// positive path remaining actions:
@@ -411,12 +434,14 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 		return result, err
 	}
 
-	if w.headersWritten {
+	if w.headerWritten {
 		return result, ErrHeaderWritten
 	}
-	w.headersWritten = true
+	w.headerWritten = true
 
-	var cfg whCfg
+	cfg := whCfg{
+		// no defaults
+	}
 	for _, f := range options {
 		f(&cfg)
 	}
@@ -425,15 +450,23 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 		return result, errors.Join(ErrBadConfig, err)
 	}
 
+	if cfg.includeBOM {
+		utf8BOM := []byte{0xEF, 0xBB, 0xBF}
+
+		n, err := w.writer.Write(utf8BOM)
+		result += n
+		if err != nil {
+			return result, err
+		}
+	}
+
 	if cfg.commentLinesSet {
 		var buf bytes.Buffer
 
-		if !cfg.commentRuneSet {
-			return result, ErrBadConfig // TODO shape
-		}
-
-		// TODO: explain via comments why no newline sequences are allowed in comments
-		// hint: makes for predictable parsing
+		// note that while separate strings will be placed on separate lines, all newline
+		// sequences will be converted to record separator newline sequences.
+		//
+		// This makes for predictable record separator discovery and parsing when reading.
 
 		// TODO: don't write runes, write chunks of bytes where possible
 
@@ -513,6 +546,41 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 		if err != nil {
 			return result, err
 		}
+
+		// these slip closures handle case where the first rune of the first
+		// column of the first record match the comment rune when a comment
+		// has been written to the writer so when being read the data record
+		// is not interpreted as a comment by mistake
+		{
+			prevProcessFirstField := w.processFirstField
+			commentRune := cfg.commentRune
+			fieldQuoter := w.processFieldFunc(true)
+
+			w.processFirstField = func(v []byte) (int, error) {
+				if !w.recordWritten {
+					if r, _ := utf8.DecodeRune(v); r == commentRune {
+						return fieldQuoter(v)
+					}
+
+					return prevProcessFirstField(v)
+				}
+
+				w.writeDoubleQuotesForRecord = w.defaultWriteDoubleQuotesForRecord
+				w.processFirstField = prevProcessFirstField
+				return w.processFirstField(v)
+			}
+
+			w.writeDoubleQuotesForRecord = func() {
+				if !w.recordWritten {
+					w.defaultWriteDoubleQuotesForRecord()
+					return
+				}
+
+				w.processFirstField = prevProcessFirstField
+				w.writeDoubleQuotesForRecord = w.defaultWriteDoubleQuotesForRecord
+				w.writeDoubleQuotesForRecord()
+			}
+		}
 	}
 
 	if !cfg.headersSet {
@@ -533,7 +601,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 	return result, err
 }
 
-func (w *Writer) writeField(input string) error {
+func (w *Writer) writeField(processField func([]byte) (int, error), input string) error {
 	if input == "" {
 		return nil
 	}
@@ -553,7 +621,7 @@ func (w *Writer) writeField(input string) error {
 	// returns
 	v := unsafe.Slice(unsafe.StringData(input), len(input))
 
-	si, err := w.processField(v)
+	si, err := processField(v)
 	if err != nil {
 
 		return err
@@ -581,32 +649,21 @@ func (w *Writer) writeField(input string) error {
 	return nil
 }
 
-func (w *Writer) processFieldFunc() func(v []byte) (int, error) {
-	var runeRequiresQuotes func(r rune) bool
-
+func (w *Writer) processFieldFunc(forceQuote bool) func(v []byte) (int, error) {
 	if w.escapeSet {
-
-		if w.recordSepLen == 2 || isNewlineRuneForWrite(w.recordSep[0]) {
-			// record sep is a newline char on this path
-			//
-			// so no need to check for it
-			runeRequiresQuotes = w.runeRequiresQuotesWithEscapeCheck
-		} else {
-			runeRequiresQuotes = w.runeRequiresQuotesWithRecordSepCheckWithEscapeCheck
-		}
 
 		return func(v []byte) (int, error) {
 			var si, i, di int
 			var r rune
 
-			for {
+			for !forceQuote {
 				r, di = utf8.DecodeRune(v[i:])
 				if di == 0 {
 					return -1, nil
 				}
 				if di == 1 && r == utf8.RuneError {
 					if w.errOnNonUTF8 {
-						return -1, errNonUTF8InRecordNonCRLFMode
+						return -1, ErrNonUTF8InRecord
 					}
 
 					i += di
@@ -632,12 +689,12 @@ func (w *Writer) processFieldFunc() func(v []byte) (int, error) {
 
 				i += di
 
-				if runeRequiresQuotes(r) {
+				if w.runeRequiresQuotesWithEscapeCheck(r) {
 					break
 				}
 			}
 
-			si2, err := w.escapeCharsWithEscape(v[si:], i-si)
+			si2, err := w.escapeCharsWithEscapeCheck(v[si:], i-si)
 			if err != nil {
 				return -1, err
 			}
@@ -646,27 +703,18 @@ func (w *Writer) processFieldFunc() func(v []byte) (int, error) {
 		}
 	}
 
-	if w.recordSepLen == 2 || isNewlineRuneForWrite(w.recordSep[0]) {
-		// record sep is a newline char on this path
-		//
-		// so no need to check for it
-		runeRequiresQuotes = w.runeRequiresQuotes
-	} else {
-		runeRequiresQuotes = w.runeRequiresQuotesWithRecordSepCheck
-	}
-
 	return func(v []byte) (int, error) {
 		var si, i, di int
 		var r rune
 
-		for {
+		for !forceQuote {
 			r, di = utf8.DecodeRune(v[i:])
 			if di == 0 {
 				return -1, nil
 			}
 			if di == 1 && r == utf8.RuneError {
 				if w.errOnNonUTF8 {
-					return -1, errNonUTF8InRecordNonCRLFMode
+					return -1, ErrNonUTF8InRecord
 				}
 
 				i += di
@@ -684,7 +732,7 @@ func (w *Writer) processFieldFunc() func(v []byte) (int, error) {
 
 			i += di
 
-			if runeRequiresQuotes(r) {
+			if w.runeRequiresQuotes(r) {
 				break
 			}
 		}
@@ -698,7 +746,7 @@ func (w *Writer) processFieldFunc() func(v []byte) (int, error) {
 	}
 }
 
-func (w *Writer) escapeCharsWithEscape(v []byte, i int) (int, error) {
+func (w *Writer) escapeCharsWithEscapeCheck(v []byte, i int) (int, error) {
 	var si, di int
 	var r rune
 
@@ -772,6 +820,10 @@ func (w *Writer) WriteRow(row ...string) (int, error) {
 	return w.writeRow(row)
 }
 
+func (w *Writer) defaultWriteDoubleQuotesForRecord() {
+	w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
+}
+
 func (w *Writer) defaultWriteRow(row []string) (int, error) {
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
@@ -783,26 +835,31 @@ func (w *Writer) defaultWriteRow(row []string) (int, error) {
 
 	if w.numFields != len(row) {
 		if w.numFields != -1 {
-			return 0, errors.New("incorrect number of fields")
+			return 0, ErrInvalidFieldCountInRecord
 		}
 
 		w.numFields = len(row)
 	}
 
 	if len(row) == 1 && row[0] == "" {
+		// This is a safety feature that makes the document slightly more durable to being edited.
+		// If we could guarantee that the "record terminator" is never removed by accident via
+		// "whitespace removal" of editors then this is extra work with no benefit. If this ever
+		// becomes disable-allowed then I would still default it to enabled behavior.
+
 		// note that this creates quite a bit of extra characters at times
-		// ideally only the last row would have this escaping
+		// ideally only the last row would have this escaping as most parsers
+		// would understand the rows in-between as empty-value cells
 		//
 		// doing this would require that we buffer the last written line
 		// and either add a close or flush function we expect persons to call
 		//
 		// but then again this only affects tables where there is one and only one attribute that is often an empty string
 		//
-		// what u doing there with that confusing gibberish mate?
-		w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
-		w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
+		// seems like an odd path to optimize for, but we could
+		w.writeDoubleQuotesForRecord()
 	} else {
-		if err := w.writeField(row[0]); err != nil {
+		if err := w.writeField(w.processFirstField, row[0]); err != nil {
 			return 0, err
 		}
 
@@ -811,7 +868,7 @@ func (w *Writer) defaultWriteRow(row []string) (int, error) {
 			// write field separator
 			w.recordBuf = append(w.recordBuf, []byte(string(w.fieldSep))...)
 
-			if err := w.writeField(v); err != nil {
+			if err := w.writeField(w.processField, v); err != nil {
 				return 0, err
 			}
 		}
@@ -819,6 +876,7 @@ func (w *Writer) defaultWriteRow(row []string) (int, error) {
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
+	w.recordWritten = true
 	n, err := w.writer.Write(w.recordBuf)
 	if err != nil {
 		w.setErr(err)
@@ -839,21 +897,6 @@ func (w *Writer) runeRequiresQuotes(r rune) bool {
 	return r == w.fieldSep || isNewlineRuneForWrite(r)
 }
 
-func (w *Writer) runeRequiresQuotesWithRecordSepCheck(r rune) bool {
-	switch r {
-	case w.fieldSep:
-		return true
-	case w.recordSep[0]:
-		// record sep is not a newline char, that is why it is here
-		//
-		// should we require record sep always be a newline rune then
-		// this becomes dead code
-		return true
-	default:
-		return isNewlineRuneForWrite(r)
-	}
-}
-
 func (w *Writer) runeRequiresQuotesWithEscapeCheck(r rune) bool {
 	switch r {
 	case w.fieldSep:
@@ -865,29 +908,12 @@ func (w *Writer) runeRequiresQuotesWithEscapeCheck(r rune) bool {
 	}
 }
 
-func (w *Writer) runeRequiresQuotesWithRecordSepCheckWithEscapeCheck(r rune) bool {
-	switch r {
-	case w.fieldSep:
-		return true
-	case w.escape:
-		return true
-	case w.recordSep[0]:
-		// record sep is not a newline char, that is why it is here
-		//
-		// should we require record sep always be a newline rune then
-		// this becomes dead code
-		return true
-	default:
-		return isNewlineRuneForWrite(r)
-	}
-}
-
 //
 // helpers
 //
 
 func badRecordSeparatorWConfig(cfg *wCfg) {
-	cfg.recordSepLen = -1
+	cfg.recordSepLen = 0
 }
 
 func isNewlineRuneForWrite(c rune) bool {
