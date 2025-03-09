@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	_ "embed"
 	"fmt"
 
 	"github.com/josephcopenhaver/csv-go"
