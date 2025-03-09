@@ -795,3 +795,206 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 	// }
 	// return r.checkNumFields(errTrailer)
 }
+
+func (w *Writer) processField_escapeUnset_quoteUnforced(v []byte) (int, error) {
+	var si, i, di int
+	var r rune
+
+	for {
+		r, di = utf8.DecodeRune(v[i:])
+		if di == 0 {
+			return -1, nil
+		}
+		if di == 1 && r == utf8.RuneError {
+			if w.errOnNonUTF8 {
+				return -1, ErrNonUTF8InRecord
+			}
+
+			i += di
+			continue
+		}
+
+		switch r {
+		case w.quote:
+			w.fieldBuf = append(w.fieldBuf, v[:i]...)
+			w.fieldBuf = append(w.fieldBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
+
+			i += di
+			si = i
+			break
+		}
+
+		i += di
+
+		if w.runeRequiresQuotes(r) {
+			break
+		}
+	}
+
+	si2, err := w.escapeChars(v[si:], i-si)
+	if err != nil {
+		return -1, err
+	}
+
+	return si + si2, nil
+}
+
+func (w *Writer) processField_escapeSet_quoteUnforced(v []byte) (int, error) {
+	var si, i, di int
+	var r rune
+
+	for {
+		r, di = utf8.DecodeRune(v[i:])
+		if di == 0 {
+			return -1, nil
+		}
+		if di == 1 && r == utf8.RuneError {
+			if w.errOnNonUTF8 {
+				return -1, ErrNonUTF8InRecord
+			}
+
+			i += di
+			continue
+		}
+
+		switch r {
+		case w.quote:
+			w.fieldBuf = append(w.fieldBuf, v[:i]...)
+			w.fieldBuf = append(w.fieldBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
+
+			i += di
+			si = i
+			break
+		case w.escape:
+			w.fieldBuf = append(w.fieldBuf, v[:i]...)
+			w.fieldBuf = append(w.fieldBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
+
+			i += di
+			si = i
+			break
+		}
+
+		i += di
+
+		if w.runeRequiresQuotesWithEscapeCheck(r) {
+			break
+		}
+	}
+
+	si2, err := w.escapeCharsWithEscapeCheck(v[si:], i-si)
+	if err != nil {
+		return -1, err
+	}
+
+	return si + si2, nil
+}
+
+func (w *Writer) processField_escapeUnset_quoteForced(v []byte) (int, error) {
+
+	n, err := w.escapeChars(v, 0)
+	if err != nil {
+		return -1, err
+	}
+
+	return n, nil
+}
+
+func (w *Writer) processField_escapeSet_quoteForced(v []byte) (int, error) {
+
+	n, err := w.escapeCharsWithEscapeCheck(v, 0)
+	if err != nil {
+		return -1, err
+	}
+
+	return n, nil
+}
+
+func (w *Writer) runeRequiresQuotes(r rune) bool {
+	switch r {
+	case w.fieldSep:
+		return true
+	default:
+		return isNewlineRuneForWrite(r)
+	}
+}
+
+func (w *Writer) escapeChars(v []byte, i int) (int, error) {
+	var si, di int
+	var r rune
+
+	for {
+		r, di = utf8.DecodeRune(v[i:])
+		if di == 0 {
+			return si, nil
+		}
+
+		if di == 1 && r == utf8.RuneError {
+			if w.errOnNonUTF8 {
+				return 0, ErrNonUTF8InRecord
+			}
+
+			i += di
+			continue
+		}
+
+		switch r {
+		case w.quote:
+			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
+			w.fieldBuf = append(w.fieldBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
+
+			i += di
+			si = i
+		default:
+			i += di
+		}
+	}
+}
+
+func (w *Writer) runeRequiresQuotesWithEscapeCheck(r rune) bool {
+	switch r {
+	case w.fieldSep:
+		return true
+	case w.escape:
+		return true
+	default:
+		return isNewlineRuneForWrite(r)
+	}
+}
+
+func (w *Writer) escapeCharsWithEscapeCheck(v []byte, i int) (int, error) {
+	var si, di int
+	var r rune
+
+	for {
+		r, di = utf8.DecodeRune(v[i:])
+		if di == 0 {
+			return si, nil
+		}
+
+		if di == 1 && r == utf8.RuneError {
+			if w.errOnNonUTF8 {
+				return 0, ErrNonUTF8InRecord
+			}
+
+			i += di
+			continue
+		}
+
+		switch r {
+		case w.quote:
+			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
+			w.fieldBuf = append(w.fieldBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
+
+			i += di
+			si = i
+		case w.escape:
+			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
+			w.fieldBuf = append(w.fieldBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
+
+			i += di
+			si = i
+		default:
+			i += di
+		}
+	}
+}
