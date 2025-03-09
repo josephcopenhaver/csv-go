@@ -17,6 +17,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+	defer func() {
+		if err := cw.Close(); err != nil {
+			panic(err)
+		}
+	}()
 
 	if _, err := cw.WriteHeader(
 		csv.WriteHeaderOpts().CommentRune('#'),

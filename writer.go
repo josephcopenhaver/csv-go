@@ -233,6 +233,7 @@ type Writer struct {
 	recordWritten           bool
 }
 
+// NewWriter creates a new instance of a CSV writer which is not safe for concurrent reads.
 func NewWriter(options ...WriterOption) (*Writer, error) {
 
 	cfg := wCfg{
@@ -328,8 +329,8 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 // Should any configuration options require post-flight
 // checks they will be implemented here.
 //
-// It will never attempt to close the underlying writer
-// instance.
+// It will never attempt to flush or close the underlying writer
+// instance. That is left to the calling context.
 func (w *Writer) Close() error {
 	w.setErr(ErrWriterClosed)
 	return nil
