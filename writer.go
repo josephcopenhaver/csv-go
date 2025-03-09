@@ -590,8 +590,9 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 
 	headers := cfg.headers
 	if cfg.trimHeaders {
-		for i := range headers {
-			headers[i] = strings.TrimSpace(headers[i])
+		headers = make([]string, len(cfg.headers))
+		for i := range cfg.headers {
+			headers[i] = strings.TrimSpace(cfg.headers[i])
 		}
 	}
 
