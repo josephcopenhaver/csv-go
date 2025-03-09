@@ -33,6 +33,17 @@ type wCfg struct {
 
 type WriterOption func(*wCfg)
 
+// WriterOptions should never be instantiated manually
+//
+// Instead call WriterOpts()
+//
+// This is only exported to allow godocs to discover the exported methods.
+//
+// WriterOptions will never have exported members and the zero value is not
+// part of the semver guarantee. Instantiate it incorrectly at your own peril.
+//
+// Calling the function is a nop that is compiled away anyways, you will not
+// optimize anything at all. Use WriterOpts()!
 type WriterOptions struct{}
 
 func WriterOpts() WriterOptions {
@@ -161,11 +172,11 @@ func (cfg *wCfg) validate() error {
 		return errors.New("invalid field separator value")
 	}
 
-	if !validUtf8Rune(cfg.quote) || isNewlineRuneForWrite(cfg.fieldSeparator) {
+	if !validUtf8Rune(cfg.quote) || isNewlineRuneForWrite(cfg.quote) {
 		return errors.New("invalid quote value")
 	}
 
-	if cfg.escapeSet && (!validUtf8Rune(cfg.escape) || isNewlineRuneForWrite(cfg.fieldSeparator)) {
+	if cfg.escapeSet && (!validUtf8Rune(cfg.escape) || isNewlineRuneForWrite(cfg.escape)) {
 		return errors.New("invalid escape value")
 	}
 
@@ -264,11 +275,13 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		escapedQuoteByteLen = int8(n)
 
 		n = utf8.EncodeRune(escapedEscape[:], cfg.escape)
-		n += utf8.EncodeRune(escapedEscape[n:], cfg.escape)
+		copy(escapedEscape[n:], escapedEscape[:n])
+		n <<= 1
 		escapedEscapeByteLen = int8(n)
 	} else {
 		n := utf8.EncodeRune(escapedQuote[:], cfg.quote)
-		n += utf8.EncodeRune(escapedQuote[n:], cfg.quote)
+		copy(escapedQuote[n:], escapedQuote[:n])
+		n <<= 1
 		escapedQuoteByteLen = int8(n)
 	}
 
@@ -349,6 +362,17 @@ type whCfg struct {
 
 type WriteHeaderOption func(*whCfg)
 
+// WriteHeaderOptions should never be instantiated manually
+//
+// Instead call WriteHeaderOpts()
+//
+// This is only exported to allow godocs to discover the exported methods.
+//
+// WriteHeaderOptions will never have exported members and the zero value is not
+// part of the semver guarantee. Instantiate it incorrectly at your own peril.
+//
+// Calling the function is a nop that is compiled away anyways, you will not
+// optimize anything at all. Use WriteHeaderOpts()!
 type WriteHeaderOptions struct{}
 
 func WriteHeaderOpts() WriteHeaderOptions {
@@ -411,12 +435,15 @@ func (cfg *whCfg) validate(w *Writer) error {
 		if w.quote == cfg.commentRune {
 			return errors.New("invalid quote and comment rune combination")
 		}
+
+		if w.fieldSep == cfg.commentRune {
+			return errors.New("invalid field separator and comment rune combination")
+		}
+
 		if w.escapeSet && w.escape == cfg.commentRune {
 			return errors.New("invalid escape and comment rune combination")
 		}
-	}
-
-	if cfg.commentLinesSet && !cfg.commentRuneSet {
+	} else if cfg.commentLinesSet {
 		return errors.New("comment lines require a comment rune")
 	}
 
@@ -513,9 +540,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 					}
 
 					if isNewlineRuneForWrite(r) {
-						for _, v := range w.recordSep[:w.recordSepByteLen] {
-							buf.WriteRune(v)
-						}
+						buf.Write(w.recordSepBytes[:w.recordSepByteLen])
 						buf.WriteRune(cfg.commentRune)
 						buf.WriteRune(' ')
 
@@ -527,9 +552,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 					line = line[s:]
 				}
 
-				for _, v := range w.recordSep[:w.recordSepByteLen] {
-					buf.WriteRune(v)
-				}
+				buf.Write(w.recordSepBytes[:w.recordSepByteLen])
 
 				if len(commentBuf) < 2 {
 					break
@@ -653,169 +676,18 @@ func (w *Writer) writeField(processField func([]byte) (int, error), input string
 
 func (w *Writer) processFieldFunc(forceQuote bool) func(v []byte) (int, error) {
 	if w.escapeSet {
-
-		return func(v []byte) (int, error) {
-			var si, i, di int
-			var r rune
-
-			for !forceQuote {
-				r, di = utf8.DecodeRune(v[i:])
-				if di == 0 {
-					return -1, nil
-				}
-				if di == 1 && r == utf8.RuneError {
-					if w.errOnNonUTF8 {
-						return -1, ErrNonUTF8InRecord
-					}
-
-					i += di
-					continue
-				}
-
-				switch r {
-				case w.quote:
-					w.fieldBuf = append(w.fieldBuf, v[:i]...)
-					w.fieldBuf = append(w.fieldBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-					i += di
-					si = i
-					break
-				case w.escape:
-					w.fieldBuf = append(w.fieldBuf, v[:i]...)
-					w.fieldBuf = append(w.fieldBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-
-					i += di
-					si = i
-					break
-				}
-
-				i += di
-
-				if w.runeRequiresQuotesWithEscapeCheck(r) {
-					break
-				}
-			}
-
-			si2, err := w.escapeCharsWithEscapeCheck(v[si:], i-si)
-			if err != nil {
-				return -1, err
-			}
-
-			return si + si2, nil
+		if forceQuote {
+			return w.processField_escapeSet_quoteForced
 		}
+
+		return w.processField_escapeSet_quoteUnforced
 	}
 
-	return func(v []byte) (int, error) {
-		var si, i, di int
-		var r rune
-
-		for !forceQuote {
-			r, di = utf8.DecodeRune(v[i:])
-			if di == 0 {
-				return -1, nil
-			}
-			if di == 1 && r == utf8.RuneError {
-				if w.errOnNonUTF8 {
-					return -1, ErrNonUTF8InRecord
-				}
-
-				i += di
-				continue
-			}
-
-			if r == w.quote {
-				w.fieldBuf = append(w.fieldBuf, v[:i]...)
-				w.fieldBuf = append(w.fieldBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-				i += di
-				si = i
-				break
-			}
-
-			i += di
-
-			if w.runeRequiresQuotes(r) {
-				break
-			}
-		}
-
-		si2, err := w.escapeChars(v[si:], i-si)
-		if err != nil {
-			return -1, err
-		}
-
-		return si + si2, nil
+	if forceQuote {
+		return w.processField_escapeUnset_quoteForced
 	}
-}
 
-func (w *Writer) escapeCharsWithEscapeCheck(v []byte, i int) (int, error) {
-	var si, di int
-	var r rune
-
-	for {
-		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
-			return si, nil
-		}
-
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return 0, ErrNonUTF8InRecord
-			}
-
-			i += di
-			continue
-		}
-
-		switch r {
-		case w.quote:
-			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
-			w.fieldBuf = append(w.fieldBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-			i += di
-			si = i
-		case w.escape:
-			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
-			w.fieldBuf = append(w.fieldBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-
-			i += di
-			si = i
-		default:
-			i += di
-		}
-	}
-}
-
-func (w *Writer) escapeChars(v []byte, i int) (int, error) {
-	var si, di int
-	var r rune
-
-	for {
-		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
-			return si, nil
-		}
-
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return 0, ErrNonUTF8InRecord
-			}
-
-			i += di
-			continue
-		}
-
-		switch r {
-		case w.quote:
-			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
-			w.fieldBuf = append(w.fieldBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-			i += di
-			si = i
-		default:
-			i += di
-		}
-	}
+	return w.processField_escapeUnset_quoteUnforced
 }
 
 func (w *Writer) WriteRow(row ...string) (int, error) {
@@ -892,21 +764,6 @@ func (w *Writer) setErr(err error) {
 	w.err = err
 	w.writeRow = func(row []string) (int, error) {
 		return 0, w.err
-	}
-}
-
-func (w *Writer) runeRequiresQuotes(r rune) bool {
-	return r == w.fieldSep || isNewlineRuneForWrite(r)
-}
-
-func (w *Writer) runeRequiresQuotesWithEscapeCheck(r rune) bool {
-	switch r {
-	case w.fieldSep:
-		return true
-	case w.escape:
-		return true
-	default:
-		return isNewlineRuneForWrite(r)
 	}
 }
 
