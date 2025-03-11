@@ -1,4 +1,4 @@
-func (w *Writer) escapeChars{{if .EscapeEnabled}}WithEscapeCheck{{end}}(v []byte, i int) (int, error) {
+func (w *Writer) escapeChars_escape{{if .EscapeEnabled}}En{{else}}Dis{{end}}abled_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled(v []byte, i int) (int, error) {
 	var si, di int
 	var r rune
 
@@ -18,15 +18,21 @@ func (w *Writer) escapeChars{{if .EscapeEnabled}}WithEscapeCheck{{end}}(v []byte
 		}
 
 		switch r {
-		case w.quote:
+		case w.quote:{{if .ClearMemoryAfterUse}}
+			w.appendField(v[si:i], w.escapedQuote[:w.escapedQuoteByteLen])
+			{{else}}
 			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
 			w.fieldBuf = append(w.fieldBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
+			{{end}}
 
 			i += di
 			si = i
-		{{if .EscapeEnabled}}case w.escape:
+		{{if .EscapeEnabled}}case w.escape:{{if .ClearMemoryAfterUse}}
+			w.appendField(v[si:i], w.escapedEscape[:w.escapedEscapeByteLen])
+			{{else}}
 			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
 			w.fieldBuf = append(w.fieldBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
+			{{end}}
 
 			i += di
 			si = i

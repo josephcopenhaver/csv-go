@@ -22,6 +22,9 @@ var tsProcessField string
 //go:embed escape_chars.go.tmpl
 var tsEscapeChars string
 
+//go:embed write.go.tmpl
+var tsWrite string
+
 func parse(s string) *template.Template {
 	t, err := template.New("").Parse(s)
 	if err != nil {
@@ -113,33 +116,57 @@ func main() {
 		t := parse(tsProcessField)
 
 		type cfg struct {
-			EscapeSet   bool
-			QuoteForced bool
+			EscapeSet           bool
+			QuoteForced         bool
+			ClearMemoryAfterUse bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{EscapeSet: false, QuoteForced: false},
-			{EscapeSet: true, QuoteForced: false},
-			{EscapeSet: false, QuoteForced: true},
-			{EscapeSet: true, QuoteForced: true},
+			{EscapeSet: false, QuoteForced: false, ClearMemoryAfterUse: false},
+			{EscapeSet: true, QuoteForced: false, ClearMemoryAfterUse: false},
+			{EscapeSet: false, QuoteForced: true, ClearMemoryAfterUse: false},
+			{EscapeSet: true, QuoteForced: true, ClearMemoryAfterUse: false},
+			{EscapeSet: false, QuoteForced: false, ClearMemoryAfterUse: true},
+			{EscapeSet: true, QuoteForced: false, ClearMemoryAfterUse: true},
+			{EscapeSet: false, QuoteForced: true, ClearMemoryAfterUse: true},
+			{EscapeSet: true, QuoteForced: true, ClearMemoryAfterUse: true},
 		})
 	}
 
-	// render quoteRune and EscapeChars strategies
+	// render EscapeChars strategies
 	{
 		t := parse(tsEscapeChars)
 
 		type cfg struct {
-			EscapeEnabled bool
+			EscapeEnabled       bool
+			ClearMemoryAfterUse bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{EscapeEnabled: false},
-			{EscapeEnabled: true},
+			{EscapeEnabled: false, ClearMemoryAfterUse: false},
+			{EscapeEnabled: true, ClearMemoryAfterUse: false},
+			{EscapeEnabled: false, ClearMemoryAfterUse: true},
+			{EscapeEnabled: true, ClearMemoryAfterUse: true},
+		})
+	}
+
+	// render writing strategies
+	{
+		t := parse(tsWrite)
+
+		type cfg struct {
+			ClearMemoryAfterUse bool
+		}
+
+		render := renderer[cfg](&buf)
+
+		render(t, []cfg{
+			{ClearMemoryAfterUse: false},
+			{ClearMemoryAfterUse: true},
 		})
 	}
 

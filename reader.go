@@ -354,7 +354,7 @@ func (ReaderOptions) TerminalRecordSeparatorEmitsRecord(b bool) ReaderOption {
 
 // BorrowRow alters the row function to return the underlying string slice every time it is called rather than a copy.
 //
-// Only set to true if the returned row slice and field strings within it are never used after the next call to Scan. Consider copying the slice and at least copy the strings within it via strings.Copy().
+// Only set to true if the returned row slice and field strings within it are never used after the next call to Scan or Close. You must copy the slice and copy the strings within it via strings.Copy() if doing otherwise.
 //
 // Please consider this to be a micro optimization in most circumstances just because is tightens the usage
 // contract of the returned row in ways most would not normally consider.
@@ -881,9 +881,9 @@ func (r *Reader) borrowedRow() []string {
 			// Usage of unsafe here is what empowers borrowing.
 			//
 			// This is why this option is NOT enabled by default
-			// and never will be. The caller accepts that they will
-			// never write to the backing slice or utilize it beyond
-			// the next call to Row() or Close()
+			// and never will be. The caller must assure that they
+			// will never write to the backing slice or utilize it
+			// beyond the next call to Row() or Close()
 			//
 			// It will also never be called if the len is zero,
 			// just as an extra precaution.
@@ -1334,7 +1334,7 @@ func (r *Reader) appendRecBuf(b ...byte) {
 
 	oldRef = oldRef[:cap(oldRef)]
 
-	if &oldRef[0] == &r.recordBuf[0] {
+	if &oldRef[0] == &(r.recordBuf[:1])[0] {
 		return
 	}
 

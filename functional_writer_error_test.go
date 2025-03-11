@@ -95,79 +95,71 @@ func TestFunctionalWriterErrorPaths(t *testing.T) {
 				{r: []string{"a", string([]byte{0xC0})}, errIs: []error{csv.ErrNonUTF8InRecord}, errStr: csv.ErrNonUTF8InRecord.Error()},
 			},
 		},
-		func() functionalWriterTestCase {
-			var buf bytes.Buffer
-			w := &errWriter{writer: &buf, err: io.ErrClosedPipe}
-			return functionalWriterTestCase{
-				when: "io error encountered when writing a BOM",
-				newOpts: []csv.WriterOption{
-					csv.WriterOpts().Writer(w),
-				},
-				whOpts: []csv.WriteHeaderOption{
-					csv.WriteHeaderOpts().IncludeByteOrderMarker(true),
-				},
-				whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
-				afterTest: func(t *testing.T) {
+		{
+			when: "io error encountered when writing a BOM",
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().IncludeByteOrderMarker(true),
+			},
+			selfInit: func(tc *functionalWriterTestCase) {
+				var buf bytes.Buffer
+				w := &errWriter{writer: &buf, err: io.ErrClosedPipe}
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
+				tc.afterTest = func(t *testing.T) {
 					assert.Empty(t, buf.String())
-				},
-			}
-		}(),
-		func() functionalWriterTestCase {
-			var buf bytes.Buffer
-			w := &errWriter{writer: &buf, err: io.ErrClosedPipe}
-			return functionalWriterTestCase{
-				when: "io error encountered when writing a comment",
-				newOpts: []csv.WriterOption{
-					csv.WriterOpts().Writer(w),
-				},
-				whOpts: []csv.WriteHeaderOption{
-					csv.WriteHeaderOpts().CommentRune('#'),
-					csv.WriteHeaderOpts().CommentLines("hello"),
-				},
-				whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
-				afterTest: func(t *testing.T) {
+				}
+			},
+			whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+		},
+		{
+			when: "io error encountered when writing a comment",
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().CommentRune('#'),
+				csv.WriteHeaderOpts().CommentLines("hello"),
+			},
+			selfInit: func(tc *functionalWriterTestCase) {
+				var buf bytes.Buffer
+				w := &errWriter{writer: &buf, err: io.ErrClosedPipe}
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
+				tc.afterTest = func(t *testing.T) {
 					assert.Empty(t, buf.String())
-				},
-			}
-		}(),
-		func() functionalWriterTestCase {
-			var buf bytes.Buffer
-			w := &errWriter{writer: &buf, numWrites: 1, err: io.ErrClosedPipe}
-			return functionalWriterTestCase{
-				when: "io error encountered when writing a comment after successful BOM",
-				newOpts: []csv.WriterOption{
-					csv.WriterOpts().Writer(w),
-				},
-				whOpts: []csv.WriteHeaderOption{
-					csv.WriteHeaderOpts().IncludeByteOrderMarker(true),
-					csv.WriteHeaderOpts().CommentRune('#'),
-					csv.WriteHeaderOpts().CommentLines("hello"),
-				},
-				whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
-				afterTest: func(t *testing.T) {
+				}
+			},
+			whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+		},
+		{
+			when: "io error encountered when writing a comment after successful BOM",
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().IncludeByteOrderMarker(true),
+				csv.WriteHeaderOpts().CommentRune('#'),
+				csv.WriteHeaderOpts().CommentLines("hello"),
+			},
+			selfInit: func(tc *functionalWriterTestCase) {
+				var buf bytes.Buffer
+				w := &errWriter{writer: &buf, numWrites: 1, err: io.ErrClosedPipe}
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
+				tc.afterTest = func(t *testing.T) {
 					assert.Equal(t, string([]byte{0xEF, 0xBB, 0xBF}), buf.String())
-				},
-			}
-		}(),
-		func() functionalWriterTestCase {
-			var buf bytes.Buffer
-			w := &errWriter{writer: &buf, numWrites: 1, err: io.ErrClosedPipe}
-			return functionalWriterTestCase{
-				when: "io error encountered when writing a header row",
-				newOpts: []csv.WriterOption{
-					csv.WriterOpts().Writer(w),
-				},
-				whOpts: []csv.WriteHeaderOption{
-					csv.WriteHeaderOpts().CommentRune('#'),
-					csv.WriteHeaderOpts().CommentLines("hello"),
-					csv.WriteHeaderOpts().Headers(strings.Split("a,b,c", ",")...),
-				},
-				whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
-				afterTest: func(t *testing.T) {
+				}
+			},
+			whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+		},
+		{
+			when: "io error encountered when writing a header row",
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().CommentRune('#'),
+				csv.WriteHeaderOpts().CommentLines("hello"),
+				csv.WriteHeaderOpts().Headers(strings.Split("a,b,c", ",")...),
+			},
+			selfInit: func(tc *functionalWriterTestCase) {
+				var buf bytes.Buffer
+				w := &errWriter{writer: &buf, numWrites: 1, err: io.ErrClosedPipe}
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
+				tc.afterTest = func(t *testing.T) {
 					assert.Equal(t, "# hello\n", buf.String())
-				},
-			}
-		}(),
+				}
+			},
+			whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+		},
 	}
 
 	for _, tc := range tcs {
