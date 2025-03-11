@@ -200,10 +200,8 @@ func (cfg *wCfg) validate() error {
 		return errors.New("invalid field separator and quote combination")
 	}
 
-	if cfg.escapeSet {
-		if cfg.fieldSeparator == cfg.escape {
-			return errors.New("invalid field separator and escape combination")
-		}
+	if cfg.escapeSet && cfg.fieldSeparator == cfg.escape {
+		return errors.New("invalid field separator and escape combination")
 	}
 
 	return nil
@@ -587,7 +585,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 			return result, err
 		}
 
-		// these slip closures handle case where the first rune of the first
+		// these slip closures handle cases where the first rune of the first
 		// column of the first record match the comment rune when a comment
 		// has been written to the writer so when being read the data record
 		// is not interpreted as a comment by mistake
