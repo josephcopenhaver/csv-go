@@ -1,0 +1,37 @@
+func (w *Writer) escapeChars{{if .EscapeEnabled}}WithEscapeCheck{{end}}(v []byte, i int) (int, error) {
+	var si, di int
+	var r rune
+
+	for {
+		r, di = utf8.DecodeRune(v[i:])
+		if di == 0 {
+			return si, nil
+		}
+
+		if di == 1 && r == utf8.RuneError {
+			if w.errOnNonUTF8 {
+				return 0, ErrNonUTF8InRecord
+			}
+
+			i += di
+			continue
+		}
+
+		switch r {
+		case w.quote:
+			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
+			w.fieldBuf = append(w.fieldBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
+
+			i += di
+			si = i
+		{{if .EscapeEnabled}}case w.escape:
+			w.fieldBuf = append(w.fieldBuf, v[si:i]...)
+			w.fieldBuf = append(w.fieldBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
+
+			i += di
+			si = i
+		{{end}}default:
+			i += di
+		}
+	}
+}
