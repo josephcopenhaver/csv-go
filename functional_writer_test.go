@@ -176,6 +176,15 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 					if len(tc.wrs) > 0 {
 						is.Equal(tc.whN, n)
 					} else {
+						// if this assert fails, you have a redundant assert m8
+						//
+						// remove the whN value and just use the res value since
+						// there were no rows written
+						//
+						// that or your test case should have rows...
+						//
+						//
+						// keep it simple, keep it clean
 						is.Equal(0, tc.whN)
 					}
 				}

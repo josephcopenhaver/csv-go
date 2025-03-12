@@ -368,10 +368,14 @@ func (ReaderOptions) RecordSeparator(s string) ReaderOption {
 	if len(s) == 0 {
 		return badRecordSeparatorRConfig
 	}
+
 	// usage of unsafe here is actually safe because v is
 	// never modified and no parts of its contents exist
 	// without cloning values to other parts of memory
 	// past the lifecycle of this function
+	//
+	// It will also never be called if the len is zero,
+	// just as an extra precaution.
 	v := unsafe.Slice(unsafe.StringData(s), len(s))
 
 	r1, n1 := utf8.DecodeRune(v)
@@ -873,7 +877,18 @@ func (r *Reader) borrowedRow() []string {
 				row[i] = ""
 				continue
 			}
+
+			// Usage of unsafe here is what empowers borrowing.
+			//
+			// This is why this option is NOT enabled by default
+			// and never will be. The caller accepts that they will
+			// never write to the backing slice or utilize it beyond
+			// the next call to Row() or Close()
+			//
+			// It will also never be called if the len is zero,
+			// just as an extra precaution.
 			row[i] = unsafe.String(&r.recordBuf[p], s)
+
 			p += s
 		}
 
@@ -1191,6 +1206,13 @@ func (r *Reader) initPipeline(reader io.Reader, initialRecordBufferSize int, bor
 				for i, s := range r.fieldLengths {
 					var field string
 					if s > 0 {
+						// usage of unsafe here is actually safe because field is
+						// never modified and no parts of its contents exist
+						// without cloning values to other parts of memory
+						// past the lifecycle of this function
+						//
+						// It will also never be called if the len is zero,
+						// just as an extra precaution.
 						field = unsafe.String(&r.recordBuf[p], s)
 					}
 					p += s

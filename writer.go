@@ -66,10 +66,14 @@ func (WriterOptions) RecordSeparator(s string) WriterOption {
 	if len(s) == 0 {
 		return badRecordSeparatorWConfig
 	}
+
 	// usage of unsafe here is actually safe because v is
 	// never modified and no parts of its contents exist
 	// without cloning values to other parts of memory
 	// past the lifecycle of this function
+	//
+	// It will also never be called if the len is zero,
+	// just as an extra precaution.
 	v := unsafe.Slice(unsafe.StringData(s), len(s))
 
 	r1, n1 := utf8.DecodeRune(v)
@@ -520,48 +524,55 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 				commentBuf = commentBuf[:1]
 			}
 			for {
-				// line here is immutable
-				//
-				// unsafe may look concerning and scary, and it can be,
-				// however in this case we're never writing to the slice
-				// created here which is stored within `line`
-				//
-				// since strings are immutable as well this is actually a safe
-				// usage of the unsafe package to avoid an allocation we're
-				// just going to read from and then throw away before this
-				// returns
-				//
-				// while line itself does get redefined via re-slicing this does not
-				// change the internals of the memory block the slice itself points to.
-				line := unsafe.Slice(unsafe.StringData(commentBuf[0]), len(commentBuf[0]))
 
 				buf.WriteRune(cfg.commentRune)
 				buf.WriteRune(' ')
 
-				for len(line) != 0 {
-					r, s := utf8.DecodeRune(line)
-					if s == 1 && r == utf8.RuneError {
-						if w.errOnNonUTF8 {
-							return result, ErrNonUTF8InComment
+				if len(commentBuf[0]) > 0 {
+
+					// line here is immutable
+					//
+					// unsafe may look concerning and scary, and it can be,
+					// however in this case we're never writing to the slice
+					// created here which is stored within `line`
+					//
+					// since strings are immutable as well this is actually a safe
+					// usage of the unsafe package to avoid an allocation we're
+					// just going to read from and then throw away before this
+					// returns
+					//
+					// while line itself does get redefined via re-slicing this does not
+					// change the internals of the memory block the slice itself points to.
+					//
+					// It will also never be called if the len is zero,
+					// just as an extra precaution.
+					line := unsafe.Slice(unsafe.StringData(commentBuf[0]), len(commentBuf[0]))
+
+					for len(line) != 0 {
+						r, s := utf8.DecodeRune(line)
+						if s == 1 && r == utf8.RuneError {
+							if w.errOnNonUTF8 {
+								return result, ErrNonUTF8InComment
+							}
+
+							buf.WriteByte(line[0])
+
+							line = line[s:]
+							continue
 						}
 
-						buf.WriteByte(line[0])
+						if isNewlineRuneForWrite(r) {
+							buf.Write(w.recordSepBytes[:w.recordSepByteLen])
+							buf.WriteRune(cfg.commentRune)
+							buf.WriteRune(' ')
 
+							line = line[s:]
+							continue
+						}
+
+						buf.WriteRune(r)
 						line = line[s:]
-						continue
 					}
-
-					if isNewlineRuneForWrite(r) {
-						buf.Write(w.recordSepBytes[:w.recordSepByteLen])
-						buf.WriteRune(cfg.commentRune)
-						buf.WriteRune(' ')
-
-						line = line[s:]
-						continue
-					}
-
-					buf.WriteRune(r)
-					line = line[s:]
 				}
 
 				buf.Write(w.recordSepBytes[:w.recordSepByteLen])
@@ -585,10 +596,10 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 			return result, err
 		}
 
-		// these slip closures handle cases where the first rune of the first
-		// column of the first record match the comment rune when a comment
-		// has been written to the writer so when being read the data record
-		// is not interpreted as a comment by mistake
+		// these slip closures handle the case where the first rune of the
+		// first column of the first record match the comment rune when a
+		// comment has been written to the writer so when being read the
+		// data record is not interpreted as a comment by mistake
 		{
 			prevProcessFirstField := w.processFirstField
 			commentRune := cfg.commentRune
@@ -658,6 +669,9 @@ func (w *Writer) writeField(processField func([]byte) (int, error), input string
 	// usage of the unsafe package to avoid an allocation we're
 	// just going to read from and then throw away before this
 	// returns
+	//
+	// It will also never be called if the len is zero,
+	// just as an extra precaution.
 	v := unsafe.Slice(unsafe.StringData(input), len(input))
 
 	si, err := processField(v)
