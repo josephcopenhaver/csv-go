@@ -31,16 +31,17 @@ func (e writeIOErr) Error() string {
 }
 
 type wCfg struct {
-	writer         io.Writer
-	recordSep      [2]rune
-	numFields      int
-	fieldSeparator rune
-	quote          rune
-	escape         rune
-	numFieldsSet   bool
-	errOnNonUTF8   bool
-	escapeSet      bool
-	recordSepLen   int8
+	writer               io.Writer
+	recordSep            [2]rune
+	numFields            int
+	fieldSeparator       rune
+	quote                rune
+	escape               rune
+	numFieldsSet         bool
+	errOnNonUTF8         bool
+	escapeSet            bool
+	recordSepLen         int8
+	clearMemoryAfterFree bool
 }
 
 type WriterOption func(*wCfg)
@@ -66,10 +67,14 @@ func (WriterOptions) RecordSeparator(s string) WriterOption {
 	if len(s) == 0 {
 		return badRecordSeparatorWConfig
 	}
+
 	// usage of unsafe here is actually safe because v is
 	// never modified and no parts of its contents exist
 	// without cloning values to other parts of memory
 	// past the lifecycle of this function
+	//
+	// It will also never be called if the len is zero,
+	// just as an extra precaution.
 	v := unsafe.Slice(unsafe.StringData(s), len(s))
 
 	r1, n1 := utf8.DecodeRune(v)
@@ -162,6 +167,18 @@ func (WriterOptions) Escape(r rune) WriterOption {
 	}
 }
 
+// ClearFreedDataMemory ensures that whenever a shared memory buffer
+// that contains data goes out of scope that zero values are written
+// to every byte within the buffer.
+//
+// This may significantly degrade performance and is recommended only
+// for sensitive data or long-lived processes.
+func (WriterOptions) ClearFreedDataMemory(b bool) WriterOption {
+	return func(cfg *wCfg) {
+		cfg.clearMemoryAfterFree = b
+	}
+}
+
 func (cfg *wCfg) validate() error {
 	if cfg.writer == nil {
 		return errors.New("nil writer")
@@ -200,10 +217,8 @@ func (cfg *wCfg) validate() error {
 		return errors.New("invalid field separator and quote combination")
 	}
 
-	if cfg.escapeSet {
-		if cfg.fieldSeparator == cfg.escape {
-			return errors.New("invalid field separator and escape combination")
-		}
+	if cfg.escapeSet && cfg.fieldSeparator == cfg.escape {
+		return errors.New("invalid field separator and escape combination")
 	}
 
 	return nil
@@ -254,6 +269,8 @@ type Writer struct {
 	errOnNonUTF8            bool
 	headerWritten           bool
 	recordWritten           bool
+	clearMemoryAfterFree    bool
+	closed                  bool
 }
 
 // NewWriter creates a new instance of a CSV writer which is not safe for concurrent reads.
@@ -330,16 +347,27 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		errOnNonUTF8:         cfg.errOnNonUTF8,
 		escape:               cfg.escape,
 		escapeSet:            cfg.escapeSet,
+		clearMemoryAfterFree: cfg.clearMemoryAfterFree,
 	}
 
-	w.writeDoubleQuotesForRecord = w.defaultWriteDoubleQuotesForRecord
+	if w.clearMemoryAfterFree {
+		w.writeRow = w.writeRow_memclearEnabled
+		w.writeDoubleQuotesForRecord = w.writeDoubleQuotesForRecord_memclearEnabled
+	} else {
+		w.writeRow = w.writeRow_memclearDisabled
+		w.writeDoubleQuotesForRecord = w.writeDoubleQuotesForRecord_memclearDisabled
+	}
+
 	w.processField = w.processFieldFunc(false)
 	w.processFirstField = w.processField
 
-	w.writeRow = func(row []string) (int, error) {
-		w.writeRow = w.defaultWriteRow
-		w.headerWritten = true
-		return w.writeRow(row)
+	{
+		f := w.writeRow
+		w.writeRow = func(row []string) (int, error) {
+			w.writeRow = f
+			w.headerWritten = true
+			return w.writeRow(row)
+		}
 	}
 
 	return w, nil
@@ -357,8 +385,67 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 // It will never attempt to flush or close the underlying writer
 // instance. That is left to the calling context.
 func (w *Writer) Close() error {
+	if w.closed {
+		return nil
+	}
+	w.closed = true
+
 	w.setErr(ErrWriterClosed)
+
+	if w.clearMemoryAfterFree {
+		for _, v := range [][]byte{w.fieldBuf, w.recordBuf} {
+			v := v[:cap(v)]
+			for i := range v {
+				v[i] = 0
+			}
+		}
+	}
+
 	return nil
+}
+
+func (w *Writer) appendField(bufs ...[]byte) {
+	for _, v := range bufs {
+		old := w.fieldBuf
+
+		w.fieldBuf = append(w.fieldBuf, v...)
+
+		if cap(old) == 0 {
+			continue
+		}
+
+		old = old[:cap(old)]
+
+		if &old[0] == &(w.fieldBuf[:1])[0] {
+			continue
+		}
+
+		for i := range old {
+			old[i] = 0
+		}
+	}
+}
+
+func (w *Writer) appendRec(bufs ...[]byte) {
+	for _, v := range bufs {
+		old := w.recordBuf
+
+		w.recordBuf = append(w.recordBuf, v...)
+
+		if cap(old) == 0 {
+			continue
+		}
+
+		old = old[:cap(old)]
+
+		if &old[0] == &(w.recordBuf[:1])[0] {
+			continue
+		}
+
+		for i := range old {
+			old[i] = 0
+		}
+	}
 }
 
 type whCfg struct {
@@ -503,7 +590,18 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 	}
 
 	if cfg.commentLinesSet {
+
 		var buf bytes.Buffer
+		if w.clearMemoryAfterFree {
+			defer func() {
+				buf.Reset()
+				b := buf.Bytes()
+				b = b[:cap(b)]
+				for i := range b {
+					b[i] = 0
+				}
+			}()
+		}
 
 		// note that while separate strings will be placed on separate lines, all newline
 		// sequences will be converted to record separator newline sequences.
@@ -522,48 +620,55 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 				commentBuf = commentBuf[:1]
 			}
 			for {
-				// line here is immutable
-				//
-				// unsafe may look concerning and scary, and it can be,
-				// however in this case we're never writing to the slice
-				// created here which is stored within `line`
-				//
-				// since strings are immutable as well this is actually a safe
-				// usage of the unsafe package to avoid an allocation we're
-				// just going to read from and then throw away before this
-				// returns
-				//
-				// while line itself does get redefined via re-slicing this does not
-				// change the internals of the memory block the slice itself points to.
-				line := unsafe.Slice(unsafe.StringData(commentBuf[0]), len(commentBuf[0]))
 
 				buf.WriteRune(cfg.commentRune)
 				buf.WriteRune(' ')
 
-				for len(line) != 0 {
-					r, s := utf8.DecodeRune(line)
-					if s == 1 && r == utf8.RuneError {
-						if w.errOnNonUTF8 {
-							return result, ErrNonUTF8InComment
+				if len(commentBuf[0]) > 0 {
+
+					// line here is immutable
+					//
+					// unsafe may look concerning and scary, and it can be,
+					// however in this case we're never writing to the slice
+					// created here which is stored within `line`
+					//
+					// since strings are immutable as well this is actually a safe
+					// usage of the unsafe package to avoid an allocation we're
+					// just going to read from and then throw away before this
+					// returns
+					//
+					// while line itself does get redefined via re-slicing this does not
+					// change the internals of the memory block the slice itself points to.
+					//
+					// It will also never be called if the len is zero,
+					// just as an extra precaution.
+					line := unsafe.Slice(unsafe.StringData(commentBuf[0]), len(commentBuf[0]))
+
+					for len(line) != 0 {
+						r, s := utf8.DecodeRune(line)
+						if s == 1 && r == utf8.RuneError {
+							if w.errOnNonUTF8 {
+								return result, ErrNonUTF8InComment
+							}
+
+							buf.WriteByte(line[0])
+
+							line = line[s:]
+							continue
 						}
 
-						buf.WriteByte(line[0])
+						if isNewlineRuneForWrite(r) {
+							buf.Write(w.recordSepBytes[:w.recordSepByteLen])
+							buf.WriteRune(cfg.commentRune)
+							buf.WriteRune(' ')
 
+							line = line[s:]
+							continue
+						}
+
+						buf.WriteRune(r)
 						line = line[s:]
-						continue
 					}
-
-					if isNewlineRuneForWrite(r) {
-						buf.Write(w.recordSepBytes[:w.recordSepByteLen])
-						buf.WriteRune(cfg.commentRune)
-						buf.WriteRune(' ')
-
-						line = line[s:]
-						continue
-					}
-
-					buf.WriteRune(r)
-					line = line[s:]
 				}
 
 				buf.Write(w.recordSepBytes[:w.recordSepByteLen])
@@ -587,12 +692,13 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 			return result, err
 		}
 
-		// these slip closures handle case where the first rune of the first
-		// column of the first record match the comment rune when a comment
-		// has been written to the writer so when being read the data record
-		// is not interpreted as a comment by mistake
+		// these slip closures handle the case where the first rune of the
+		// first column of the first record match the comment rune when a
+		// comment has been written to the writer so when being read the
+		// data record is not interpreted as a comment by mistake
 		{
 			prevProcessFirstField := w.processFirstField
+			prevWriteDoubleQuotesForRecord := w.writeDoubleQuotesForRecord
 			commentRune := cfg.commentRune
 			fieldQuoter := w.processFieldFunc(true)
 
@@ -606,18 +712,18 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 				}
 
 				w.processFirstField = prevProcessFirstField
-				w.writeDoubleQuotesForRecord = w.defaultWriteDoubleQuotesForRecord
+				w.writeDoubleQuotesForRecord = prevWriteDoubleQuotesForRecord
 				return w.processFirstField(v)
 			}
 
 			w.writeDoubleQuotesForRecord = func() {
 				if !w.recordWritten {
-					w.defaultWriteDoubleQuotesForRecord()
+					prevWriteDoubleQuotesForRecord()
 					return
 				}
 
 				w.processFirstField = prevProcessFirstField
-				w.writeDoubleQuotesForRecord = w.defaultWriteDoubleQuotesForRecord
+				w.writeDoubleQuotesForRecord = prevWriteDoubleQuotesForRecord
 				w.writeDoubleQuotesForRecord()
 			}
 		}
@@ -642,139 +748,37 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 	return result, err
 }
 
-func (w *Writer) writeField(processField func([]byte) (int, error), input string) error {
-	if input == "" {
-		return nil
-	}
-	defer func() {
-		w.fieldBuf = w.fieldBuf[:0]
-	}()
-
-	// v here is immutable
-	//
-	// unsafe may look concerning and scary, and it can be,
-	// however in this case we're never writing to the slice
-	// created here which is stored within `v`
-	//
-	// since strings are immutable as well this is actually a safe
-	// usage of the unsafe package to avoid an allocation we're
-	// just going to read from and then throw away before this
-	// returns
-	v := unsafe.Slice(unsafe.StringData(input), len(input))
-
-	si, err := processField(v)
-	if err != nil {
-
-		return err
-	} else if si == -1 {
-		// w.fieldBuf is guaranteed to be empty on this code path
-		//
-		// use v instead
-		w.recordBuf = append(w.recordBuf, v...)
-
-		return nil
-	}
-
-	// w.fieldBuf might have a len greater than zero on this code path
-	// if it does then use it
-
-	w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
-	if len(w.fieldBuf) > 0 {
-		w.recordBuf = append(w.recordBuf, w.fieldBuf...)
-		w.recordBuf = append(w.recordBuf, v[si:]...)
-	} else {
-		w.recordBuf = append(w.recordBuf, v...)
-	}
-	w.recordBuf = append(w.recordBuf, []byte(string(w.quote))...)
-
-	return nil
-}
-
 func (w *Writer) processFieldFunc(forceQuote bool) func(v []byte) (int, error) {
 	if w.escapeSet {
 		if forceQuote {
-			return w.processField_escapeSet_quoteForced
+			if w.clearMemoryAfterFree {
+				return w.processField_escapeSet_quoteForced_memclearEnabled
+			}
+			return w.processField_escapeSet_quoteForced_memclearDisabled
 		}
 
-		return w.processField_escapeSet_quoteUnforced
+		if w.clearMemoryAfterFree {
+			return w.processField_escapeSet_quoteUnforced_memclearEnabled
+		}
+		return w.processField_escapeSet_quoteUnforced_memclearDisabled
 	}
 
 	if forceQuote {
-		return w.processField_escapeUnset_quoteForced
+		if w.clearMemoryAfterFree {
+			return w.processField_escapeUnset_quoteForced_memclearEnabled
+		}
+		return w.processField_escapeUnset_quoteForced_memclearDisabled
 	}
 
-	return w.processField_escapeUnset_quoteUnforced
+	if w.clearMemoryAfterFree {
+		return w.processField_escapeUnset_quoteUnforced_memclearEnabled
+	}
+
+	return w.processField_escapeUnset_quoteUnforced_memclearDisabled
 }
 
 func (w *Writer) WriteRow(row ...string) (int, error) {
 	return w.writeRow(row)
-}
-
-func (w *Writer) defaultWriteDoubleQuotesForRecord() {
-	w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-}
-
-func (w *Writer) defaultWriteRow(row []string) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
-	if len(row) == 0 {
-		return 0, ErrRowNilOrEmpty
-	}
-
-	if w.numFields != len(row) {
-		if w.numFields != -1 {
-			return 0, ErrInvalidFieldCountInRecord
-		}
-
-		w.numFields = len(row)
-	}
-
-	if len(row) == 1 && row[0] == "" {
-		// This is a safety feature that makes the document slightly more durable to being edited.
-		// If we could guarantee that the "record terminator" is never removed by accident via
-		// "whitespace removal" of editors then this is extra work with no benefit. If this ever
-		// becomes disable-allowed then I would still default it to enabled behavior.
-
-		// note that this creates quite a bit of extra characters at times
-		// ideally only the last row would have this escaping as most parsers
-		// would understand the rows in-between as empty-value cells
-		//
-		// doing this would require that we buffer the last written line
-		// and either add a close or flush function we expect persons to call
-		//
-		// but then again this only affects tables where there is one and only one attribute that is often an empty string
-		//
-		// seems like an odd path to optimize for, but we could
-		w.writeDoubleQuotesForRecord()
-	} else {
-		if err := w.writeField(w.processFirstField, row[0]); err != nil {
-			return 0, err
-		}
-
-		for _, v := range row[1:] {
-
-			// write field separator
-			w.recordBuf = append(w.recordBuf, []byte(string(w.fieldSep))...)
-
-			if err := w.writeField(w.processField, v); err != nil {
-				return 0, err
-			}
-		}
-	}
-
-	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-	w.recordWritten = true
-	n, err := w.writer.Write(w.recordBuf)
-	if err != nil {
-		err := writeIOErr{err}
-		w.setErr(err)
-		return n, err
-	}
-
-	return n, nil
 }
 
 func (w *Writer) runeRequiresQuotes(r rune) bool {

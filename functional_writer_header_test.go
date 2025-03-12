@@ -69,7 +69,7 @@ func TestFunctionalWriterHeaderOKPaths(t *testing.T) {
 		},
 		{
 			when: "comment header, escape set, and two records that start with comment runes",
-			then: "data row should be rendered as a pair of empty quotes",
+			then: "first row, first column should be quoted",
 			newOpts: []csv.WriterOption{
 				csv.WriterOpts().Escape('\\'),
 			},
@@ -86,7 +86,7 @@ func TestFunctionalWriterHeaderOKPaths(t *testing.T) {
 		},
 		{
 			when: "comment header, escape set, and two records that start with escape runes",
-			then: "data row should be rendered as a pair of empty quotes",
+			then: "data row fields with escapes should be doubly escaped",
 			newOpts: []csv.WriterOption{
 				csv.WriterOpts().Escape('\\'),
 			},
@@ -100,6 +100,15 @@ func TestFunctionalWriterHeaderOKPaths(t *testing.T) {
 				{r: strings.Split("\\,2", ","), n: 7},
 			},
 			res: "# hello world\n\"\\\\\",b\n\"\\\\\",2\n",
+		},
+		{
+			when: "comment lines contains an empty string",
+			then: "document should just have the comment rune line sequence",
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().CommentRune('#'),
+				csv.WriteHeaderOpts().CommentLines(""),
+			},
+			res: "# \n",
 		},
 	}
 

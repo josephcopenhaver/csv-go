@@ -176,6 +176,15 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 					if len(tc.wrs) > 0 {
 						is.Equal(tc.whN, n)
 					} else {
+						// if this assert fails, you have a redundant assert m8
+						//
+						// remove the whN value and just use the res value since
+						// there were no rows written
+						//
+						// that or your test case should have rows...
+						//
+						//
+						// keep it simple, keep it clean
 						is.Equal(0, tc.whN)
 					}
 				}
@@ -275,6 +284,12 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 						is.ErrorIs(err, csv.ErrWriterClosed)
 					}
 				}
+
+				// a second close should always return nil as well (be a nop)
+				{
+					err := cw.Close()
+					is.Nil(err)
+				}
 			}
 
 			// a checkpoint to ensure that if a write has taken place
@@ -305,6 +320,15 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 		t.Helper()
 
 		t.Run(name, f())
+	})
+
+	t.Run("when clearmem+ and "+tc.when, func(t *testing.T) {
+		t.Helper()
+
+		t.Run(name, f(func(tc *functionalWriterTestCase) {
+			v := slices.Clone(tc.newOpts)
+			tc.newOpts = append(v, csv.WriterOpts().ClearFreedDataMemory(true))
+		}))
 	})
 }
 
@@ -465,6 +489,14 @@ func TestFunctionalWriterOKPaths(t *testing.T) {
 				{r: []string{"\""}, n: 5},
 			},
 			res: "\"\"\"\"\n",
+		},
+		{
+			when: "short field and long field with quotes",
+			then: "should cover field buffer reallocation code path",
+			wrs: []wr{
+				{r: strings.Split("a\"b,zzzzzzzzzzzzzzz\"zzzzzzzzzzzzzzz", ","), n: 42},
+			},
+			res: "\"a\"\"b\",\"zzzzzzzzzzzzzzz\"\"zzzzzzzzzzzzzzz\"\n",
 		},
 	}
 

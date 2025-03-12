@@ -1,6 +1,6 @@
-func (w *Writer) processField_escape{{if .EscapeSet}}S{{else}}Uns{{end}}et_quote{{if .QuoteForced}}F{{else}}Unf{{end}}orced(v []byte) (int, error) {
+func (w *Writer) processField_escape{{if .EscapeSet}}S{{else}}Uns{{end}}et_quote{{if .QuoteForced}}F{{else}}Unf{{end}}orced_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled(v []byte) (int, error) {
 	{{if .QuoteForced}}
-	n, err := w.escapeChars{{if .EscapeSet}}WithEscapeCheck{{end}}(v, 0)
+	n, err := w.escapeChars_escape{{if .EscapeSet}}En{{else}}Dis{{end}}abled_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled(v, 0)
 	if err != nil {
 		return -1, err
 	}
@@ -23,15 +23,21 @@ func (w *Writer) processField_escape{{if .EscapeSet}}S{{else}}Uns{{end}}et_quote
 		}
 
 		switch r {
-		case w.quote:
+		case w.quote:{{if .ClearMemoryAfterUse}}
+			w.appendField(v[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+			{{else}}
 			w.fieldBuf = append(w.fieldBuf, v[:i]...)
 			w.fieldBuf = append(w.fieldBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
+			{{end}}
 
 			i += di
 			si = i
-		{{if .EscapeSet}}case w.escape:
+		{{if .EscapeSet}}case w.escape:{{if .ClearMemoryAfterUse}}
+			w.appendField(v[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+			{{else}}
 			w.fieldBuf = append(w.fieldBuf, v[:i]...)
 			w.fieldBuf = append(w.fieldBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
+			{{end}}
 
 			i += di
 			si = i
@@ -46,7 +52,7 @@ func (w *Writer) processField_escape{{if .EscapeSet}}S{{else}}Uns{{end}}et_quote
 		break
 	}
 
-	si2, err := w.escapeChars{{if .EscapeSet}}WithEscapeCheck{{end}}(v[si:], i-si)
+	si2, err := w.escapeChars_escape{{if .EscapeSet}}En{{else}}Dis{{end}}abled_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled(v[si:], i-si)
 	if err != nil {
 		return -1, err
 	}

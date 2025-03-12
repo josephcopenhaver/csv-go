@@ -354,7 +354,7 @@ func (ReaderOptions) TerminalRecordSeparatorEmitsRecord(b bool) ReaderOption {
 
 // BorrowRow alters the row function to return the underlying string slice every time it is called rather than a copy.
 //
-// Only set to true if the returned row slice and field strings within it are never used after the next call to Scan. Consider copying the slice and at least copy the strings within it via strings.Copy().
+// Only set to true if the returned row slice and field strings within it are never used after the next call to Scan or Close. You must copy the slice and copy the strings within it via strings.Copy() if doing otherwise.
 //
 // Please consider this to be a micro optimization in most circumstances just because is tightens the usage
 // contract of the returned row in ways most would not normally consider.
@@ -368,10 +368,14 @@ func (ReaderOptions) RecordSeparator(s string) ReaderOption {
 	if len(s) == 0 {
 		return badRecordSeparatorRConfig
 	}
+
 	// usage of unsafe here is actually safe because v is
 	// never modified and no parts of its contents exist
 	// without cloning values to other parts of memory
 	// past the lifecycle of this function
+	//
+	// It will also never be called if the len is zero,
+	// just as an extra precaution.
 	v := unsafe.Slice(unsafe.StringData(s), len(s))
 
 	r1, n1 := utf8.DecodeRune(v)
@@ -873,7 +877,18 @@ func (r *Reader) borrowedRow() []string {
 				row[i] = ""
 				continue
 			}
+
+			// Usage of unsafe here is what empowers borrowing.
+			//
+			// This is why this option is NOT enabled by default
+			// and never will be. The caller must assure that they
+			// will never write to the backing slice or utilize it
+			// beyond the next call to Row() or Close()
+			//
+			// It will also never be called if the len is zero,
+			// just as an extra precaution.
 			row[i] = unsafe.String(&r.recordBuf[p], s)
+
 			p += s
 		}
 
@@ -1191,6 +1206,13 @@ func (r *Reader) initPipeline(reader io.Reader, initialRecordBufferSize int, bor
 				for i, s := range r.fieldLengths {
 					var field string
 					if s > 0 {
+						// usage of unsafe here is actually safe because field is
+						// never modified and no parts of its contents exist
+						// without cloning values to other parts of memory
+						// past the lifecycle of this function
+						//
+						// It will also never be called if the len is zero,
+						// just as an extra precaution.
 						field = unsafe.String(&r.recordBuf[p], s)
 					}
 					p += s
@@ -1312,7 +1334,7 @@ func (r *Reader) appendRecBuf(b ...byte) {
 
 	oldRef = oldRef[:cap(oldRef)]
 
-	if &oldRef[0] == &r.recordBuf[0] {
+	if &oldRef[0] == &(r.recordBuf[:1])[0] {
 		return
 	}
 

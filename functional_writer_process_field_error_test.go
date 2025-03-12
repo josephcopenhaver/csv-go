@@ -62,6 +62,9 @@ func TestFunctionalWriterProcessFieldErrorPaths(t *testing.T) {
 	}
 
 	for _, tc := range tcs {
+		if tc.then == "" {
+			tc.then = "a coupled error should occur"
+		}
 		tc.Run(t)
 	}
 }
