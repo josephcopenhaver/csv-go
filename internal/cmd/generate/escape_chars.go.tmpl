@@ -4,17 +4,18 @@ func (w *Writer) escapeChars_escape{{if .EscapeEnabled}}En{{else}}Dis{{end}}able
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
+		switch di {
+		case 0:
 			return si, nil
-		}
+		case 1:
+			if r == utf8.RuneError {
+				if w.errOnNonUTF8 {
+					return 0, ErrNonUTF8InRecord
+				}
 
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return 0, ErrNonUTF8InRecord
+				i += di
+				continue
 			}
-
-			i += di
-			continue
 		}
 
 		switch r {

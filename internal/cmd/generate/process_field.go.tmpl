@@ -10,16 +10,18 @@ func (w *Writer) processField_escape{{if .EscapeSet}}S{{else}}Uns{{end}}et_quote
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
+		switch di {
+		case 0:
 			return -1, nil
-		}
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return -1, ErrNonUTF8InRecord
-			}
+		case 1:
+			if r == utf8.RuneError {
+				if w.errOnNonUTF8 {
+					return -1, ErrNonUTF8InRecord
+				}
 
-			i += di
-			continue
+				i += di
+				continue
+			}
 		}
 
 		switch r {
