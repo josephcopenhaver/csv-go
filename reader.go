@@ -31,6 +31,29 @@ const (
 	utf16ByteOrderMarkerLE = 0xFFFE
 )
 
+type rFlag uint16
+
+const (
+	stDone rFlag = 1 << iota
+	stAfterSOR
+
+	rFlagDropBOM
+	rFlagErrOnNoBOM
+
+	// rFlagStartOfDoc = either of rFlagDropBOM, rFlagErrOnNoBOM
+
+	rFlagClearMemAfterUser
+	rFlagErrOnNLInUF
+	rFlagErrOnQInUF
+	rFlagOneRuneRecSep
+	rFlagTwoRuneRecSep
+	rFlagComment
+	rFlagQuote
+	rFlagEscape
+	rFlagCommentAfterSOR
+	rFlagTRSEmitsRecord
+)
+
 type rState uint8
 
 const (
@@ -533,18 +556,8 @@ type Reader struct {
 	//
 	// the recordIndex could also have been used for this purpose but it may have overflow issues for some input types
 	// and keeping its purpose singular and disconnected from parsing management is likely ideal
-	recordSepLen                       int8
-	afterStartOfRecords                bool
-	commentsAllowedAfterStartOfRecords bool
-	quoteSet                           bool
-	escapeSet                          bool
-	commentSet                         bool
-	errOnQuotesInUnquotedField         bool
-	errOnNewlineInUnquotedField        bool
-	trsEmitsRecord                     bool
-	removeByteOrderMarker              bool
-	errOnNoByteOrderMarker             bool
-	done                               bool
+	recordSepLen int8
+	bitFlags     rFlag
 }
 
 func (cfg *rCfg) validate() error {
@@ -743,25 +756,46 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		}
 	}
 
+	var bitFlags rFlag
+	if cfg.trsEmitsRecord {
+		bitFlags |= rFlagTRSEmitsRecord
+	}
+	if cfg.quoteSet {
+		bitFlags |= rFlagQuote
+	}
+	if cfg.escapeSet {
+		bitFlags |= rFlagEscape
+	}
+	if cfg.commentSet {
+		bitFlags |= rFlagComment
+	}
+	if cfg.removeByteOrderMarker {
+		bitFlags |= rFlagDropBOM
+	}
+	if cfg.errOnNoByteOrderMarker {
+		bitFlags |= rFlagErrOnNoBOM
+	}
+	if cfg.commentsAllowedAfterStartOfRecords {
+		bitFlags |= rFlagCommentAfterSOR
+	}
+	if cfg.errOnQuotesInUnquotedField {
+		bitFlags |= rFlagErrOnQInUF
+	}
+	if cfg.errOnNewlineInUnquotedField {
+		bitFlags |= rFlagErrOnNLInUF
+	}
+
 	cr := Reader{
-		quote:                              cfg.quote,
-		escape:                             cfg.escape,
-		numFields:                          cfg.numFields,
-		fieldSeparator:                     cfg.fieldSeparator,
-		comment:                            cfg.comment,
-		trsEmitsRecord:                     cfg.trsEmitsRecord,
-		quoteSet:                           cfg.quoteSet,
-		escapeSet:                          cfg.escapeSet,
-		commentSet:                         cfg.commentSet,
-		headers:                            headers,
-		recordBuf:                          cfg.recordBuf[:0],
-		recordSep:                          cfg.recordSep,
-		recordSepLen:                       cfg.recordSepLen,
-		removeByteOrderMarker:              cfg.removeByteOrderMarker,
-		errOnNoByteOrderMarker:             cfg.errOnNoByteOrderMarker,
-		commentsAllowedAfterStartOfRecords: cfg.commentsAllowedAfterStartOfRecords,
-		errOnQuotesInUnquotedField:         cfg.errOnQuotesInUnquotedField,
-		errOnNewlineInUnquotedField:        cfg.errOnNewlineInUnquotedField,
+		quote:          cfg.quote,
+		escape:         cfg.escape,
+		numFields:      cfg.numFields,
+		fieldSeparator: cfg.fieldSeparator,
+		comment:        cfg.comment,
+		headers:        headers,
+		recordBuf:      cfg.recordBuf[:0],
+		recordSep:      cfg.recordSep,
+		recordSepLen:   cfg.recordSepLen,
+		bitFlags:       bitFlags,
 	}
 
 	cr.initPipeline(cfg)
@@ -1001,7 +1035,7 @@ func (r *Reader) defaultCheckNumFields(errTrailer error) bool {
 
 func (r *Reader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool {
 	if r.defaultCheckNumFields(errTrailer) {
-		r.afterStartOfRecords = true
+		r.bitFlags |= stAfterSOR
 		r.checkNumFields = r.defaultCheckNumFields
 		return true
 	}
@@ -1012,7 +1046,7 @@ func (r *Reader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool 
 // errTrailer is unused since we're discovering the row length
 func (r *Reader) checkNumFieldsWithDiscovery(errTrailer error) bool {
 	r.numFields = len(r.fieldLengths)
-	r.afterStartOfRecords = true
+	r.bitFlags |= stAfterSOR
 	r.checkNumFields = r.defaultCheckNumFields
 	return true
 }
@@ -1112,10 +1146,10 @@ func (r *Reader) defaultScan() bool {
 func (r *Reader) initPipeline(cfg rCfg) {
 
 	if cfg.clearMemoryAfterFree {
-		r.prepareRow = r.prepareRow_memclearEnabled
+		r.prepareRow = r.prepareRow_memclearOn
 		r.close = r.closeWithMemClear
 	} else {
-		r.prepareRow = r.prepareRow_memclearDisabled
+		r.prepareRow = r.prepareRow_memclearOff
 		r.close = r.defaultClose
 	}
 
@@ -1123,7 +1157,7 @@ func (r *Reader) initPipeline(cfg rCfg) {
 		r.recordBuf = make([]byte, 0, cfg.initialRecordBufferSize)
 	}
 
-	if !(r.removeByteOrderMarker || r.errOnNoByteOrderMarker) {
+	if (r.bitFlags & (rFlagDropBOM | rFlagErrOnNoBOM)) == 0 {
 		r.state = rStateStartOfRecord
 	}
 
@@ -1141,7 +1175,7 @@ func (r *Reader) initPipeline(cfg rCfg) {
 
 	if r.numFields == -1 {
 		r.checkNumFields = r.checkNumFieldsWithDiscovery
-	} else if r.commentSet {
+	} else if (r.bitFlags & rFlagComment) != 0 {
 		r.checkNumFields = r.checkNumFieldsWithStartOfRecordTracking
 	} else {
 		r.checkNumFields = r.defaultCheckNumFields
@@ -1275,7 +1309,7 @@ func (r *Reader) handleEOF() bool {
 	// there is no new character to process
 	switch r.state {
 	case rStateStartOfDoc:
-		if r.errOnNoByteOrderMarker {
+		if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
 			r.parsingErr(errors.Join(ErrNoByteOrderMarker, io.ErrUnexpectedEOF))
 			return false
 		}
@@ -1283,7 +1317,7 @@ func (r *Reader) handleEOF() bool {
 		r.state = rStateStartOfRecord
 		fallthrough
 	case rStateStartOfRecord:
-		if r.trsEmitsRecord && r.numFields == 1 {
+		if (r.bitFlags&rFlagTRSEmitsRecord) != 0 && r.numFields == 1 {
 			r.fieldLengths = append(r.fieldLengths, 0)
 			// field start is unchanged because the last one was zero length
 			// r.fieldStart = len(r.recordBuf)
@@ -1310,10 +1344,10 @@ func (r *Reader) handleEOF() bool {
 }
 
 func (r *Reader) setDone() {
-	if r.done {
+	if (r.bitFlags & stDone) != 0 {
 		return
 	}
-	r.done = true
+	r.bitFlags |= stDone
 
 	r.scan = func() bool {
 		return false

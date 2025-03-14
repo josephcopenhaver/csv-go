@@ -138,7 +138,7 @@ func TestFunctionalWriterErrorPaths(t *testing.T) {
 				w := &errWriter{writer: &buf, numWrites: 1, err: io.ErrClosedPipe}
 				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
 				tc.afterTest = func(t *testing.T) {
-					assert.Equal(t, string([]byte{0xEF, 0xBB, 0xBF}), buf.String())
+					assert.Equal(t, string(bomBytes()), buf.String())
 				}
 			},
 			whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),

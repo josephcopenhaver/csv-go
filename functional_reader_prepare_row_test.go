@@ -12,7 +12,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 	tcs := []functionalReaderTestCase{
 		{
 			when: "single non-utf8 byte",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(bytes.NewReader([]byte{0xC0})),
@@ -22,7 +21,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "single non-utf8 byte after a full ascii byte",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(bytes.NewReader([]byte{'A', 0xC0})),
@@ -32,7 +30,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "single non-utf8 byte after a comma",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(bytes.NewReader([]byte{',', 0xC0})),
@@ -42,7 +39,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "single non-utf8 byte in quotes with quote set",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(bytes.NewReader([]byte{'"', 0xC0, '"'})),
@@ -55,7 +51,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "single non-utf8 byte in comment with comment set",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(bytes.NewReader(append(append([]byte("# "), 0xC0), []byte("\n1,2")...))),
@@ -68,10 +63,9 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "configured to remove a byte order marker that exists",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
-					csv.ReaderOpts().Reader(bytes.NewReader(append([]byte{0xEF, 0xBB, 0xBF}, []byte("1,2,3")...))),
+					csv.ReaderOpts().Reader(bytes.NewReader(append(bomBytes(), []byte("1,2,3")...))),
 				}
 			},
 			newOpts: []csv.ReaderOption{
@@ -81,7 +75,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "two non record sep characters separated by two record sep and ending in a record sep",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader("a\n\nb\n")),
@@ -91,7 +84,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "two non record sep characters separated by two record sep and not ending in a record sep",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader("a\n\nb")),
@@ -101,7 +93,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "two non record sep characters separated by two record sep and ending in a record sep with TerminalRecordSeparatorEmitsRecord=false",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader("a\n\nb\n")),
@@ -114,7 +105,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "two non record sep characters separated by two record sep and ending in a record sep with TerminalRecordSeparatorEmitsRecord=true",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader("a\n\nb\n")),
@@ -127,7 +117,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "discover record sep enabled and comment line ends file with CR",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader("# neat\r")),
@@ -140,7 +129,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "EOF on first line with comment enabled",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader("#neat")),
@@ -152,7 +140,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "just a comma",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader(",")),
@@ -162,7 +149,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "quotes and escapes one column",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader(`"\"1\""`)),
@@ -176,7 +162,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "quotes and escapes two columns with second empty",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader(`"\"1\"",`)),
@@ -190,7 +175,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "quotes and escapes two columns with second empty ending in newline",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader(`"\"1\"",` + "\n")),
@@ -204,7 +188,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "quotes and escapes two columns",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader(`"\"1\"","\"2\""`)),
@@ -218,7 +201,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "quotes and escapes two columns ending in newline",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader(`"\"1\"","\"2\""` + "\n")),
@@ -232,7 +214,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "quotes in field one column",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader(`"1""2"`)),
@@ -245,7 +226,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "quotes in field two columns with second empty",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader(`"1""2",`)),
@@ -258,7 +238,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "quotes in field two columns with second empty ending in newline",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader(`"1""2",` + "\n")),
@@ -271,7 +250,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "quotes in field two columns",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader(`"1""2","3""4"`)),
@@ -284,7 +262,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "quotes in field two columns ending in newline",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader(`"1""2","3""4"` + "\n")),
@@ -297,7 +274,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "comments after start of records and support enabled",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader("#neat1\na,b,c\n#neat2\n1,2,3")),
@@ -450,7 +426,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "BOM removal enabled and EOF is the first event encountered",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader("")),
@@ -462,7 +437,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "BOM removal enabled then normal-rune+EOF",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader("A")),
@@ -475,7 +449,6 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 		},
 		{
 			when: "BOM removal enabled then normal-rune+EOF",
-			then: "no error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(bytes.NewReader([]byte{0xC0})),
@@ -486,9 +459,64 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 			},
 			rows: [][]string{{string([]byte{0xC0})}},
 		},
+		{
+			when: "BOM removal and error on no-BOM enabled",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(bytes.NewReader(append(bomBytes(), []byte("a,b,c")...))),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().RemoveByteOrderMarker(true),
+				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),
+			},
+			rows: [][]string{strings.Split("a,b,c", ",")},
+		},
+		{
+			when: "error on no-BOM enabled",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(bytes.NewReader(append(bomBytes(), []byte("a,b,c")...))),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),
+			},
+			rows: [][]string{append([]string{string(bomBytes()) + "a"}, strings.Split("b,c", ",")...)},
+		},
+		{
+			when: "quotes enabled and err on quote in unquoted field enabled but no quotes present",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("a1,b2,c3")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().ErrorOnQuotesInUnquotedField(true),
+			},
+			rows: [][]string{strings.Split("a1,b2,c3", ",")},
+		},
+		{
+			when: "escape set and record sep CRNL after closing quote",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\"\"\r\n")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().RecordSeparator("\r\n"),
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().Escape('\\'),
+			},
+			rows: [][]string{{""}},
+		},
 	}
 
 	for _, tc := range tcs {
+		if tc.then == "" {
+			tc.then = "no error"
+		}
 		tc.Run(t)
 	}
 }

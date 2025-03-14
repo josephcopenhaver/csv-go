@@ -9,7 +9,7 @@ import (
 	"unsafe"
 )
 
-func (r *Reader) prepareRow_memclearDisabled() bool {
+func (r *Reader) prepareRow_memclearOff() bool {
 
 	for {
 		c, size, rErr := r.reader.ReadRune()
@@ -28,8 +28,8 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 			// handle a non UTF8 byte
 			//
 
-			if rStateStartOfDoc == r.state {
-				if r.errOnNoByteOrderMarker {
+			if r.state == rStateStartOfDoc {
+				if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
 					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
 					r.setDone()
 					r.parsingErr(ErrNoByteOrderMarker)
@@ -91,13 +91,13 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 		switch r.state {
 		case rStateStartOfDoc:
 			if !isByteOrderMarker(uint32(c), size) {
-				if r.errOnNoByteOrderMarker {
+				if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
 					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
 					r.setDone()
 					r.parsingErr(ErrNoByteOrderMarker)
 					return false
 				}
-			} else if r.removeByteOrderMarker {
+			} else if (r.bitFlags & rFlagDropBOM) != 0 {
 				r.state = rStateStartOfRecord
 				continue
 			}
@@ -135,7 +135,7 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 				return false
 			}
 
-			if c == r.quote && r.quoteSet {
+			if c == r.quote && (r.bitFlags&rFlagQuote) != 0 {
 				r.state = rStateInQuotedField
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -148,7 +148,7 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 				continue
 			}
 
-			if c == r.comment && r.commentSet && (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) {
+			if c == r.comment && (r.bitFlags&rFlagComment) != 0 && ((r.bitFlags&stAfterSOR) == 0 || (r.bitFlags&rFlagCommentAfterSOR) != 0) {
 				r.state = rStateInLineComment
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -163,13 +163,13 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
+				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
 					return false
 				}
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
+				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
 					return false
@@ -209,7 +209,7 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 				return false
 			}
 
-			if c == r.quote && r.quoteSet {
+			if c == r.quote && (r.bitFlags&rFlagQuote) != 0 {
 				r.state = rStateInQuotedField
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -224,13 +224,13 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
+				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
 					return false
 				}
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
+				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
 					return false
@@ -268,7 +268,7 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 				return false
 			}
 
-			if c == r.quote && r.quoteSet && r.errOnQuotesInUnquotedField {
+			if c == r.quote && (r.bitFlags&rFlagQuote) != 0 && (r.bitFlags&rFlagErrOnQInUF) != 0 {
 				r.setDone()
 				r.parsingErr(ErrQuoteInUnquotedField)
 				return false
@@ -276,13 +276,13 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
+				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
 					return false
 				}
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
+				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
 					return false
@@ -296,7 +296,7 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 			case r.quote:
 				r.state = rStateEndOfQuotedField
 			default:
-				if c == r.escape && r.escapeSet {
+				if c == r.escape && (r.bitFlags&rFlagEscape) != 0 {
 					r.state = rStateInQuotedFieldAfterEscape
 					continue
 				}
@@ -325,7 +325,7 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 				r.state = rStateStartOfField
 				r.fieldIndex++
 			case r.quote:
-				if r.escapeSet {
+				if (r.bitFlags & rFlagEscape) != 0 {
 					r.setDone()
 					r.parsingErr(ErrUnexpectedQuoteAfterField)
 					return false
@@ -403,7 +403,7 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 	// return r.checkNumFields(errTrailer)
 }
 
-func (r *Reader) prepareRow_memclearEnabled() bool {
+func (r *Reader) prepareRow_memclearOn() bool {
 
 	for {
 		c, size, rErr := r.reader.ReadRune()
@@ -422,8 +422,8 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 			// handle a non UTF8 byte
 			//
 
-			if rStateStartOfDoc == r.state {
-				if r.errOnNoByteOrderMarker {
+			if r.state == rStateStartOfDoc {
+				if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
 					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
 					r.setDone()
 					r.parsingErr(ErrNoByteOrderMarker)
@@ -485,13 +485,13 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 		switch r.state {
 		case rStateStartOfDoc:
 			if !isByteOrderMarker(uint32(c), size) {
-				if r.errOnNoByteOrderMarker {
+				if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
 					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
 					r.setDone()
 					r.parsingErr(ErrNoByteOrderMarker)
 					return false
 				}
-			} else if r.removeByteOrderMarker {
+			} else if (r.bitFlags & rFlagDropBOM) != 0 {
 				r.state = rStateStartOfRecord
 				continue
 			}
@@ -529,7 +529,7 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 				return false
 			}
 
-			if c == r.quote && r.quoteSet {
+			if c == r.quote && (r.bitFlags&rFlagQuote) != 0 {
 				r.state = rStateInQuotedField
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -542,7 +542,7 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 				continue
 			}
 
-			if c == r.comment && r.commentSet && (!r.afterStartOfRecords || r.commentsAllowedAfterStartOfRecords) {
+			if c == r.comment && (r.bitFlags&rFlagComment) != 0 && ((r.bitFlags&stAfterSOR) == 0 || (r.bitFlags&rFlagCommentAfterSOR) != 0) {
 				r.state = rStateInLineComment
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -557,13 +557,13 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
+				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
 					return false
 				}
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
+				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
 					return false
@@ -603,7 +603,7 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 				return false
 			}
 
-			if c == r.quote && r.quoteSet {
+			if c == r.quote && (r.bitFlags&rFlagQuote) != 0 {
 				r.state = rStateInQuotedField
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -618,13 +618,13 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
+				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
 					return false
 				}
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
+				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
 					return false
@@ -662,7 +662,7 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 				return false
 			}
 
-			if c == r.quote && r.quoteSet && r.errOnQuotesInUnquotedField {
+			if c == r.quote && (r.bitFlags&rFlagQuote) != 0 && (r.bitFlags&rFlagErrOnQInUF) != 0 {
 				r.setDone()
 				r.parsingErr(ErrQuoteInUnquotedField)
 				return false
@@ -670,13 +670,13 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
+				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
 					return false
 				}
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
+				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 					r.setDone()
 					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
 					return false
@@ -690,7 +690,7 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 			case r.quote:
 				r.state = rStateEndOfQuotedField
 			default:
-				if c == r.escape && r.escapeSet {
+				if c == r.escape && (r.bitFlags&rFlagEscape) != 0 {
 					r.state = rStateInQuotedFieldAfterEscape
 					continue
 				}
@@ -719,7 +719,7 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 				r.state = rStateStartOfField
 				r.fieldIndex++
 			case r.quote:
-				if r.escapeSet {
+				if (r.bitFlags & rFlagEscape) != 0 {
 					r.setDone()
 					r.parsingErr(ErrUnexpectedQuoteAfterField)
 					return false
