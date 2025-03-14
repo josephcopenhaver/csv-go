@@ -1,5 +1,5 @@
 {{define "recBufAppend"}}{{if .ClearMemoryAfterUse}}r.appendRecBuf({{else}}r.recordBuf = append(r.recordBuf, {{end}}{{end}}
-func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled() bool {
+func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled_startOfDoc{{if .StartOfDoc}}En{{else}}Dis{{end}}abled_errOnNLInUF{{if .ErrOnNLInUF}}En{{else}}Dis{{end}}abled() bool {
 
 	for {
 		c, size, rErr := r.reader.ReadRune()
@@ -18,6 +18,7 @@ func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{en
 			// handle a non UTF8 byte
 			//
 
+			{{if .StartOfDoc}}
 			if rStateStartOfDoc == r.state {
 				if r.errOnNoByteOrderMarker {
 					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
@@ -28,6 +29,7 @@ func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{en
 
 				r.state = rStateStartOfRecord
 			}
+			{{end}}
 
 			if err := r.reader.UnreadRune(); err != nil {
 				r.setDone()
@@ -44,7 +46,7 @@ func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{en
 			}
 
 			switch r.state {
-			case rStateStartOfRecord, rStateStartOfField:
+			case {{if .StartOfDoc}}rStateStartOfRecord, {{end}}rStateStartOfField:
 				{{template "recBufAppend" .}}b)
 				r.state = rStateInField
 			case rStateInField, rStateInQuotedField:
@@ -78,7 +80,7 @@ func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{en
 			return false
 		}
 
-		switch r.state {
+		switch r.state { {{- if .StartOfDoc}}
 		case rStateStartOfDoc:
 			if isByteOrderMarker(uint32(c), size) {
 				if r.removeByteOrderMarker {
@@ -93,7 +95,7 @@ func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{en
 			}
 
 			r.state = rStateStartOfRecord
-			fallthrough
+			fallthrough{{end}}
 		case rStateStartOfRecord:
 			if c == r.fieldSeparator {
 				r.fieldLengths = append(r.fieldLengths, 0)
@@ -151,20 +153,18 @@ func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{en
 				continue
 			}
 
+			{{if .ErrOnNLInUF}}
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
-					r.setDone()
-					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
-					return false
-				}
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
-					r.setDone()
-					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
-					return false
-				}
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
 			}
+			{{end}}
 
 			{{template "recBufAppend" .}}[]byte(string(c))...)
 			r.state = rStateInField
@@ -212,20 +212,18 @@ func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{en
 				continue
 			}
 
+			{{if .ErrOnNLInUF}}
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
-					r.setDone()
-					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
-					return false
-				}
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
-					r.setDone()
-					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
-					return false
-				}
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
 			}
+			{{end}}
 
 			{{template "recBufAppend" .}}[]byte(string(c))...)
 			r.state = rStateInField
@@ -264,20 +262,18 @@ func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{en
 				return false
 			}
 
+			{{if .ErrOnNLInUF}}
 			switch c {
 			case '\r':
-				if r.errOnNewlineInUnquotedField {
-					r.setDone()
-					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
-					return false
-				}
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
 			case '\n':
-				if r.errOnNewlineInUnquotedField {
-					r.setDone()
-					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
-					return false
-				}
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
 			}
+			{{end}}
 
 			{{template "recBufAppend" .}}[]byte(string(c))...)
 			// r.state = rStateInField

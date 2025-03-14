@@ -1118,19 +1118,47 @@ func (r *Reader) defaultScan() bool {
 func (r *Reader) initPipeline(reader io.Reader, initialRecordBufferSize int, borrowRow, discoverRecordSeparator, clearMemoryAfterFree bool) {
 
 	if clearMemoryAfterFree {
-		r.prepareRow = r.prepareRow_memclearEnabled
 		r.close = r.closeWithMemClear
 	} else {
-		r.prepareRow = r.prepareRow_memclearDisabled
 		r.close = r.defaultClose
+	}
+
+	if r.removeByteOrderMarker || r.errOnNoByteOrderMarker {
+		// keep start state as rStateStartOfDoc
+
+		if clearMemoryAfterFree {
+			if r.errOnNewlineInUnquotedField {
+				r.prepareRow = r.prepareRow_memclearEnabled_startOfDocEnabled_errOnNLInUFEnabled
+			} else {
+				r.prepareRow = r.prepareRow_memclearEnabled_startOfDocEnabled_errOnNLInUFDisabled
+			}
+		} else {
+			if r.errOnNewlineInUnquotedField {
+				r.prepareRow = r.prepareRow_memclearDisabled_startOfDocEnabled_errOnNLInUFEnabled
+			} else {
+				r.prepareRow = r.prepareRow_memclearDisabled_startOfDocEnabled_errOnNLInUFDisabled
+			}
+		}
+	} else {
+		r.state = rStateStartOfRecord
+
+		if clearMemoryAfterFree {
+			if r.errOnNewlineInUnquotedField {
+				r.prepareRow = r.prepareRow_memclearEnabled_startOfDocDisabled_errOnNLInUFEnabled
+			} else {
+				r.prepareRow = r.prepareRow_memclearEnabled_startOfDocDisabled_errOnNLInUFDisabled
+			}
+		} else {
+			if r.errOnNewlineInUnquotedField {
+				r.prepareRow = r.prepareRow_memclearDisabled_startOfDocDisabled_errOnNLInUFEnabled
+			} else {
+				r.prepareRow = r.prepareRow_memclearDisabled_startOfDocDisabled_errOnNLInUFDisabled
+			}
+		}
 	}
 
 	if initialRecordBufferSize > 0 {
 		r.recordBuf = make([]byte, 0, initialRecordBufferSize)
-	}
-
-	if !(r.removeByteOrderMarker || r.errOnNoByteOrderMarker) {
-		r.state = rStateStartOfRecord
 	}
 
 	if v, ok := reader.(BufferedReader); ok {

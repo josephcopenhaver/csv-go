@@ -101,13 +101,21 @@ func main() {
 
 		type cfg struct {
 			ClearMemoryAfterUse bool
+			StartOfDoc          bool
+			ErrOnNLInUF         bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{ClearMemoryAfterUse: false},
-			{ClearMemoryAfterUse: true},
+			{ClearMemoryAfterUse: false, StartOfDoc: false, ErrOnNLInUF: false},
+			{ClearMemoryAfterUse: true, StartOfDoc: false, ErrOnNLInUF: false},
+			{ClearMemoryAfterUse: false, StartOfDoc: true, ErrOnNLInUF: false},
+			{ClearMemoryAfterUse: true, StartOfDoc: true, ErrOnNLInUF: false},
+			{ClearMemoryAfterUse: false, StartOfDoc: false, ErrOnNLInUF: true},
+			{ClearMemoryAfterUse: true, StartOfDoc: false, ErrOnNLInUF: true},
+			{ClearMemoryAfterUse: false, StartOfDoc: true, ErrOnNLInUF: true},
+			{ClearMemoryAfterUse: true, StartOfDoc: true, ErrOnNLInUF: true},
 		})
 	}
 
