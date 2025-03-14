@@ -80,16 +80,16 @@ func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{en
 
 		switch r.state {
 		case rStateStartOfDoc:
-			if isByteOrderMarker(uint32(c), size) {
-				if r.removeByteOrderMarker {
-					r.state = rStateStartOfRecord
-					continue
+			if !isByteOrderMarker(uint32(c), size) {
+				if r.errOnNoByteOrderMarker {
+					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+					r.setDone()
+					r.parsingErr(ErrNoByteOrderMarker)
+					return false
 				}
-			} else if r.errOnNoByteOrderMarker {
-				r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
-				r.setDone()
-				r.parsingErr(ErrNoByteOrderMarker)
-				return false
+			} else if r.removeByteOrderMarker {
+				r.state = rStateStartOfRecord
+				continue
 			}
 
 			r.state = rStateStartOfRecord

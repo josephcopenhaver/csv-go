@@ -90,16 +90,16 @@ func (r *Reader) prepareRow_memclearDisabled() bool {
 
 		switch r.state {
 		case rStateStartOfDoc:
-			if isByteOrderMarker(uint32(c), size) {
-				if r.removeByteOrderMarker {
-					r.state = rStateStartOfRecord
-					continue
+			if !isByteOrderMarker(uint32(c), size) {
+				if r.errOnNoByteOrderMarker {
+					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+					r.setDone()
+					r.parsingErr(ErrNoByteOrderMarker)
+					return false
 				}
-			} else if r.errOnNoByteOrderMarker {
-				r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
-				r.setDone()
-				r.parsingErr(ErrNoByteOrderMarker)
-				return false
+			} else if r.removeByteOrderMarker {
+				r.state = rStateStartOfRecord
+				continue
 			}
 
 			r.state = rStateStartOfRecord
@@ -484,16 +484,16 @@ func (r *Reader) prepareRow_memclearEnabled() bool {
 
 		switch r.state {
 		case rStateStartOfDoc:
-			if isByteOrderMarker(uint32(c), size) {
-				if r.removeByteOrderMarker {
-					r.state = rStateStartOfRecord
-					continue
+			if !isByteOrderMarker(uint32(c), size) {
+				if r.errOnNoByteOrderMarker {
+					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+					r.setDone()
+					r.parsingErr(ErrNoByteOrderMarker)
+					return false
 				}
-			} else if r.errOnNoByteOrderMarker {
-				r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
-				r.setDone()
-				r.parsingErr(ErrNoByteOrderMarker)
-				return false
+			} else if r.removeByteOrderMarker {
+				r.state = rStateStartOfRecord
+				continue
 			}
 
 			r.state = rStateStartOfRecord
@@ -803,16 +803,18 @@ func (w *Writer) processField_escapeUnset_quoteUnforced_memclearDisabled(v []byt
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
+		switch di {
+		case 0:
 			return -1, nil
-		}
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return -1, ErrNonUTF8InRecord
-			}
+		case 1:
+			if r == utf8.RuneError {
+				if w.errOnNonUTF8 {
+					return -1, ErrNonUTF8InRecord
+				}
 
-			i += di
-			continue
+				i += di
+				continue
+			}
 		}
 
 		switch r {
@@ -847,16 +849,18 @@ func (w *Writer) processField_escapeSet_quoteUnforced_memclearDisabled(v []byte)
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
+		switch di {
+		case 0:
 			return -1, nil
-		}
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return -1, ErrNonUTF8InRecord
-			}
+		case 1:
+			if r == utf8.RuneError {
+				if w.errOnNonUTF8 {
+					return -1, ErrNonUTF8InRecord
+				}
 
-			i += di
-			continue
+				i += di
+				continue
+			}
 		}
 
 		switch r {
@@ -917,16 +921,18 @@ func (w *Writer) processField_escapeUnset_quoteUnforced_memclearEnabled(v []byte
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
+		switch di {
+		case 0:
 			return -1, nil
-		}
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return -1, ErrNonUTF8InRecord
-			}
+		case 1:
+			if r == utf8.RuneError {
+				if w.errOnNonUTF8 {
+					return -1, ErrNonUTF8InRecord
+				}
 
-			i += di
-			continue
+				i += di
+				continue
+			}
 		}
 
 		switch r {
@@ -960,16 +966,18 @@ func (w *Writer) processField_escapeSet_quoteUnforced_memclearEnabled(v []byte) 
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
+		switch di {
+		case 0:
 			return -1, nil
-		}
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return -1, ErrNonUTF8InRecord
-			}
+		case 1:
+			if r == utf8.RuneError {
+				if w.errOnNonUTF8 {
+					return -1, ErrNonUTF8InRecord
+				}
 
-			i += di
-			continue
+				i += di
+				continue
+			}
 		}
 
 		switch r {
@@ -1028,17 +1036,18 @@ func (w *Writer) escapeChars_escapeDisabled_memclearDisabled(v []byte, i int) (i
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
+		switch di {
+		case 0:
 			return si, nil
-		}
+		case 1:
+			if r == utf8.RuneError {
+				if w.errOnNonUTF8 {
+					return 0, ErrNonUTF8InRecord
+				}
 
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return 0, ErrNonUTF8InRecord
+				i += di
+				continue
 			}
-
-			i += di
-			continue
 		}
 
 		switch r {
@@ -1060,17 +1069,18 @@ func (w *Writer) escapeChars_escapeEnabled_memclearDisabled(v []byte, i int) (in
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
+		switch di {
+		case 0:
 			return si, nil
-		}
+		case 1:
+			if r == utf8.RuneError {
+				if w.errOnNonUTF8 {
+					return 0, ErrNonUTF8InRecord
+				}
 
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return 0, ErrNonUTF8InRecord
+				i += di
+				continue
 			}
-
-			i += di
-			continue
 		}
 
 		switch r {
@@ -1098,17 +1108,18 @@ func (w *Writer) escapeChars_escapeDisabled_memclearEnabled(v []byte, i int) (in
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
+		switch di {
+		case 0:
 			return si, nil
-		}
+		case 1:
+			if r == utf8.RuneError {
+				if w.errOnNonUTF8 {
+					return 0, ErrNonUTF8InRecord
+				}
 
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return 0, ErrNonUTF8InRecord
+				i += di
+				continue
 			}
-
-			i += di
-			continue
 		}
 
 		switch r {
@@ -1129,17 +1140,18 @@ func (w *Writer) escapeChars_escapeEnabled_memclearEnabled(v []byte, i int) (int
 
 	for {
 		r, di = utf8.DecodeRune(v[i:])
-		if di == 0 {
+		switch di {
+		case 0:
 			return si, nil
-		}
+		case 1:
+			if r == utf8.RuneError {
+				if w.errOnNonUTF8 {
+					return 0, ErrNonUTF8InRecord
+				}
 
-		if di == 1 && r == utf8.RuneError {
-			if w.errOnNonUTF8 {
-				return 0, ErrNonUTF8InRecord
+				i += di
+				continue
 			}
-
-			i += di
-			continue
 		}
 
 		switch r {

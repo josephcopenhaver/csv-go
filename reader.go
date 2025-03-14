@@ -542,9 +542,6 @@ type Reader struct {
 	errOnQuotesInUnquotedField         bool
 	errOnNewlineInUnquotedField        bool
 	trsEmitsRecord                     bool
-	trimHeaders                        bool
-	removeHeaderRow                    bool
-	errOnNoRows                        bool
 	removeByteOrderMarker              bool
 	errOnNoByteOrderMarker             bool
 	done                               bool
@@ -756,9 +753,6 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		quoteSet:                           cfg.quoteSet,
 		escapeSet:                          cfg.escapeSet,
 		commentSet:                         cfg.commentSet,
-		trimHeaders:                        cfg.trimHeaders,
-		removeHeaderRow:                    cfg.removeHeaderRow,
-		errOnNoRows:                        cfg.errOnNoRows,
 		headers:                            headers,
 		recordBuf:                          cfg.recordBuf[:0],
 		recordSep:                          cfg.recordSep,
@@ -770,7 +764,7 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		errOnNewlineInUnquotedField:        cfg.errOnNewlineInUnquotedField,
 	}
 
-	cr.initPipeline(cfg.reader, cfg.initialRecordBufferSize, cfg.borrowRow, cfg.discoverRecordSeparator, cfg.clearMemoryAfterFree)
+	cr.initPipeline(cfg)
 
 	return &cr, nil
 }
@@ -1115,9 +1109,9 @@ func (r *Reader) defaultScan() bool {
 	return r.prepareRow()
 }
 
-func (r *Reader) initPipeline(reader io.Reader, initialRecordBufferSize int, borrowRow, discoverRecordSeparator, clearMemoryAfterFree bool) {
+func (r *Reader) initPipeline(cfg rCfg) {
 
-	if clearMemoryAfterFree {
+	if cfg.clearMemoryAfterFree {
 		r.prepareRow = r.prepareRow_memclearEnabled
 		r.close = r.closeWithMemClear
 	} else {
@@ -1125,21 +1119,21 @@ func (r *Reader) initPipeline(reader io.Reader, initialRecordBufferSize int, bor
 		r.close = r.defaultClose
 	}
 
-	if initialRecordBufferSize > 0 {
-		r.recordBuf = make([]byte, 0, initialRecordBufferSize)
+	if cfg.initialRecordBufferSize > 0 {
+		r.recordBuf = make([]byte, 0, cfg.initialRecordBufferSize)
 	}
 
 	if !(r.removeByteOrderMarker || r.errOnNoByteOrderMarker) {
 		r.state = rStateStartOfRecord
 	}
 
-	if v, ok := reader.(BufferedReader); ok {
+	if v, ok := cfg.reader.(BufferedReader); ok {
 		r.reader = v
 	} else {
-		r.reader = bufio.NewReader(reader)
+		r.reader = bufio.NewReader(cfg.reader)
 	}
 
-	if borrowRow {
+	if cfg.borrowRow {
 		r.row = r.borrowedRow
 	} else {
 		r.row = r.defaultRow
@@ -1153,7 +1147,7 @@ func (r *Reader) initPipeline(reader io.Reader, initialRecordBufferSize int, bor
 		r.checkNumFields = r.defaultCheckNumFields
 	}
 
-	if !discoverRecordSeparator {
+	if !cfg.discoverRecordSeparator {
 		r.updateIsRecordSeparatorImpl()
 	} else {
 		r.isRecordSeparator = r.isRecordSeparatorWithDiscovery
@@ -1165,8 +1159,10 @@ func (r *Reader) initPipeline(reader io.Reader, initialRecordBufferSize int, bor
 
 	headersHandled := true
 	checkHeadersMatch := (r.headers != nil)
-	if checkHeadersMatch || r.removeHeaderRow || r.trimHeaders {
+	if checkHeadersMatch || cfg.removeHeaderRow || cfg.trimHeaders {
 		headersHandled = false
+		trimHeaders := cfg.trimHeaders
+		removeHeaderRow := cfg.removeHeaderRow
 		next := r.scan
 		r.scan = func() bool {
 			r.scan = next
@@ -1175,7 +1171,7 @@ func (r *Reader) initPipeline(reader io.Reader, initialRecordBufferSize int, bor
 				return false
 			}
 
-			if r.trimHeaders {
+			if trimHeaders {
 				headersStr := string(r.recordBuf)
 				r.recordBuf = r.recordBuf[:0]
 
@@ -1227,7 +1223,7 @@ func (r *Reader) initPipeline(reader io.Reader, initialRecordBufferSize int, bor
 
 			headersHandled = true
 
-			if !r.removeHeaderRow {
+			if !removeHeaderRow {
 				return true
 			}
 
@@ -1237,13 +1233,14 @@ func (r *Reader) initPipeline(reader io.Reader, initialRecordBufferSize int, bor
 		}
 	}
 
-	if r.headers == nil && !r.errOnNoRows {
+	if r.headers == nil && !cfg.errOnNoRows {
 		return
 	}
 
 	// verify that true is returned at least once
 	// using a slip closure
 	{
+		errOnNoRows := cfg.errOnNoRows
 		next := r.scan
 		r.scan = func() bool {
 			r.scan = next
@@ -1251,7 +1248,7 @@ func (r *Reader) initPipeline(reader io.Reader, initialRecordBufferSize int, bor
 			if !v {
 				if !headersHandled {
 					r.parsingErr(ErrNoHeaderRow)
-				} else if r.errOnNoRows {
+				} else if errOnNoRows {
 					r.parsingErr(ErrNoRows)
 				}
 			}
