@@ -1123,10 +1123,12 @@ func (r *Reader) defaultScan() bool {
 func (r *Reader) initPipeline(cfg rCfg) {
 
 	if cfg.clearMemoryAfterFree {
-		r.prepareRow = r.prepareRow_memclearEnabled
+		f := prepareRowForFlags_memclearOn(r.bitFlags)
+		r.prepareRow = f(r)
 		r.close = r.closeWithMemClear
 	} else {
-		r.prepareRow = r.prepareRow_memclearDisabled
+		f := prepareRowForFlags_memclearOff(r.bitFlags)
+		r.prepareRow = f(r)
 		r.close = r.defaultClose
 	}
 
@@ -1134,7 +1136,7 @@ func (r *Reader) initPipeline(cfg rCfg) {
 		r.recordBuf = make([]byte, 0, cfg.initialRecordBufferSize)
 	}
 
-	if !((r.bitFlags&rFlagDropBOM) != 0 || (r.bitFlags&rFlagErrOnNoBOM) != 0) {
+	if (r.bitFlags & (rFlagDropBOM | rFlagErrOnNoBOM)) == 0 {
 		r.state = rStateStartOfRecord
 	}
 

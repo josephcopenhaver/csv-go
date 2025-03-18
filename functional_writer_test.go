@@ -332,6 +332,10 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 	})
 }
 
+func bomBytes() []byte {
+	return []byte{0xEF, 0xBB, 0xBF}
+}
+
 func TestFunctionalWriterOKPaths(t *testing.T) {
 	tcs := []functionalWriterTestCase{
 		{
@@ -349,7 +353,7 @@ func TestFunctionalWriterOKPaths(t *testing.T) {
 				csv.WriteHeaderOpts().CommentLines("hello world"),
 				csv.WriteHeaderOpts().IncludeByteOrderMarker(true),
 			},
-			res: string([]byte{0xEF, 0xBB, 0xBF}) + "# hello world\n",
+			res: string(bomBytes()) + "# hello world\n",
 		},
 		{
 			when: "rendering a comment header with a 2 col csv header trimmed",

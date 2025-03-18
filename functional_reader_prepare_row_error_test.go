@@ -440,6 +440,80 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNoByteOrderMarker},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 0, record 0, field 0: " + csv.ErrNoByteOrderMarker.Error(),
 		},
+		{
+			when: "escape set and field count overflows after closing quote",
+			then: "coupled error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\"\",")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().Escape('\\'),
+				csv.ReaderOpts().NumFields(1),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 3, record 1, field 1: " + csv.ErrTooManyFields.Error() + ": field count exceeds 1",
+		},
+		{
+			when: "escape set and io error after closing quote and CR and record sep is CRNL",
+			then: "coupled error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(func() *errBufferedReader {
+						ebr := newErrBufferedReader(errReader{
+							t:        t,
+							reader:   strings.NewReader("\"\"\r"),
+							numBytes: 4,
+							err:      io.ErrClosedPipe,
+						})
+
+						return ebr
+					}()),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().RecordSeparator("\r\n"),
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().Escape('\\'),
+			},
+			iterErrIs:  []error{csv.ErrIO, io.ErrClosedPipe},
+			iterErrStr: csv.ErrIO.Error() + " at byte 3, record 1, field 1: " + io.ErrClosedPipe.Error(),
+		},
+		{
+			when: "escape set and record sep CRNL after closing quote but field count under-flows",
+			then: "coupled error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\"\"\r\n")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().RecordSeparator("\r\n"),
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().Escape('\\'),
+				csv.ReaderOpts().NumFields(2),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNotEnoughFields},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 4, record 1, field 1: " + csv.ErrNotEnoughFields.Error() + ": expected 2 fields but found 1",
+		},
+		{
+			when: "escape set and unexpected normal ascii char after closing quote",
+			then: "coupled error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\"\"a")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().Escape('\\'),
+				csv.ReaderOpts().NumFields(2),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidQuotedFieldEnding},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 3, record 1, field 1: " + csv.ErrInvalidQuotedFieldEnding.Error(),
+		},
 	}
 
 	for i := range tcs {

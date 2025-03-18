@@ -1,4 +1,5 @@
 {{define "recBufAppend"}}{{if .ClearMemoryAfterUse}}r.appendRecBuf({{else}}r.recordBuf = append(r.recordBuf, {{end}}{{end}}
+{{if false}}
 func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled() bool {
 
 	for {
@@ -392,3 +393,604 @@ func (r *Reader) prepareRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{en
 	// }
 	// return r.checkNumFields(errTrailer)
 }
+{{else}}
+func prepareRowForFlags_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}(bitFlags rFlag) func(r *Reader) (func() bool) {
+	sm := make([][](func(*Reader, rune, int) uint8), rStateInLineComment+1)
+
+	{
+		buf := make([](func(*Reader, rune, int) uint8),8*23)
+		for i := range sm {
+			sm[i] = buf[i*8:(i+1)*8][:0]
+		}
+	}
+
+	//
+	// rStateStartOfDoc
+	//
+
+	if (bitFlags & (rFlagDropBOM | rFlagErrOnNoBOM)) != 0 {
+		if (bitFlags & (rFlagDropBOM | rFlagErrOnNoBOM)) == (rFlagDropBOM | rFlagErrOnNoBOM) {
+			sm[rStateStartOfDoc] = append(sm[rStateStartOfDoc], func(r *Reader, c rune, size int) uint8 {
+				if !isByteOrderMarker(uint32(c), size) {
+					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+					r.setDone()
+					r.parsingErr(ErrNoByteOrderMarker)
+					return cf_return_false
+				}
+
+				r.state = rStateStartOfRecord
+				return cf_continue
+			})
+		} else if (bitFlags & rFlagErrOnNoBOM) != 0 {
+			sm[rStateStartOfDoc] = append(sm[rStateStartOfDoc], func(r *Reader, c rune, size int) uint8 {
+				if !isByteOrderMarker(uint32(c), size) {
+					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+					r.setDone()
+					r.parsingErr(ErrNoByteOrderMarker)
+					return cf_return_false
+				}
+
+				r.state = rStateStartOfRecord
+				return cf_fallthrough
+			})
+		} else {
+			sm[rStateStartOfDoc] = append(sm[rStateStartOfDoc], func(r *Reader, c rune, size int) uint8 {
+				if isByteOrderMarker(uint32(c), size) {
+					r.state = rStateStartOfRecord
+					return cf_continue
+				}
+
+				r.state = rStateStartOfRecord
+				return cf_fallthrough
+			})
+		}
+	}
+
+	//
+	// rStateStartOfRecord
+	//
+
+	sm[rStateStartOfRecord] = append(sm[rStateStartOfRecord], func(r *Reader, c rune, size int) uint8 {
+		if c == r.fieldSeparator {
+			r.fieldLengths = append(r.fieldLengths, 0)
+			// field start is unchanged because the last one was zero length
+			// r.fieldStart = len(r.recordBuf)
+			if r.fieldNumOverflow() {
+				return cf_return_false
+			}
+			r.state = rStateStartOfField
+			r.fieldIndex++
+
+			return cf_continue
+		}
+
+		isRecSep, immediateErr := r.isRecordSeparator(c)
+		if immediateErr {
+			return cf_return_false
+		}
+		if isRecSep {
+			r.fieldLengths = append(r.fieldLengths, 0)
+			// field start is unchanged because the last one was zero length
+			// r.fieldStart = len(r.recordBuf)
+			// r.state = rStateStartOfRecord
+			if r.checkNumFields(nil) {
+				r.fieldIndex = 0
+				r.recordIndex++
+				return cf_return_true
+			}
+			return cf_return_false
+		}
+
+		return cf_next_step
+	})
+
+	if (bitFlags & rFlagQuote) != 0 {
+		sm[rStateStartOfRecord] = append(sm[rStateStartOfRecord], func(r *Reader, c rune, size int) uint8 {
+			if c == r.quote {
+				r.state = rStateInQuotedField
+
+				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+				//
+				//
+				// // checking if EOF was signaled from within the isRecordSeparator call before continue
+				// if r.eof {
+				// 	break
+				// }
+				return cf_continue
+			}
+
+			return cf_next_step
+		})
+	}
+
+	if (bitFlags&rFlagComment) != 0 {
+		if (bitFlags&rFlagCommentAfterSOR) != 0 {
+			sm[rStateStartOfRecord] = append(sm[rStateStartOfRecord], func(r *Reader, c rune, size int) uint8 {
+				if c == r.comment {
+					r.state = rStateInLineComment
+
+					// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+					//
+					//
+					// // checking if EOF was signaled from within the isRecordSeparator call before continue
+					// if r.eof {
+					// 	break
+					// }
+					return cf_continue
+				}
+
+				return cf_next_step
+			})
+		} else {
+			sm[rStateStartOfRecord] = append(sm[rStateStartOfRecord], func(r *Reader, c rune, size int) uint8 {
+				if c == r.comment && (r.bitFlags&stAfterSOR) == 0 {
+					r.state = rStateInLineComment
+
+					// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+					//
+					//
+					// // checking if EOF was signaled from within the isRecordSeparator call before continue
+					// if r.eof {
+					// 	break
+					// }
+					return cf_continue
+				}
+
+				return cf_next_step
+			})
+		}
+	}
+
+	if (bitFlags & rFlagErrOnNLInUF) != 0 {
+		sm[rStateStartOfRecord] = append(sm[rStateStartOfRecord], func(r *Reader, c rune, size int) uint8 {
+			switch c {
+			case '\r':
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return cf_return_false
+			case '\n':
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return cf_return_false
+			}
+
+			return cf_next_step
+		})
+	}
+
+	sm[rStateStartOfRecord] = append(sm[rStateStartOfRecord], func(r *Reader, c rune, size int) uint8 {
+		{{template "recBufAppend" .}}[]byte(string(c))...)
+		r.state = rStateInField
+
+		return cf_next_step
+	})
+
+	//
+	// rStateStartOfField
+	//
+
+	sm[rStateStartOfField] = append(sm[rStateStartOfField], func(r *Reader, c rune, size int) uint8 {
+		if c == r.fieldSeparator {
+			r.fieldLengths = append(r.fieldLengths, 0)
+			// field start is unchanged because the last one was zero length
+			// r.fieldStart = len(r.recordBuf)
+			if r.fieldNumOverflow() {
+				return cf_return_false
+			}
+			// r.state = rStateStartOfField
+			r.fieldIndex++
+
+			return cf_continue
+		}
+
+		isRecSep, immediateErr := r.isRecordSeparator(c)
+		if immediateErr {
+			return cf_return_false
+		}
+		if isRecSep {
+			r.fieldLengths = append(r.fieldLengths, 0)
+			// field start is unchanged because the last one was zero length
+			// r.fieldStart = len(r.recordBuf)
+			r.state = rStateStartOfRecord
+			if r.checkNumFields(nil) {
+				r.fieldIndex = 0
+				r.recordIndex++
+				return cf_return_true
+			}
+			return cf_return_false
+		}
+
+		return cf_next_step
+	})
+
+	if (bitFlags & rFlagQuote) != 0 {
+		sm[rStateStartOfField] = append(sm[rStateStartOfField], func(r *Reader, c rune, size int) uint8 {
+			if c == r.quote {
+				r.state = rStateInQuotedField
+
+				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+				//
+				//
+				// // checking if EOF was signaled from within the isRecordSeparator call before continue
+				// if r.eof {
+				// 	break
+				// }
+				return cf_continue
+			}
+
+			return cf_next_step
+		})
+	}
+
+	if (bitFlags & rFlagErrOnNLInUF) != 0 {
+		sm[rStateStartOfField] = append(sm[rStateStartOfField], func(r *Reader, c rune, size int) uint8 {
+			switch c {
+			case '\r':
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return cf_return_false
+			case '\n':
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return cf_return_false
+			}
+
+			return cf_next_step
+		})
+	}
+
+	sm[rStateStartOfField] = append(sm[rStateStartOfField], func(r *Reader, c rune, size int) uint8 {
+		{{template "recBufAppend" .}}[]byte(string(c))...)
+		r.state = rStateInField
+
+		return cf_next_step
+	})
+
+	//
+	// rStateInField
+	//
+
+	sm[rStateInField] = append(sm[rStateInField], func(r *Reader, c rune, size int) uint8 {
+		if c == r.fieldSeparator {
+			r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+			r.fieldStart = len(r.recordBuf)
+			if r.fieldNumOverflow() {
+				return cf_return_false
+			}
+			r.state = rStateStartOfField
+			r.fieldIndex++
+
+			return cf_continue
+		}
+
+		isRecSep, immediateErr := r.isRecordSeparator(c)
+		if immediateErr {
+			return cf_return_false
+		}
+		if isRecSep {
+			r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+			r.fieldStart = len(r.recordBuf)
+			r.state = rStateStartOfRecord
+			if r.checkNumFields(nil) {
+				r.fieldIndex = 0
+				r.recordIndex++
+				return cf_return_true
+			}
+			return cf_return_false
+		}
+
+		return cf_next_step
+	})
+
+	if (bitFlags&rFlagQuote) != 0 && (bitFlags&rFlagErrOnQInUF) != 0 {
+		sm[rStateInField] = append(sm[rStateInField], func(r *Reader, c rune, size int) uint8 {
+			if c == r.quote {
+				r.setDone()
+				r.parsingErr(ErrQuoteInUnquotedField)
+				return cf_return_false
+			}
+
+			return cf_next_step
+		})
+	}
+
+	if (bitFlags & rFlagErrOnNLInUF) != 0 {
+		sm[rStateInField] = append(sm[rStateInField], func(r *Reader, c rune, size int) uint8 {
+			switch c {
+			case '\r':
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return cf_return_false
+			case '\n':
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return cf_return_false
+			}
+
+			return cf_next_step
+		})
+	}
+
+	sm[rStateInField] = append(sm[rStateInField], func(r *Reader, c rune, size int) uint8 {
+		{{template "recBufAppend" .}}[]byte(string(c))...)
+		// r.state = rStateInField
+
+		return cf_next_step
+	})
+
+	//
+	// rStateInQuotedField
+	//
+
+	if (bitFlags & rFlagQuote) != 0 {
+		if (bitFlags & rFlagEscape) != 0 {
+			sm[rStateInQuotedField] = append(sm[rStateInQuotedField], func(r *Reader, c rune, size int) uint8 {
+				if c == r.quote {
+					r.state = rStateEndOfQuotedField
+				} else {
+					if c == r.escape {
+						r.state = rStateInQuotedFieldAfterEscape
+						return cf_continue
+					}
+
+					{{template "recBufAppend" .}}[]byte(string(c))...)
+					// r.state = rStateInQuotedField
+				}
+
+				return cf_next_step
+			})
+		} else {
+			sm[rStateInQuotedField] = append(sm[rStateInQuotedField], func(r *Reader, c rune, size int) uint8 {
+				if c == r.quote {
+					r.state = rStateEndOfQuotedField
+				} else {
+					{{template "recBufAppend" .}}[]byte(string(c))...)
+					// r.state = rStateInQuotedField
+				}
+
+				return cf_next_step
+			})
+		}
+	}
+
+	//
+	// rStateInQuotedFieldAfterEscape
+	//
+
+	if (bitFlags & rFlagEscape) != 0 {
+		sm[rStateInQuotedFieldAfterEscape] = append(sm[rStateInQuotedFieldAfterEscape], func(r *Reader, c rune, size int) uint8 {
+			switch c {
+			case r.quote, r.escape:
+				{{template "recBufAppend" .}}[]byte(string(c))...)
+				r.state = rStateInQuotedField
+
+				return cf_next_step
+			default:
+				r.setDone()
+				r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedRune)
+
+				return cf_return_false
+			}
+		})
+
+	}
+
+	//
+	// rStateEndOfQuotedField
+	//
+
+	if (bitFlags & rFlagEscape) != 0 {
+		sm[rStateEndOfQuotedField] = append(sm[rStateEndOfQuotedField], func(r *Reader, c rune, size int) uint8 {
+
+			switch c {
+			case r.fieldSeparator:
+				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+				r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return cf_return_false
+				}
+				r.state = rStateStartOfField
+				r.fieldIndex++
+			case r.quote:
+				r.setDone()
+				r.parsingErr(ErrUnexpectedQuoteAfterField)
+
+				return cf_return_false
+			default:
+				isRecSep, immediateErr := r.isRecordSeparator(c)
+				if immediateErr {
+					return cf_return_false
+				}
+				if isRecSep {
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+					r.fieldStart = len(r.recordBuf)
+					r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+
+						return cf_return_true
+					}
+
+					return cf_return_false
+				}
+
+				r.setDone()
+				r.parsingErr(ErrInvalidQuotedFieldEnding)
+
+				return cf_return_false
+			}
+
+			return cf_next_step
+		})
+	} else {
+		sm[rStateEndOfQuotedField] = append(sm[rStateEndOfQuotedField], func(r *Reader, c rune, size int) uint8 {
+
+			switch c {
+			case r.fieldSeparator:
+				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+				r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return cf_return_false
+				}
+				r.state = rStateStartOfField
+				r.fieldIndex++
+			case r.quote:
+				{{template "recBufAppend" .}}[]byte(string(r.quote))...)
+				r.state = rStateInQuotedField
+			default:
+				isRecSep, immediateErr := r.isRecordSeparator(c)
+				if immediateErr {
+					return cf_return_false
+				}
+				if isRecSep {
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+					r.fieldStart = len(r.recordBuf)
+					r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+
+						return cf_return_true
+					}
+
+					return cf_return_false
+				}
+
+				r.setDone()
+				r.parsingErr(ErrInvalidQuotedFieldEnding)
+
+				return cf_return_false
+			}
+
+			return cf_next_step
+		})
+	}
+
+	//
+	// rStateInLineComment
+	//
+
+	if (bitFlags & rFlagComment) != 0 {
+
+		sm[rStateInLineComment] = append(sm[rStateInLineComment], func(r *Reader, c rune, size int) uint8 {
+			isRecSep, immediateErr := r.isRecordSeparator(c)
+			if immediateErr {
+				return cf_return_false
+			}
+			if isRecSep {
+				r.state = rStateStartOfRecord
+				// r.recordIndex++ // not valid in this case because the previous state was not a record
+			}
+
+			return cf_continue
+		})
+	}
+
+	return func(r *Reader) (func() bool) {
+		return func() bool {
+
+			for {
+				c, size, rErr := r.reader.ReadRune()
+				if size > 0 && rErr != nil {
+					r.setDone()
+					r.ioErr(errors.Join(ErrBadReadRuneImpl, rErr))
+					return false
+				}
+
+				// advance the position indicator
+				r.byteIndex += uint64(size)
+
+				if size == 1 && c == utf8.RuneError {
+
+					//
+					// handle a non UTF8 byte
+					//
+
+					if r.state == rStateStartOfDoc {
+						if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+							r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+							r.setDone()
+							r.parsingErr(ErrNoByteOrderMarker)
+							return false
+						}
+
+						r.state = rStateStartOfRecord
+					}
+
+					if err := r.reader.UnreadRune(); err != nil {
+						r.setDone()
+						r.ioErr(errors.Join(ErrBadUnreadRuneImpl, err))
+						return false
+					}
+					var b byte
+					if v, err := r.reader.ReadByte(); err != nil {
+						r.setDone()
+						r.ioErr(errors.Join(ErrBadReadByteImpl, err))
+						return false
+					} else {
+						b = v
+					}
+
+					switch r.state {
+					case rStateStartOfRecord, rStateStartOfField:
+						{{template "recBufAppend" .}}b)
+						r.state = rStateInField
+					case rStateInField, rStateInQuotedField:
+						{{template "recBufAppend" .}}b)
+						// r.state = rStateInField
+					// case rStateInQuotedField:
+					// 	{{template "recBufAppend" .}}b)
+					// 	// r.state = rStateInQuotedField
+					case rStateInQuotedFieldAfterEscape:
+						r.setDone()
+						r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedByte)
+						return false
+					case rStateEndOfQuotedField:
+						r.setDone()
+						r.parsingErr(ErrInvalidQuotedFieldEnding)
+						return false
+						// case rStateInLineComment:
+						// 	// r.state = rStateInLineComment
+					}
+
+					if rErr == nil {
+						continue
+					}
+				}
+				if rErr != nil {
+					r.setDone()
+					if errors.Is(rErr, io.EOF) {
+						return r.handleEOF()
+					}
+					r.ioErr(rErr)
+					return false
+				}
+
+				steps := sm[r.state]
+				var i int
+				for ; i < len(steps); i++ {
+					switch steps[i](r, c, size) {
+					case cf_next_step:
+						continue
+					case cf_return_true:
+						return true
+					case cf_return_false:
+						return false
+					case cf_fallthrough:
+						steps = sm[r.state]
+						i = -1
+						continue
+					default:
+						// do nothing
+						//
+						// which breaks out of this sub-loop
+						// and fetches another character
+					}
+					break
+				}
+			}
+		}
+	}
+}
+{{end}}
