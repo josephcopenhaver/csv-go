@@ -10,6 +10,10 @@ import (
 )
 
 var (
+	//
+	// writer specific errors
+	//
+
 	ErrRowNilOrEmpty             = errors.New("row is nil or empty")
 	ErrNonUTF8InRecord           = errors.New("non-utf8 characters in record")
 	ErrNonUTF8InComment          = errors.New("non-utf8 characters in comment")
