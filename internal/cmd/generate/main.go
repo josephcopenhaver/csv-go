@@ -101,14 +101,60 @@ func main() {
 
 		type cfg struct {
 			ClearMemoryAfterUse bool
+			ErrOnNLInUF         bool
+			ErrOnQInUF          bool
+			Comment             bool
+			DropBOM             bool
+			ErrOnNoBOM          bool
+			Quote               bool
+			Escape              bool // always false if quote is false
+
+			// mutually exclusive, but not required
+
+			OneRuneRecSep bool
+			TwoRuneRecSep bool
+			// total combinations: [on_off_switches](2^7)*[record_sep_selection]3*[when_quote_is_on_escape_can_be_on]3/2
+			// => 576
 		}
 
 		render := renderer[cfg](&buf)
 
-		render(t, []cfg{
-			{ClearMemoryAfterUse: false},
-			{ClearMemoryAfterUse: true},
-		})
+		buf := [576]cfg{}
+		cfgs := buf[:0]
+		for i := range 1 << 7 {
+			v := cfg{
+				ClearMemoryAfterUse: (i & (1 << 6)) != 0,
+				ErrOnNLInUF:         (i & (1 << 5)) != 0,
+				ErrOnQInUF:          (i & (1 << 4)) != 0,
+				Comment:             (i & (1 << 3)) != 0,
+				DropBOM:             (i & (1 << 2)) != 0,
+				ErrOnNoBOM:          (i & (1 << 1)) != 0,
+				Quote:               (i & 1) != 0,
+			}
+			for i2 := range 3 {
+				v := v
+
+				switch i2 {
+				case 1:
+					v.OneRuneRecSep = true
+				case 2:
+					v.TwoRuneRecSep = true
+				}
+
+				cfgs = append(cfgs, v)
+
+				if v.Quote {
+					v.Escape = true
+					cfgs = append(cfgs, v)
+				}
+			}
+		}
+
+		if len(cfgs) != len(buf) || &buf[0] != &cfgs[0] {
+			panic("looks like permutations changed: double check logic above")
+		}
+
+		render(t, cfgs)
 	}
 
 	// render processField strategies

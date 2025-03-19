@@ -1,5 +1,5 @@
 {{define "recBufAppend"}}{{if .ClearMemoryAfterUse}}r.appendRecBuf({{else}}r.recordBuf = append(r.recordBuf, {{end}}{{end}}
-func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}() bool {
+func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_errOnNLInUFO{{if .ErrOnNLInUF}}n{{else}}ff{{end}}_errOnQInUFO{{if .ErrOnQInUF}}n{{else}}ff{{end}}_commentO{{if .Comment}}n{{else}}ff{{end}}_dropBOMO{{if .DropBOM}}n{{else}}ff{{end}}_errOnNoBOMO{{if .ErrOnNoBOM}}n{{else}}ff{{end}}_quoteO{{if .Quote}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}_1RuneRecSepO{{if .OneRuneRecSep}}n{{else}}ff{{end}}_2RuneRecSepO{{if .TwoRuneRecSep}}n{{else}}ff{{end}}() bool {
 
 	for {
 		c, size, rErr := r.reader.ReadRune()
@@ -18,7 +18,8 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 			// handle a non UTF8 byte
 			//
 
-			if r.state == rStateStartOfDoc {
+			{{if or .DropBOM .ErrOnNoBOM}}
+			if rStateStartOfDoc == r.state {
 				if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
 					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
 					r.setDone()
@@ -28,6 +29,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 
 				r.state = rStateStartOfRecord
 			}
+			{{end}}
 
 			if err := r.reader.UnreadRune(); err != nil {
 				r.setDone()
@@ -79,22 +81,37 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 		}
 
 		switch r.state {
-		case rStateStartOfDoc:
+		{{if or .DropBOM .ErrOnNoBOM}}case rStateStartOfDoc:
+			{{if and .DropBOM .ErrOnNoBOM}}
 			if !isByteOrderMarker(uint32(c), size) {
-				if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
-					r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
-					r.setDone()
-					r.parsingErr(ErrNoByteOrderMarker)
-					return false
-				}
-			} else if (r.bitFlags & rFlagDropBOM) != 0 {
+				r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+				r.setDone()
+				r.parsingErr(ErrNoByteOrderMarker)
+				return false
+			} else {
 				r.state = rStateStartOfRecord
 				continue
 			}
+			{{else}}
+			{{if .ErrOnNoBOM}}
+			if !isByteOrderMarker(uint32(c), size) {
+				r.byteIndex = 0 // special case, no BOM rune was found while at start of doc so no processed bytes were "stable"
+				r.setDone()
+				r.parsingErr(ErrNoByteOrderMarker)
+				return false
+			}
+			{{else}}
+			if isByteOrderMarker(uint32(c), size) {
+				r.state = rStateStartOfRecord
+				continue
+			}
+			{{end}}
 
 			r.state = rStateStartOfRecord
 			fallthrough
-		case rStateStartOfRecord:
+			{{end}}
+		{{end}}case rStateStartOfRecord:
+			{{if or .TwoRuneRecSep (not .OneRuneRecSep)}}
 			if c == r.fieldSeparator {
 				r.fieldLengths = append(r.fieldLengths, 0)
 				// field start is unchanged because the last one was zero length
@@ -112,8 +129,11 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 			if immediateErr {
 				return false
 			}
-			if isRecSep {
-				r.fieldLengths = append(r.fieldLengths, 0)
+			if isRecSep { {{- if not .TwoRuneRecSep}}
+				//
+				// TODO: set prepareRow to decided record separator handler
+				//
+				{{end}}r.fieldLengths = append(r.fieldLengths, 0)
 				// field start is unchanged because the last one was zero length
 				// r.fieldStart = len(r.recordBuf)
 				// r.state = rStateStartOfRecord
@@ -125,7 +145,68 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 				return false
 			}
 
-			if c == r.quote && (r.bitFlags & rFlagQuote) != 0 {
+			{{if or .Quote .Comment .ErrOnNLInUF}}
+			switch c {
+			{{if .Quote}}case r.quote:
+				r.state = rStateInQuotedField
+
+				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+				//
+				//
+				// // checking if EOF was signaled from within the isRecordSeparator call before continue
+				// if r.eof {
+				// 	break
+				// }
+				continue{{end}}
+			{{if .Comment}}case r.comment:
+				if ((r.bitFlags & stAfterSOR) == 0 || (r.bitFlags & rFlagCommentAfterSOR) != 0) {
+					r.state = rStateInLineComment
+
+					// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+					//
+					//
+					// // checking if EOF was signaled from within the isRecordSeparator call before continue
+					// if r.eof {
+					// 	break
+					// }
+					continue
+				}
+			{{end}}{{if .ErrOnNLInUF}}case '\r':
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
+			case '\n':
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
+			{{end}}
+			}
+			{{end}}
+			{{else}}
+			switch c {
+			case r.fieldSeparator:
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
+					return false
+				}
+				r.state = rStateStartOfField
+				r.fieldIndex++
+
+				continue
+			{{if .OneRuneRecSep}}case r.recordSep[0]:
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				// r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false{{end}}
+			{{if .Quote}}case r.quote:
 				r.state = rStateInQuotedField
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -136,39 +217,72 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 				// 	break
 				// }
 				continue
-			}
+			{{end}}{{if .Comment}}case r.comment:
+				if ((r.bitFlags & stAfterSOR) == 0 || (r.bitFlags & rFlagCommentAfterSOR) != 0) {
+					r.state = rStateInLineComment
 
-			if c == r.comment && (r.bitFlags & rFlagComment) != 0 && ((r.bitFlags & stAfterSOR) == 0 || (r.bitFlags & rFlagCommentAfterSOR) != 0) {
-				r.state = rStateInLineComment
-
-				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
-				//
-				//
-				// // checking if EOF was signaled from within the isRecordSeparator call before continue
-				// if r.eof {
-				// 	break
-				// }
-				continue
-			}
-
-			switch c {
+					// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+					//
+					//
+					// // checking if EOF was signaled from within the isRecordSeparator call before continue
+					// if r.eof {
+					// 	break
+					// }
+					continue
+				}
+			{{end}}{{if .ErrOnNLInUF}}
 			case '\r':
-				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
-					r.setDone()
-					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				{{if not .OneRuneRecSep}}if isRecSep, _ := r.isRecordSeparator(c); isRecSep {
+					r.fieldLengths = append(r.fieldLengths, 0)
+					// field start is unchanged because the last one was zero length
+					// r.fieldStart = len(r.recordBuf)
+					// r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
 					return false
-				}
+				}{{end}}
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
 			case '\n':
-				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
-					r.setDone()
-					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				{{if not .OneRuneRecSep}}if isRecSep, _ := r.isRecordSeparator(c); isRecSep {
+					r.fieldLengths = append(r.fieldLengths, 0)
+					// field start is unchanged because the last one was zero length
+					// r.fieldStart = len(r.recordBuf)
+					// r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
 					return false
-				}
-			}
+				}{{end}}
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
+			{{if not .OneRuneRecSep}}default:
+				if isRecSep, _ := r.isRecordSeparator(c); isRecSep {
+					r.fieldLengths = append(r.fieldLengths, 0)
+					// field start is unchanged because the last one was zero length
+					// r.fieldStart = len(r.recordBuf)
+					// r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
+					return false
+				}{{end}}
+			{{end}}}
+			{{end}}
 
 			{{template "recBufAppend" .}}[]byte(string(c))...)
 			r.state = rStateInField
 		case rStateStartOfField:
+			{{if .TwoRuneRecSep}}
 			if c == r.fieldSeparator {
 				r.fieldLengths = append(r.fieldLengths, 0)
 				// field start is unchanged because the last one was zero length
@@ -199,7 +313,9 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 				return false
 			}
 
-			if c == r.quote && (r.bitFlags & rFlagQuote) != 0 {
+			{{if or .Quote .ErrOnNLInUF}}
+			switch c {
+			{{if .Quote}}case r.quote:
 				r.state = rStateInQuotedField
 
 				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
@@ -210,26 +326,104 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 				// 	break
 				// }
 				continue
-			}
-
-			switch c {
-			case '\r':
-				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
-					r.setDone()
-					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
-					return false
-				}
+			{{end}}{{if .ErrOnNLInUF}}case '\r':
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
 			case '\n':
-				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
-					r.setDone()
-					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
+			{{end}}
+			}
+			{{end}}
+			{{else}}
+			switch c {
+			case r.fieldSeparator:
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
 					return false
 				}
-			}
+				// r.state = rStateStartOfField
+				r.fieldIndex++
+
+				continue
+			{{if .OneRuneRecSep}}case r.recordSep[0]:
+				r.fieldLengths = append(r.fieldLengths, 0)
+				// field start is unchanged because the last one was zero length
+				// r.fieldStart = len(r.recordBuf)
+				r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false{{end}}
+			{{if .Quote}}case r.quote:
+				r.state = rStateInQuotedField
+
+				// not required because quote being set to \r is not allowed when record sep discovery mode is enabled
+				//
+				//
+				// // checking if EOF was signaled from within the isRecordSeparator call before continue
+				// if r.eof {
+				// 	break
+				// }
+				continue
+			{{end}}{{if .ErrOnNLInUF}}case '\r':
+				{{if not .OneRuneRecSep}}if isRecSep, _ := r.isRecordSeparator(c); isRecSep {
+					r.fieldLengths = append(r.fieldLengths, 0)
+					// field start is unchanged because the last one was zero length
+					// r.fieldStart = len(r.recordBuf)
+					r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
+					return false
+				}{{end}}
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
+			case '\n':
+				{{if not .OneRuneRecSep}}if isRecSep, _ := r.isRecordSeparator(c); isRecSep {
+					r.fieldLengths = append(r.fieldLengths, 0)
+					// field start is unchanged because the last one was zero length
+					// r.fieldStart = len(r.recordBuf)
+					r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
+					return false
+				}{{end}}
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
+			{{if not .OneRuneRecSep}}default:
+				if isRecSep, _ := r.isRecordSeparator(c); isRecSep {
+					r.fieldLengths = append(r.fieldLengths, 0)
+					// field start is unchanged because the last one was zero length
+					// r.fieldStart = len(r.recordBuf)
+					r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
+					return false
+				}{{end}}
+			{{end}}}
+			{{end}}
 
 			{{template "recBufAppend" .}}[]byte(string(c))...)
 			r.state = rStateInField
 		case rStateInField:
+			{{if .TwoRuneRecSep}}
 			if c == r.fieldSeparator {
 				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
 				r.fieldStart = len(r.recordBuf)
@@ -258,43 +452,111 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 				return false
 			}
 
-			if c == r.quote && (r.bitFlags & rFlagQuote) != 0 && (r.bitFlags & rFlagErrOnQInUF) != 0 {
+			{{if or (and .Quote .ErrOnQInUF) .ErrOnNLInUF}}
+			switch c {
+			{{if and .Quote .ErrOnQInUF}}case r.quote:
 				r.setDone()
 				r.parsingErr(ErrQuoteInUnquotedField)
 				return false
-			}
-
-			switch c {
-			case '\r':
-				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
-					r.setDone()
-					r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
-					return false
-				}
+			{{end}}{{if .ErrOnNLInUF}}case '\r':
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
 			case '\n':
-				if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
-					r.setDone()
-					r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
+			{{end}}
+			}
+			{{end}}
+			{{else}}
+			switch c {
+			case r.fieldSeparator:
+				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+				r.fieldStart = len(r.recordBuf)
+				if r.fieldNumOverflow() {
 					return false
 				}
-			}
+				r.state = rStateStartOfField
+				r.fieldIndex++
+
+				continue
+			{{if .OneRuneRecSep}}case r.recordSep[0]:
+				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+				r.fieldStart = len(r.recordBuf)
+				r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false{{end}}
+			{{if and .Quote .ErrOnQInUF}}case r.quote:
+				r.setDone()
+				r.parsingErr(ErrQuoteInUnquotedField)
+				return false
+			{{end}}{{if .ErrOnNLInUF}}
+			case '\r':
+				{{if not .OneRuneRecSep}}if isRecSep, _ := r.isRecordSeparator(c); isRecSep {
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+					r.fieldStart = len(r.recordBuf)
+					r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
+					return false
+				}{{end}}
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+				return false
+			case '\n':
+				{{if not .OneRuneRecSep}}if isRecSep, _ := r.isRecordSeparator(c); isRecSep {
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+					r.fieldStart = len(r.recordBuf)
+					r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
+					return false
+				}{{end}}
+
+				r.setDone()
+				r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+				return false
+			{{if not .OneRuneRecSep}}default:
+				if isRecSep, _ := r.isRecordSeparator(c); isRecSep {
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+					r.fieldStart = len(r.recordBuf)
+					r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
+					return false
+				}{{end}}
+			{{end}}}
+			{{end}}
 
 			{{template "recBufAppend" .}}[]byte(string(c))...)
 			// r.state = rStateInField
-		case rStateInQuotedField:
+		{{if .Quote}}case rStateInQuotedField:
 			switch c {
 			case r.quote:
 				r.state = rStateEndOfQuotedField
-			default:
-				if c == r.escape && (r.bitFlags & rFlagEscape) != 0 {
+			{{if .Escape}}case r.escape:
 					r.state = rStateInQuotedFieldAfterEscape
 					continue
-				}
+			{{end}}default:
 
 				{{template "recBufAppend" .}}[]byte(string(c))...)
 				// r.state = rStateInQuotedField
 			}
-		case rStateInQuotedFieldAfterEscape:
+		{{if .Escape}}case rStateInQuotedFieldAfterEscape:
 			switch c {
 			case r.quote, r.escape:
 				{{template "recBufAppend" .}}[]byte(string(c))...)
@@ -304,7 +566,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 				r.parsingErr(errInvalidEscapeInQuotedFieldUnexpectedRune)
 				return false
 			}
-		case rStateEndOfQuotedField:
+		{{end}}case rStateEndOfQuotedField:
 			switch c {
 			case r.fieldSeparator:
 				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
@@ -315,19 +577,31 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 				r.state = rStateStartOfField
 				r.fieldIndex++
 			case r.quote:
-				if (r.bitFlags & rFlagEscape) != 0 {
-					r.setDone()
-					r.parsingErr(ErrUnexpectedQuoteAfterField)
-					return false
-				}
+				{{if .Escape}}
+				r.setDone()
+				r.parsingErr(ErrUnexpectedQuoteAfterField)
+				return false
+				{{else}}
 				{{template "recBufAppend" .}}[]byte(string(r.quote))...)
 				r.state = rStateInQuotedField
-			default:
-				isRecSep, immediateErr := r.isRecordSeparator(c)
+				{{end}}
+			{{if .OneRuneRecSep}}case r.recordSep[0]:
+				r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+				r.fieldStart = len(r.recordBuf)
+				r.state = rStateStartOfRecord
+				if r.checkNumFields(nil) {
+					r.fieldIndex = 0
+					r.recordIndex++
+					return true
+				}
+				return false
+			{{end}}default:
+				{{if not .OneRuneRecSep}}
+				{{if .TwoRuneRecSep}}isRecSep, immediateErr := r.isRecordSeparator(c)
 				if immediateErr {
 					return false
 				}
-				if isRecSep {
+				if isRecSep{{else}}if isRecSep, _ := r.isRecordSeparator(c); isRecSep{{end}} {
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
 					r.fieldStart = len(r.recordBuf)
 					r.state = rStateStartOfRecord
@@ -338,22 +612,24 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 					}
 					return false
 				}
+				{{end}}
 
 				r.setDone()
 				r.parsingErr(ErrInvalidQuotedFieldEnding)
 				return false
 			}
-		case rStateInLineComment:
-			isRecSep, immediateErr := r.isRecordSeparator(c)
+		{{end}}{{if .Comment}}case rStateInLineComment:
+			{{if .TwoRuneRecSep}}isRecSep, immediateErr := r.isRecordSeparator(c)
 			if immediateErr {
 				return false
 			}
-			if isRecSep {
+			if isRecSep {{- else}}
+			if {{if .OneRuneRecSep}}c == r.recordSep[0]{{else}}isRecSep, _ := r.isRecordSeparator(c); isRecSep{{end}}{{end}} {
 				r.state = rStateStartOfRecord
 				// r.recordIndex++ // not valid in this case because the previous state was not a record
 			}
 
-			continue
+			continue{{end}}
 		}
 
 		// not required because all code paths that would set this value

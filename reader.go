@@ -1141,12 +1141,11 @@ func (r *Reader) defaultScan() bool {
 }
 
 func (r *Reader) initPipeline(cfg rCfg) {
+	r.updatePrepareRow(cfg.clearMemoryAfterFree)
 
 	if cfg.clearMemoryAfterFree {
-		r.prepareRow = r.prepareRow_memclearOn
 		r.close = r.closeWithMemClear
 	} else {
-		r.prepareRow = r.prepareRow_memclearOff
 		r.close = r.defaultClose
 	}
 
