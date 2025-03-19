@@ -498,7 +498,7 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 			rows: [][]string{strings.Split("a1,b2,c3", ",")},
 		},
 		{
-			when: "escape set and record sep CRNL after closing quote",
+			when: "escape set and record sep CRLF after closing quote",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader("\"\"\r\n")),
