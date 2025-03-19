@@ -1,5 +1,6 @@
 # csv-go
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/josephcopenhaver/csv-go)](https://goreportcard.com/report/github.com/josephcopenhaver/csv-go)
 ![tests](https://github.com/josephcopenhaver/csv-go/actions/workflows/tests.yaml/badge.svg)
 ![code-coverage](https://img.shields.io/badge/code_coverage-100%25-rgb%2852%2C208%2C88%29)
 
