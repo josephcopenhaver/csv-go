@@ -457,7 +457,7 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			iterErrStr: csv.ErrParsing.Error() + " at byte 3, record 1, field 1: " + csv.ErrTooManyFields.Error() + ": field count exceeds 1",
 		},
 		{
-			when: "escape set and io error after closing quote and CR and record sep is CRNL",
+			when: "escape set and io error after closing quote and CR and record sep is CRLF",
 			then: "coupled error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
@@ -482,7 +482,7 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			iterErrStr: csv.ErrIO.Error() + " at byte 3, record 1, field 1: " + io.ErrClosedPipe.Error(),
 		},
 		{
-			when: "escape set and record sep CRNL after closing quote but field count under-flows",
+			when: "escape set and record sep CRLF after closing quote but field count under-flows",
 			then: "coupled error",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{

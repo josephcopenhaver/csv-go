@@ -42,11 +42,8 @@ const (
 
 	// rFlagStartOfDoc = either of rFlagDropBOM, rFlagErrOnNoBOM
 
-	rFlagClearMemAfterUser
 	rFlagErrOnNLInUF
 	rFlagErrOnQInUF
-	rFlagOneRuneRecSep
-	rFlagTwoRuneRecSep
 	rFlagComment
 	rFlagQuote
 	rFlagEscape
