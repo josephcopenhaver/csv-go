@@ -1,7 +1,7 @@
 package csv
 
 import (
-	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -11,13 +11,6 @@ import (
 	"unsafe"
 )
 
-type BufferedReader interface {
-	io.Reader
-	ReadRune() (r rune, size int, err error)
-	UnreadRune() error
-	ReadByte() (byte, error)
-}
-
 const (
 	asciiCarriageReturn = 0x0D
 	asciiLineFeed       = 0x0A
@@ -25,6 +18,7 @@ const (
 	asciiFormFeed       = 0x0C
 	utf8NextLine        = 0x85
 	utf8LineSeparator   = 0x2028
+	invalidControlRune  = 0x80
 
 	utf8ByteOrderMarker    = 0xEFBBBF
 	utf16ByteOrderMarkerBE = 0xFEFF
@@ -36,6 +30,7 @@ type rFlag uint16
 const (
 	stDone rFlag = 1 << iota
 	stAfterSOR
+	stEOF
 
 	rFlagDropBOM
 	rFlagErrOnNoBOM
@@ -89,7 +84,7 @@ var (
 	ErrNoRows                      = fmt.Errorf("no rows: %w", io.ErrUnexpectedEOF)
 	ErrNoByteOrderMarker           = errors.New("no byte order marker")
 	ErrNilReader                   = errors.New("nil reader")
-	ErrInvalidEscapeInQuotedField  = errors.New("invalid escape sequence in quoted field")
+	ErrInvalidEscSeqInQuotedField  = errors.New("invalid escape sequence in quoted field")
 	ErrNewlineInUnquotedField      = errors.New("newline rune found in unquoted field")
 	ErrUnexpectedQuoteAfterField   = errors.New("unexpected quote after quoted+escaped field")
 	ErrBadUnreadRuneImpl           = errors.New("UnreadRune failed")
@@ -98,9 +93,6 @@ var (
 	//
 	// it could happen if someone is trying to read concurrently or made their own bad buffered reader implementation
 	ErrBadReadByteImpl = errors.New("ReadByte failed")
-
-	errInvalidEscapeInQuotedFieldUnexpectedByte = fmt.Errorf("%w: unexpected non-UTF8 byte following escape", ErrInvalidEscapeInQuotedField)
-	errInvalidEscapeInQuotedFieldUnexpectedRune = fmt.Errorf("%w: unexpected rune following escape", ErrInvalidEscapeInQuotedField)
 
 	errNewlineInUnquotedFieldCarriageReturn = fmt.Errorf("%w: carriage return", ErrNewlineInUnquotedField)
 	errNewlineInUnquotedFieldLineFeed       = fmt.Errorf("%w: line feed", ErrNewlineInUnquotedField)
@@ -521,6 +513,11 @@ type rCfg struct {
 }
 
 type Reader struct {
+	controlRunes string
+	rawBuf       []byte
+	rawIndex     int
+	//
+	readErr    error
 	prepareRow func() bool
 	scan       func() bool
 	err        error
@@ -532,7 +529,7 @@ type Reader struct {
 	isRecordSeparator func(c rune) (bool, bool)
 	checkNumFields    func(errTrailer error) bool
 	close             func() error
-	reader            BufferedReader
+	reader            io.Reader
 	recordSep         [2]rune
 	recordBuf         []byte
 	fieldLengths      []int
@@ -592,7 +589,7 @@ func (cfg *rCfg) validate() error {
 
 	if cfg.discoverRecordSeparator {
 		cfg.recordSepLen = 0
-		cfg.recordSep = [2]rune{}
+		cfg.recordSep = [2]rune{invalidControlRune, 0}
 	}
 
 	{
@@ -753,18 +750,30 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		}
 	}
 
+	var controlRunesBuf [7]rune
+	controlRunes := append(controlRunesBuf[:0], cfg.fieldSeparator)
+
 	var bitFlags rFlag
 	if cfg.trsEmitsRecord {
 		bitFlags |= rFlagTRSEmitsRecord
 	}
 	if cfg.quoteSet {
+		controlRunes = append(controlRunes, cfg.quote)
 		bitFlags |= rFlagQuote
+	} else {
+		cfg.quote = invalidControlRune
 	}
 	if cfg.escapeSet {
+		controlRunes = append(controlRunes, cfg.escape)
 		bitFlags |= rFlagEscape
+	} else {
+		cfg.escape = invalidControlRune
 	}
 	if cfg.commentSet {
+		controlRunes = append(controlRunes, cfg.comment)
 		bitFlags |= rFlagComment
+	} else {
+		cfg.comment = invalidControlRune
 	}
 	if cfg.removeByteOrderMarker {
 		bitFlags |= rFlagDropBOM
@@ -778,11 +787,28 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	if cfg.errOnQuotesInUnquotedField {
 		bitFlags |= rFlagErrOnQInUF
 	}
+
+	if cfg.recordSepLen == 1 {
+		controlRunes = append(controlRunes, cfg.recordSep[0])
+	}
+
 	if cfg.errOnNewlineInUnquotedField {
 		bitFlags |= rFlagErrOnNLInUF
+
+		crs := []byte(string(controlRunes))
+
+		if !bytes.Contains(crs, []byte{'\r'}) {
+			controlRunes = append(controlRunes, '\r')
+		}
+
+		if !bytes.Contains(crs, []byte{'\n'}) {
+			controlRunes = append(controlRunes, '\n')
+		}
 	}
 
 	cr := Reader{
+		controlRunes:   string(controlRunes),
+		rawBuf:         make([]byte, 0, 4096),
 		quote:          cfg.quote,
 		escape:         cfg.escape,
 		numFields:      cfg.numFields,
@@ -961,9 +987,8 @@ func (r *Reader) defaultClonedRow() []string {
 // if the second param is true then the reader should stop processing as an
 // immediate (non-deferred) error has occurred
 func (r *Reader) nextRuneIsLF() (bool, bool) {
-	c, size, err := r.reader.ReadRune()
-	if size <= 0 {
-		if errors.Is(err, io.EOF) {
+	if r.rawIndex >= len(r.rawBuf) {
+		if (r.bitFlags & stEOF) != 0 {
 			// should only be true when the record separator is known to be CRLF
 			// r.recordSepLen will be 2 in this case
 			//
@@ -985,26 +1010,17 @@ func (r *Reader) nextRuneIsLF() (bool, bool) {
 			return false, false
 		} else {
 			r.setDone()
-			r.ioErr(err)
+			r.ioErr(r.readErr)
 			return false, true
 		}
-	} else if err != nil {
-		r.setDone()
-		r.ioErr(errors.Join(ErrBadReadRuneImpl, err))
-		return false, true
 	}
 
-	if size == 1 && (c == asciiLineFeed) {
+	if r.rawBuf[r.rawIndex] == asciiLineFeed {
 		// advance the position indicator
-		r.byteIndex += uint64(size)
+		r.rawIndex++
+		r.byteIndex++
 
 		return true, false
-	}
-
-	if err := r.reader.UnreadRune(); err != nil {
-		r.setDone()
-		r.ioErr(errors.Join(ErrBadUnreadRuneImpl, err))
-		return false, true
 	}
 
 	return false, false
@@ -1112,6 +1128,7 @@ func (r *Reader) isRecordSeparatorWithDiscovery(c rune) (bool, bool) {
 func (r *Reader) resetRecordBuffers() {
 	r.fieldLengths = r.fieldLengths[:0]
 	r.fieldStart = 0
+	r.fieldIndex = 0
 	r.recordBuf = r.recordBuf[:0]
 }
 
@@ -1143,10 +1160,10 @@ func (r *Reader) defaultScan() bool {
 func (r *Reader) initPipeline(cfg rCfg) {
 
 	if cfg.clearMemoryAfterFree {
-		r.prepareRow = r.prepareRow_memclearOn
+		r.prepareRow = r.newPrepareRow(true)
 		r.close = r.closeWithMemClear
 	} else {
-		r.prepareRow = r.prepareRow_memclearOff
+		r.prepareRow = r.newPrepareRow(false)
 		r.close = r.defaultClose
 	}
 
@@ -1158,11 +1175,7 @@ func (r *Reader) initPipeline(cfg rCfg) {
 		r.state = rStateStartOfRecord
 	}
 
-	if v, ok := cfg.reader.(BufferedReader); ok {
-		r.reader = v
-	} else {
-		r.reader = bufio.NewReader(cfg.reader)
-	}
+	r.reader = cfg.reader
 
 	if cfg.borrowRow {
 		r.row = r.borrowedRow
@@ -1296,48 +1309,6 @@ func (r *Reader) fieldNumOverflow() bool {
 	}
 
 	return false
-}
-
-func (r *Reader) handleEOF() bool {
-
-	// r.done is always true when this function is called
-
-	// check if we're in a terminal state otherwise error
-	// there is no new character to process
-	switch r.state {
-	case rStateStartOfDoc:
-		if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
-			r.parsingErr(errors.Join(ErrNoByteOrderMarker, io.ErrUnexpectedEOF))
-			return false
-		}
-
-		r.state = rStateStartOfRecord
-		fallthrough
-	case rStateStartOfRecord:
-		if (r.bitFlags&rFlagTRSEmitsRecord) != 0 && r.numFields == 1 {
-			r.fieldLengths = append(r.fieldLengths, 0)
-			// field start is unchanged because the last one was zero length
-			// r.fieldStart = len(r.recordBuf)
-			return r.checkNumFields(io.ErrUnexpectedEOF)
-		}
-		return false
-	case rStateInQuotedField, rStateInQuotedFieldAfterEscape:
-		r.parsingErr(ErrIncompleteQuotedField)
-		return false
-	case rStateInLineComment:
-		return false
-	case rStateStartOfField:
-		r.fieldLengths = append(r.fieldLengths, 0)
-		// field start is unchanged because the last one was zero length
-		// r.fieldStart = len(r.recordBuf)
-		return r.checkNumFields(io.ErrUnexpectedEOF)
-	case rStateEndOfQuotedField, rStateInField:
-		r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
-		r.fieldStart = len(r.recordBuf)
-		return r.checkNumFields(io.ErrUnexpectedEOF)
-	}
-
-	panic(panicUnknownReaderStateDuringEOF)
 }
 
 func (r *Reader) setDone() {

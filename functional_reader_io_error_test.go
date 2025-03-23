@@ -28,7 +28,7 @@ type errReader struct {
 
 func (er *errReader) Read(b []byte) (int, error) {
 	if len(b) == 0 {
-		return 0, nil
+		return 0, er.err
 	}
 
 	if er.numBytes <= 0 {
