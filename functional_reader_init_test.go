@@ -19,6 +19,7 @@ func TestFunctionalReaderInitializationPaths(t *testing.T) {
 			)
 			assert.Nil(t, err)
 			assert.NotNil(t, cr)
+			assert.Nil(t, cr.Row())
 
 			for row := range cr.IntoIter() {
 				_ = row
@@ -26,6 +27,7 @@ func TestFunctionalReaderInitializationPaths(t *testing.T) {
 
 			assert.Nil(t, cr.Err())
 			assert.Nil(t, cr.Close())
+			assert.Nil(t, cr.Row())
 		})
 	})
 
@@ -38,6 +40,7 @@ func TestFunctionalReaderInitializationPaths(t *testing.T) {
 			)
 			assert.Nil(t, err)
 			assert.NotNil(t, cr)
+			assert.Nil(t, cr.Row())
 
 			for row := range cr.IntoIter() {
 				_ = row
@@ -45,6 +48,93 @@ func TestFunctionalReaderInitializationPaths(t *testing.T) {
 
 			assert.Nil(t, cr.Err())
 			assert.Nil(t, cr.Close())
+			assert.Nil(t, cr.Row())
+		})
+	})
+
+	t.Run("when creating a csv reader and specifying reader buffer", func(t *testing.T) {
+		t.Run("should not error", func(t *testing.T) {
+			buf := [csv.ReaderMinBufferSize]byte{}
+			header := "a,b,c"
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader(header)),
+				csv.ReaderOpts().ReaderBuffer(buf[:]),
+			)
+			assert.Nil(t, err)
+			assert.NotNil(t, cr)
+			assert.Nil(t, cr.Row())
+
+			for row := range cr.IntoIter() {
+				_ = row
+			}
+
+			assert.Nil(t, cr.Err())
+			assert.Nil(t, cr.Close())
+			assert.Nil(t, cr.Row())
+		})
+	})
+
+	t.Run("when creating a csv reader and specifying reader buffer size", func(t *testing.T) {
+		t.Run("should not error", func(t *testing.T) {
+			header := "a,b,c"
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader(header)),
+				csv.ReaderOpts().ReaderBufferSize(csv.ReaderMinBufferSize),
+			)
+			assert.Nil(t, err)
+			assert.NotNil(t, cr)
+			assert.Nil(t, cr.Row())
+
+			for row := range cr.IntoIter() {
+				_ = row
+			}
+
+			assert.Nil(t, cr.Err())
+			assert.Nil(t, cr.Close())
+			assert.Nil(t, cr.Row())
+		})
+	})
+
+	t.Run("when creating a csv reader and row borrowing with no field borrowing implicitly", func(t *testing.T) {
+		t.Run("should not error", func(t *testing.T) {
+			header := "a,b,c"
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader(header)),
+				csv.ReaderOpts().BorrowRow(true),
+			)
+			assert.Nil(t, err)
+			assert.NotNil(t, cr)
+			assert.Nil(t, cr.Row())
+
+			for row := range cr.IntoIter() {
+				_ = row
+			}
+
+			assert.Nil(t, cr.Err())
+			assert.Nil(t, cr.Close())
+			assert.Nil(t, cr.Row())
+		})
+	})
+
+	t.Run("when creating a csv reader and row borrowing with no field borrowing explicitly", func(t *testing.T) {
+		t.Run("should not error", func(t *testing.T) {
+			header := "a,b,c"
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader(header)),
+				csv.ReaderOpts().BorrowRow(true),
+				csv.ReaderOpts().BorrowFields(false),
+			)
+			assert.Nil(t, err)
+			assert.NotNil(t, cr)
+			assert.Nil(t, cr.Row())
+
+			for row := range cr.IntoIter() {
+				_ = row
+			}
+
+			assert.Nil(t, cr.Err())
+			assert.Nil(t, cr.Close())
+			assert.Nil(t, cr.Row())
 		})
 	})
 }

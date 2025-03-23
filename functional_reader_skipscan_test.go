@@ -27,6 +27,7 @@ func TestFunctionalReaderSkipscanPaths(t *testing.T) {
 			},
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().BorrowRow(false),
+				csv.ReaderOpts().BorrowFields(false),
 			},
 		},
 		{
@@ -38,6 +39,7 @@ func TestFunctionalReaderSkipscanPaths(t *testing.T) {
 			},
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().BorrowRow(true),
+				csv.ReaderOpts().BorrowFields(true),
 			},
 		},
 	}

@@ -2,6 +2,7 @@ package csv_test
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -324,6 +325,76 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorIs(t, err, csv.ErrBadConfig)
 			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`initial record buffer size cannot be specified when also setting the initial record buffer`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader and specifying a reader buffer length and a reader buffer", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			buf := [csv.ReaderMinBufferSize]byte{}
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().ReaderBufferSize(len(buf)),
+				csv.ReaderOpts().ReaderBuffer(buf[:]),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`cannot specify both ReaderBuffer and ReaderBufferSize`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader and specifying a reader buffer length that is too small", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			bufLen := 6
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().ReaderBufferSize(bufLen),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`ReaderBufferSize must be greater than or equal to 7`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader and specifying a reader buffer that is too small", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			buf := [csv.ReaderMinBufferSize - 1]byte{}
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().ReaderBuffer(buf[:]),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`ReaderBuffer must have a length greater than or equal to `+strconv.Itoa(csv.ReaderMinBufferSize))).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader and specifying field borrowing is enabled with row borrowing implicitly disabled", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().BorrowFields(true),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`field borrowing cannot be enabled without enabling row borrowing`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader and specifying field borrowing is enabled with row borrowing explicitly disabled", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().BorrowFields(true),
+				csv.ReaderOpts().BorrowRow(false),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`field borrowing cannot be enabled without enabling row borrowing`)).Error(), err.Error())
 			assert.Nil(t, cr)
 		})
 	})

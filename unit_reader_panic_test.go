@@ -21,14 +21,14 @@ func TestUnitReaderPanicOnValidate(t *testing.T) {
 		recordSepLen: -2,
 	}
 
-	validate := func() (_ error, r any) {
+	validate := func() (r any, _ error) {
 		defer func() {
 			r = recover()
 		}()
-		return cfg.validate(), nil
+		return nil, cfg.validate()
 	}
 
-	err, r := validate()
+	r, err := validate()
 	is.NotNil(r)
 	is.Nil(err)
 
@@ -39,7 +39,7 @@ func TestUnitReaderPanicOnValidate(t *testing.T) {
 		recordSepLen: 3,
 	}
 
-	err, r = validate()
+	r, err = validate()
 	is.NotNil(r)
 	is.Nil(err)
 

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/josephcopenhaver/csv-go"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
@@ -69,6 +70,7 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().ErrorOnNoRows(true),
 				csv.ReaderOpts().BorrowRow(false),
+				csv.ReaderOpts().BorrowFields(false),
 			},
 			iterErrIs:         []error{csv.ErrParsing, csv.ErrNoRows, io.ErrUnexpectedEOF},
 			iterErrStr:        "parsing error at byte 0, record 0, field 0: no rows: unexpected EOF",
@@ -85,6 +87,7 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().ErrorOnNoRows(true),
 				csv.ReaderOpts().BorrowRow(true),
+				csv.ReaderOpts().BorrowFields(true),
 			},
 			iterErrIs:         []error{csv.ErrParsing, csv.ErrNoRows, io.ErrUnexpectedEOF},
 			iterErrStr:        "parsing error at byte 0, record 0, field 0: no rows: unexpected EOF",
@@ -422,7 +425,11 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		},
 	}
 
-	for i := range tcs {
-		tcs[i].Run(t)
+	for _, tc := range tcs {
+		assert.NotEmpty(t, tc.then, "then segment of test is empty")
+		if tc.then == "" {
+			t.FailNow()
+		}
+		tc.Run(t)
 	}
 }
