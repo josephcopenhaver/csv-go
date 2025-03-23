@@ -57,7 +57,7 @@ func (r *Reader) _prepareRow() bool {
 	var size uint8
 
 	for {
-		if len(r.rawBuf[r.rawIndex:]) == 0 {
+		if len(r.rawBuf) == r.rawIndex {
 			if (r.bitFlags & stEOF) != 0 {
 				r.setDone()
 				return r.handleEOF()
@@ -80,14 +80,16 @@ func (r *Reader) _prepareRow() bool {
 							return r.handleEOF()
 						}
 						break
-					} else if n == 0 {
+					}
+
+					if n == 0 {
 						r.setDone()
 						r.ioErr(err)
 						return false
-					} else {
-						r.readErr = err
-						break
 					}
+
+					r.readErr = err
+					break
 				}
 
 				if n != 0 {
@@ -113,7 +115,6 @@ func (r *Reader) _prepareRow() bool {
 
 						// r.state = ... (unchanged)
 					case rStateInQuotedFieldAfterEscape:
-						// errInvalidEscapeInQuotedFieldUnexpectedRune // TODO: could continue to indicate rune vs byte?
 						r.setDone()
 						r.parsingErr(ErrInvalidEscSeqInQuotedField)
 						return false
@@ -141,15 +142,15 @@ func (r *Reader) _prepareRow() bool {
 			idx := r.rawIndex + di
 
 			c = rune(r.rawBuf[idx])
-			if (c & invalidControlRune) != 0 {
+			if (c & invalidControlRune) == 0 {
+				size = 1
+			} else {
 				v, s := utf8.DecodeRune(r.rawBuf[idx:])
 				if s == 1 {
 					panic("DecodeRune failed")
 				}
 				c = v
 				size = uint8(s)
-			} else {
-				size = 1
 			}
 
 			// TODO: benchmark if skipping intermediate copies for signals not valid for a state saves time
@@ -182,7 +183,6 @@ func (r *Reader) _prepareRow() bool {
 
 					// r.state = rStateInQuotedField
 				case rStateInQuotedFieldAfterEscape:
-					// errInvalidEscapeInQuotedFieldUnexpectedRune // TODO: could continue to indicate rune vs byte?
 					r.setDone()
 					r.parsingErr(ErrInvalidEscSeqInQuotedField)
 					return false
