@@ -58,8 +58,8 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 				csv.ReaderOpts().Quote('"'),
 				csv.ReaderOpts().Escape('\\'),
 			},
-			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidEscapeInQuotedField},
-			iterErrStr: csv.ErrParsing.Error() + " at byte 13, record 1, field 1: " + csv.ErrInvalidEscapeInQuotedField.Error() + ": unexpected non-UTF8 byte following escape",
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidEscSeqInQuotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 13, record 1, field 1: " + csv.ErrInvalidEscSeqInQuotedField.Error(),
 		},
 		{
 			when: "at end of quoted field reader ends in incomplete utf8 rune ",
@@ -115,8 +115,8 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 				csv.ReaderOpts().Quote('"'),
 				csv.ReaderOpts().Escape('\\'),
 			},
-			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidEscapeInQuotedField},
-			iterErrStr: csv.ErrParsing.Error() + " at byte 5, record 1, field 1: " + csv.ErrInvalidEscapeInQuotedField.Error() + ": unexpected rune following escape",
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidEscSeqInQuotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 5, record 1, field 1: " + csv.ErrInvalidEscSeqInQuotedField.Error(),
 		},
 		{
 			when: "numFields=1, first column is quoted, second column is unquoted",
@@ -423,7 +423,7 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			iterErrStr: csv.ErrParsing.Error() + " at byte 1, record 1, field 1: " + csv.ErrTooManyFields.Error() + ": field count exceeds 1",
 		},
 		{
-			when: "BOM required but doc starts with another multibyte rune instead",
+			when: "BOM required but doc starts with another multi-byte rune instead",
 			then: "error at byte 0 - no BOM",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
