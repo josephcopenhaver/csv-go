@@ -70,7 +70,7 @@ var (
 	ErrParsing         = errors.New("parsing error")
 	ErrFieldCount      = errors.New("field count error")
 	ErrBadConfig       = errors.New("bad config")
-	ErrBadReadRuneImpl = errors.New("bad ReadRune implementation")
+	ErrBadReadRuneImpl = errors.New("bad ReadRune implementation") // TODO: remove
 	// instances
 	ErrTooManyFields               = errors.New("too many fields")
 	ErrNotEnoughFields             = errors.New("not enough fields")
@@ -87,12 +87,12 @@ var (
 	ErrInvalidEscSeqInQuotedField  = errors.New("invalid escape sequence in quoted field")
 	ErrNewlineInUnquotedField      = errors.New("newline rune found in unquoted field")
 	ErrUnexpectedQuoteAfterField   = errors.New("unexpected quote after quoted+escaped field")
-	ErrBadUnreadRuneImpl           = errors.New("UnreadRune failed")
+	ErrBadUnreadRuneImpl           = errors.New("UnreadRune failed") // TODO: remove
 	ErrUnsafeCRFileEnd             = fmt.Errorf("ended in a carriage return which must be quoted when record separator is CRLF: %w", io.ErrUnexpectedEOF)
 	// ReadByte should never fail because we're always preceding this call with UnreadRune
 	//
 	// it could happen if someone is trying to read concurrently or made their own bad buffered reader implementation
-	ErrBadReadByteImpl = errors.New("ReadByte failed")
+	ErrBadReadByteImpl = errors.New("ReadByte failed") // TODO: remove
 
 	errNewlineInUnquotedFieldCarriageReturn = fmt.Errorf("%w: carriage return", ErrNewlineInUnquotedField)
 	errNewlineInUnquotedFieldLineFeed       = fmt.Errorf("%w: line feed", ErrNewlineInUnquotedField)
