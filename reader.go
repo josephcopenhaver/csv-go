@@ -517,16 +517,11 @@ type Reader struct {
 	rawBuf       []byte
 	rawIndex     int
 	//
-	readErr    error
-	prepareRow func() bool
-	scan       func() bool
-	err        error
-	row        func() []string
-	// isRecordSeparator can set the reader state to errored
-	//
-	// note that it can return true and still set the error state
-	// for the next iteration
-	isRecordSeparator func(c rune) (bool, bool)
+	readErr           error
+	prepareRow        func() bool
+	scan              func() bool
+	err               error
+	row               func() []string
 	checkNumFields    func(errTrailer error) bool
 	close             func() error
 	reader            io.Reader
@@ -996,57 +991,6 @@ func (r *Reader) defaultClonedRow() []string {
 	return row
 }
 
-// nextRuneIsLF can set the reader state to errored
-//
-// note that it can return true in the first param and still set the error state
-// for the next iteration, in this case the second param will be false
-//
-// if it changes r.err to non-nil then r.done will also be true
-//
-// this should only be called when searching for pairs of CRLF
-//
-// if the second param is true then the reader should stop processing as an
-// immediate (non-deferred) error has occurred
-func (r *Reader) nextRuneIsLF() (bool, bool) {
-	if r.rawIndex >= len(r.rawBuf) {
-		if (r.bitFlags & stEOF) != 0 {
-			// should only be true when the record separator is known to be CRLF
-			// r.recordSepLen will be 2 in this case
-			//
-			// in addition if the state is rStateEndOfQuotedField then a less ambiguous error message
-			// will be conveyed, so lets not set the error state in that case before the state machine
-			// gets that chance
-			if r.recordSepLen == 2 && r.state != rStateEndOfQuotedField {
-				r.setDone()
-				r.parsingErr(ErrUnsafeCRFileEnd)
-				return false, true
-			}
-
-			// set done on next scan
-			// due to the EOF encountered
-			r.scan = func() bool {
-				r.setDone()
-				return false
-			}
-			return false, false
-		} else {
-			r.setDone()
-			r.ioErr(r.readErr)
-			return false, true
-		}
-	}
-
-	if r.rawBuf[r.rawIndex] == asciiLineFeed {
-		// advance the position indicator
-		r.rawIndex++
-		r.byteIndex++
-
-		return true, false
-	}
-
-	return false, false
-}
-
 func (r *Reader) defaultCheckNumFields(errTrailer error) bool {
 	if len(r.fieldLengths) == r.numFields {
 		return true
@@ -1083,67 +1027,6 @@ func (r *Reader) checkNumFieldsWithDiscovery(errTrailer error) bool {
 	r.bitFlags |= stAfterSOR
 	r.checkNumFields = r.defaultCheckNumFields
 	return true
-}
-
-func (r *Reader) isSingleRuneRecordSeparator(c rune) (bool, bool) {
-	return (c == r.recordSep[0]), false
-}
-
-// isCRLFRecordSeparator can set the reader state to errored
-func (r *Reader) isCRLFRecordSeparator(c rune) (bool, bool) {
-	if c == asciiCarriageReturn {
-		return r.nextRuneIsLF()
-	}
-
-	return false, false
-}
-
-func (r *Reader) updateIsRecordSeparatorImpl() {
-	if r.recordSepLen != 2 {
-		r.isRecordSeparator = r.isSingleRuneRecordSeparator
-		return
-	}
-
-	r.isRecordSeparator = r.isCRLFRecordSeparator
-}
-
-// isRecordSeparatorWithDiscovery can set the reader state to errored
-func (r *Reader) isRecordSeparatorWithDiscovery(c rune) (bool, bool) {
-	isCarriageReturn, ok := isNewlineRune(c)
-	if !ok {
-		return false, false
-	}
-
-	if isCarriageReturn {
-		var isSep, immediateErr bool
-		if isLF, isErr := r.nextRuneIsLF(); isLF {
-			isSep = true
-			immediateErr = isErr
-
-			r.recordSep = [2]rune{asciiCarriageReturn, asciiLineFeed}
-			r.recordSepLen = 2
-		} else {
-			if isErr {
-				immediateErr = true
-			} else {
-				isSep = true
-			}
-
-			r.recordSep = [2]rune{c, 0}
-			r.recordSepLen = 1
-		}
-
-		r.updateIsRecordSeparatorImpl()
-
-		return isSep, immediateErr
-	}
-
-	r.recordSep = [2]rune{c, 0}
-	r.recordSepLen = 1
-
-	r.updateIsRecordSeparatorImpl()
-
-	return true, false
 }
 
 func (r *Reader) resetRecordBuffers() {
@@ -1210,12 +1093,6 @@ func (r *Reader) initPipeline(cfg rCfg) {
 		r.checkNumFields = r.checkNumFieldsWithStartOfRecordTracking
 	} else {
 		r.checkNumFields = r.defaultCheckNumFields
-	}
-
-	if !cfg.discoverRecordSeparator {
-		r.updateIsRecordSeparatorImpl()
-	} else {
-		r.isRecordSeparator = r.isRecordSeparatorWithDiscovery
 	}
 
 	// letting any valid utf8 end of line act as the record separator

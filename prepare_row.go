@@ -63,16 +63,39 @@ func (r *Reader) _prepareRow() bool {
 
 	for {
 		if len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex < rMinRawBufSize {
-			{
-				n := copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
-				r.rawBuf = r.rawBuf[0:n]
+			var lastByte byte
+			if r.rawIndex > 0 {
+				lastByte = r.rawBuf[r.rawIndex-1]
 			}
+
+			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
+			r.rawBuf = r.rawBuf[0 : len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
 			r.rawIndex = 0
 			r.rawNumHiddenBytes = 0
 
 			if (r.bitFlags & stEOF) != 0 {
 				if len(r.rawBuf) == 0 {
 					r.setDone()
+
+					// if CRLF is the record sep, no error has been thrown before now
+					// and we've reached EOF with the last byte being a CR
+					//
+					// It's unsafe to assume that the field has ended correctly and that
+					// the file has been generated reliably.
+					//
+					// In such cases where strict RFC compliance is enabled and CRLF is supported
+					// this character along with LF should be encased in quotes and an error should
+					// be raised.
+					//
+					// An argument could be made that this should be allowed when rFlagErrOnNLInUF
+					// is off that this should also be off, but I will not be making that decision
+					// without a stronger opinion. A pull request with strong justification or a new
+					// option would be welcome here should you have a strong opinion dear reader.
+					if lastByte == asciiCarriageReturn && r.recordSepLen == 2 {
+						r.parsingErr(ErrUnsafeCRFileEnd)
+						return false
+					}
+
 					return r.handleEOF()
 				}
 			} else if r.readErr != nil {
@@ -123,6 +146,7 @@ func (r *Reader) _prepareRow() bool {
 								break
 							}
 						}
+
 						break
 					}
 				}
@@ -133,6 +157,7 @@ func (r *Reader) _prepareRow() bool {
 			di := bytes.IndexAny(r.rawBuf[r.rawIndex:], r.controlRunes)
 			if di == -1 {
 				// consume it all without adjustment
+
 				switch r.state {
 				case rStateStartOfDoc, rStateStartOfRecord, rStateStartOfField:
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:]...)
@@ -156,7 +181,7 @@ func (r *Reader) _prepareRow() bool {
 					// r.state = ... (unchanged)
 				}
 
-				r.byteIndex += uint64(di + 1)
+				r.byteIndex += uint64(len(r.rawBuf) - r.rawIndex)
 				r.rawIndex = len(r.rawBuf)
 				break
 			}
@@ -409,7 +434,16 @@ func (r *Reader) _prepareRow() bool {
 				}
 			case r.recordSep[0]:
 				if r.recordSepLen == 2 {
+					// checking for a full CRLF
+					//
+					// if not a CRLF sequence then just process the CR as field data
+
 					if r.rawIndex+int(size) >= len(r.rawBuf) || r.rawBuf[r.rawIndex+int(size)] != asciiLineFeed {
+						// definitely not a CRLF sequence, just an isolated CR byte
+						// not followed by LF
+						//
+						// so treat as a field data byte
+
 						switch r.state {
 						case rStateStartOfDoc, rStateStartOfRecord, rStateStartOfField:
 							r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:]...)
@@ -439,6 +473,9 @@ func (r *Reader) _prepareRow() bool {
 						continue
 					}
 
+					// we are handling a CRLF sequence
+					// so increase size by the length of LF
+					// and continue with record separator processing
 					size++
 				}
 				switch r.state {
@@ -553,13 +590,13 @@ func (r *Reader) _prepareRow() bool {
 					continue
 				}
 
-				// encountered a CR or LF character when record separator detection is automatically enabled
-
-				switch c {
-				case asciiCarriageReturn, asciiLineFeed, asciiVerticalTab, asciiFormFeed, utf8NextLine, utf8LineSeparator:
-				default:
-					panic("discovering record sep and found a non CR LF rune") // TODO: can be removed once proven it is unreachable 100%
-				}
+				//
+				// record separator discovery handling block
+				//
+				// c contains the first rune of the record separator sequence
+				//
+				// only CRLF is a valid two-rune sequence, all others are one rune
+				//
 
 				switch r.state {
 				case rStateStartOfDoc, rStateStartOfRecord, rStateEndOfQuotedField, rStateInLineComment, rStateStartOfField, rStateInField:
