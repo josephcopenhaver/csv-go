@@ -636,16 +636,16 @@ func (cfg *rCfg) validate() error {
 				return errors.New("invalid record separator and escape combination")
 			}
 		case 2:
-			if cfg.quoteSet && (cfg.quote == '\r' || cfg.quote == '\n') {
+			if cfg.quoteSet && (cfg.quote == asciiCarriageReturn || cfg.quote == asciiLineFeed) {
 				return errors.New("invalid record separator and quote combination")
 			}
-			if cfg.fieldSeparator == '\r' || cfg.fieldSeparator == '\n' {
+			if cfg.fieldSeparator == asciiCarriageReturn || cfg.fieldSeparator == asciiLineFeed {
 				return errors.New("invalid record separator and field separator combination")
 			}
-			if cfg.commentSet && (cfg.comment == '\r' || cfg.comment == '\n') {
+			if cfg.commentSet && (cfg.comment == asciiCarriageReturn || cfg.comment == asciiLineFeed) {
 				return errors.New("invalid record separator and comment combination")
 			}
-			if cfg.escapeSet && (cfg.escape == '\r' || cfg.escape == '\n') {
+			if cfg.escapeSet && (cfg.escape == asciiCarriageReturn || cfg.escape == asciiLineFeed) {
 				return errors.New("invalid record separator and escape combination")
 			}
 		default:
@@ -751,8 +751,14 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		}
 	}
 
-	var controlRunesBuf [7]rune
-	controlRunes := append(controlRunesBuf[:0], cfg.fieldSeparator)
+	var controlRunes []rune
+	if cfg.recordSepLen == 0 {
+		var buf [11]rune
+		controlRunes = append(buf[:0], cfg.fieldSeparator)
+	} else {
+		var buf [7]rune
+		controlRunes = append(buf[:0], cfg.fieldSeparator)
+	}
 
 	var bitFlags rFlag
 	if cfg.trsEmitsRecord {
@@ -789,7 +795,7 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		bitFlags |= rFlagErrOnQInUF
 	}
 
-	if cfg.recordSepLen == 1 {
+	if cfg.recordSepLen != 0 {
 		controlRunes = append(controlRunes, cfg.recordSep[0])
 	}
 
@@ -798,12 +804,26 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 
 		crs := []byte(string(controlRunes))
 
-		if !bytes.Contains(crs, []byte{'\r'}) {
-			controlRunes = append(controlRunes, '\r')
+		if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
+			controlRunes = append(controlRunes, asciiCarriageReturn)
 		}
 
-		if !bytes.Contains(crs, []byte{'\n'}) {
-			controlRunes = append(controlRunes, '\n')
+		if !bytes.Contains(crs, []byte{asciiLineFeed}) {
+			controlRunes = append(controlRunes, asciiLineFeed)
+		}
+	}
+
+	if cfg.recordSepLen == 0 {
+		allPossibleNLRunes := []rune{asciiCarriageReturn, asciiLineFeed, asciiVerticalTab, asciiFormFeed, utf8NextLine, utf8LineSeparator}
+		crs := []byte(string(controlRunes))
+
+		for _, r := range allPossibleNLRunes {
+			if bytes.Contains(crs, []byte(string(r))) {
+				continue
+			}
+
+			controlRunes = append(controlRunes, r)
+			crs = []byte(string(controlRunes))
 		}
 	}
 

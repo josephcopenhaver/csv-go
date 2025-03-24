@@ -108,7 +108,7 @@ func (r *Reader) _prepareRow() bool {
 					}
 
 					if n >= rMinRawBufSize {
-						if r.rawBuf[n-1] == '\r' {
+						if r.rawBuf[n-1] == asciiCarriageReturn {
 							if r.recordSepLen != 1 {
 								r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-1]
 								r.rawNumHiddenBytes = 1
@@ -132,43 +132,33 @@ func (r *Reader) _prepareRow() bool {
 		for {
 			di := bytes.IndexAny(r.rawBuf[r.rawIndex:], r.controlRunes)
 			if di == -1 {
-				if (r.rawBuf[len(r.rawBuf)-1]&invalidControlRune) == 0 || endsInValidUTF8(r.rawBuf[r.rawIndex:]) {
-					// ends in ascii byte or valid utf8, so a multi-byte character is not split awkwardly
-					//
-					// consume it all without adjustment
-					switch r.state {
-					case rStateStartOfDoc, rStateStartOfRecord, rStateStartOfField:
-						r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:]...)
+				// consume it all without adjustment
+				switch r.state {
+				case rStateStartOfDoc, rStateStartOfRecord, rStateStartOfField:
+					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:]...)
 
-						r.state = rStateInField
-					case rStateInQuotedField, rStateInField:
-						r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:]...)
+					r.state = rStateInField
+				case rStateInQuotedField, rStateInField:
+					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:]...)
 
-						// r.state = ... (unchanged)
-					case rStateInQuotedFieldAfterEscape:
-						r.setDone()
-						r.parsingErr(ErrInvalidEscSeqInQuotedField)
-						return false
-					case rStateEndOfQuotedField:
-						r.setDone()
-						r.parsingErr(ErrInvalidQuotedFieldEnding)
-						return false
-					case rStateInLineComment:
-						// TODO: zero out bytes
+					// r.state = ... (unchanged)
+				case rStateInQuotedFieldAfterEscape:
+					r.setDone()
+					r.parsingErr(ErrInvalidEscSeqInQuotedField)
+					return false
+				case rStateEndOfQuotedField:
+					r.setDone()
+					r.parsingErr(ErrInvalidQuotedFieldEnding)
+					return false
+				case rStateInLineComment:
+					// TODO: zero out bytes
 
-						// r.state = ... (unchanged)
-					}
-
-					r.byteIndex += uint64(di + 1)
-					r.rawIndex = len(r.rawBuf)
-					break
+					// r.state = ... (unchanged)
 				}
-				panic("chunk ends in multi-byte char") // TODO: implement
-				// address this by making sure at least 4 bytes remain unprocessed at all times
-				//
-				// note if doing the above it might be best to use another "edge buffer" to avoid
-				// scenarios where users provide the buffer-space they want to utilize in some fashion
-				// (we support both the slice and the slice size)
+
+				r.byteIndex += uint64(di + 1)
+				r.rawIndex = len(r.rawBuf)
+				break
 			}
 			idx := r.rawIndex + di
 
@@ -400,13 +390,37 @@ func (r *Reader) _prepareRow() bool {
 				}
 			case r.recordSep[0]:
 				if r.recordSepLen == 2 {
-					// c is definitely CR
-					//
-					// if next exists and is LF then process as record sep
-					//
-					// otherwise process as just a data rune
-					// continue
-					panic("not implemented yet") // TODO: implement
+					if r.rawIndex+int(size) >= len(r.rawBuf) || r.rawBuf[r.rawIndex+int(size)] != asciiLineFeed {
+						switch r.state {
+						case rStateStartOfDoc, rStateStartOfRecord, rStateStartOfField:
+							r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:]...)
+
+							r.state = rStateInField
+						case rStateInQuotedField, rStateInField:
+							r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:]...)
+
+							// r.state = ... (unchanged)
+						case rStateInQuotedFieldAfterEscape:
+							r.setDone()
+							r.parsingErr(ErrInvalidEscSeqInQuotedField)
+							return false
+						case rStateEndOfQuotedField:
+							r.setDone()
+							r.parsingErr(ErrInvalidQuotedFieldEnding)
+							return false
+						case rStateInLineComment:
+							// TODO: zero out bytes
+
+							// r.state = ... (unchanged)
+						}
+
+						r.byteIndex += uint64(di) + uint64(size)
+						r.rawIndex = idx + int(size)
+
+						continue
+					}
+
+					size++
 				}
 				switch r.state {
 				case rStateStartOfDoc:
@@ -481,7 +495,7 @@ func (r *Reader) _prepareRow() bool {
 							r.byteIndex += uint64(di)
 						}
 						r.setDone()
-						if c == '\n' {
+						if c == asciiLineFeed {
 							r.parsingErr(errNewlineInUnquotedFieldLineFeed)
 						} else {
 							r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
@@ -490,7 +504,7 @@ func (r *Reader) _prepareRow() bool {
 					case rStateInField:
 						r.byteIndex += uint64(di)
 						r.setDone()
-						if c == '\n' {
+						if c == asciiLineFeed {
 							r.parsingErr(errNewlineInUnquotedFieldLineFeed)
 						} else {
 							r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
@@ -514,7 +528,7 @@ func (r *Reader) _prepareRow() bool {
 						// TODO: zero out bytes
 						r.byteIndex += uint64(di) + uint64(size)
 						r.rawIndex = idx + int(size)
-						// continue
+						// continue // can skip, very next instruction after the switch is this
 					}
 
 					continue
@@ -523,17 +537,50 @@ func (r *Reader) _prepareRow() bool {
 				// encountered a CR or LF character when record separator detection is automatically enabled
 
 				switch c {
-				case '\r':
-					panic("CR or CRLF record sep discovery not implemented") // TODO: implement
-				case '\n':
+				case asciiCarriageReturn, asciiLineFeed, asciiVerticalTab, asciiFormFeed, utf8NextLine, utf8LineSeparator:
 				default:
-					panic("discovering record sep and found a non CR LF rune")
+					panic("discovering record sep and found a non CR LF rune") // TODO: can be removed once proven it is unreachable 100%
 				}
 
 				switch r.state {
 				case rStateStartOfDoc, rStateStartOfRecord, rStateEndOfQuotedField, rStateInLineComment, rStateStartOfField, rStateInField:
-					r.recordSepLen = 1
-					r.recordSep[0] = c
+					if c == asciiCarriageReturn && r.rawIndex+1 < len(r.rawBuf) && r.rawBuf[r.rawIndex+1] == asciiLineFeed {
+						r.recordSepLen = 2
+						r.recordSep[0] = asciiCarriageReturn
+						r.recordSep[1] = asciiLineFeed
+					} else {
+						r.recordSepLen = 1
+						r.recordSep[0] = c
+					}
+
+					// preserve field separator
+					var buf [7]rune
+					controlRunes := append(buf[:0], r.fieldSeparator)
+					controlRunes = append(controlRunes, c)
+
+					if (r.bitFlags & rFlagQuote) != 0 {
+						controlRunes = append(controlRunes, r.quote)
+					}
+					if (r.bitFlags & rFlagEscape) != 0 {
+						controlRunes = append(controlRunes, r.escape)
+					}
+					if (r.bitFlags & rFlagComment) != 0 {
+						controlRunes = append(controlRunes, r.comment)
+					}
+
+					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
+						crs := []byte(string(controlRunes))
+
+						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
+							controlRunes = append(controlRunes, asciiCarriageReturn)
+						}
+
+						if !bytes.Contains(crs, []byte{asciiLineFeed}) {
+							controlRunes = append(controlRunes, asciiLineFeed)
+						}
+					}
+
+					r.controlRunes = string(controlRunes)
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedField:
