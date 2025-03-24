@@ -24,7 +24,7 @@ func (r *Reader) handleEOF() bool {
 			return false
 		}
 
-		r.state = rStateStartOfRecord
+		r.state = rStateStartOfRecord // TODO: might be removable
 		fallthrough
 	case rStateStartOfRecord:
 		if (r.bitFlags&rFlagTRSEmitsRecord) != 0 && r.numFields == 1 {
@@ -181,7 +181,7 @@ func (r *Reader) _prepareRow() bool {
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
-					// r.state = rStateInQuotedField
+					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
 					r.setDone()
 					r.parsingErr(ErrInvalidEscSeqInQuotedField)
@@ -218,7 +218,7 @@ func (r *Reader) _prepareRow() bool {
 					r.fieldStart = len(r.recordBuf)
 					r.fieldIndex++
 
-					// r.state = rStateStartOfField
+					// r.state = ... (unchanged)
 				case rStateInField:
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx]...)
 					r.byteIndex += uint64(di) + uint64(size)
@@ -240,12 +240,68 @@ func (r *Reader) _prepareRow() bool {
 					continue
 				}
 			case r.escape:
-				panic("not implemented: handle escape") // TODO: implement
+				switch r.state {
+				case rStateStartOfDoc, rStateStartOfRecord, rStateStartOfField:
+					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					r.state = rStateInField
+				case rStateInQuotedField:
+					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					r.state = rStateInQuotedFieldAfterEscape
+				case rStateInQuotedFieldAfterEscape:
+					if di != 0 {
+						r.setDone()
+						r.parsingErr(ErrInvalidEscSeqInQuotedField)
+						return false
+					}
+
+					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(size)
+					r.rawIndex = idx + int(size)
+
+					r.state = rStateInQuotedField
+				case rStateEndOfQuotedField:
+					r.setDone()
+					r.parsingErr(ErrInvalidQuotedFieldEnding)
+					return false
+				case rStateInField:
+					// TODO: technically "skippable"
+
+					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
+				case rStateInLineComment:
+					// TODO: zero out bytes
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+					continue
+				}
 			case r.quote:
 				switch r.state {
 				case rStateStartOfDoc, rStateStartOfRecord:
 					if di != 0 {
-						panic("quote not escaped before start of first field of record") // TODO: handle
+						if (r.bitFlags & rFlagErrOnQInUF) != 0 {
+							r.byteIndex += uint64(di)
+
+							r.state = rStateInField // TODO: might be removable
+
+							r.setDone()
+							r.parsingErr(ErrQuoteInUnquotedField)
+							return false
+						}
+
+						r.byteIndex += uint64(di) + uint64(size)
+						r.rawIndex = idx + int(size)
+
+						r.state = rStateInField
+						continue
 					}
 
 					r.byteIndex += uint64(size)
@@ -259,11 +315,27 @@ func (r *Reader) _prepareRow() bool {
 
 					r.state = rStateEndOfQuotedField
 				case rStateInQuotedFieldAfterEscape:
-					panic("not implemented: handle after-escape state") // TODO: implement
+					if di != 0 {
+						r.setDone()
+						r.parsingErr(ErrInvalidEscSeqInQuotedField)
+						return false
+					}
+
+					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(size)
+					r.rawIndex = idx + int(size)
+
+					r.state = rStateInQuotedField
 				case rStateEndOfQuotedField:
 					if di != 0 {
 						r.setDone()
 						r.parsingErr(ErrInvalidQuotedFieldEnding)
+						return false
+					}
+
+					if (r.bitFlags & rFlagEscape) != 0 {
+						r.setDone()
+						r.parsingErr(ErrUnexpectedQuoteAfterField)
 						return false
 					}
 
@@ -290,9 +362,7 @@ func (r *Reader) _prepareRow() bool {
 					r.parsingErr(ErrQuoteInUnquotedField)
 					return false
 				case rStateInLineComment:
-
 					// TODO: zero out bytes
-
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 					continue
@@ -322,7 +392,7 @@ func (r *Reader) _prepareRow() bool {
 					r.rawIndex = idx + int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
 
-					// r.state = rStateStartOfRecord
+					// r.state = ... (unchanged)
 					return r.checkNumFields(nil)
 				case rStateInQuotedField:
 					// TODO: technically "skippable"
@@ -330,8 +400,12 @@ func (r *Reader) _prepareRow() bool {
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					panic("not implemented: handle after-escape state") // TODO: implement
+					r.setDone()
+					r.parsingErr(ErrInvalidEscSeqInQuotedField)
+					return false
 				case rStateEndOfQuotedField:
 					if di != 0 {
 						r.setDone()
@@ -354,6 +428,7 @@ func (r *Reader) _prepareRow() bool {
 					r.state = rStateStartOfRecord
 					return r.checkNumFields(nil)
 				case rStateInLineComment:
+					// TODO: zero out bytes
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
@@ -367,11 +442,11 @@ func (r *Reader) _prepareRow() bool {
 					// if discovered outside of a quoted state
 					switch r.state {
 					case rStateStartOfDoc:
-						r.state = rStateStartOfRecord
+						r.state = rStateStartOfRecord // TODO: might be removable
 						fallthrough
 					case rStateStartOfRecord, rStateStartOfField:
 						if di > 0 {
-							r.state = rStateInField
+							r.state = rStateInField // TODO: might be removable
 							r.byteIndex += uint64(di)
 						}
 						r.setDone()
@@ -394,15 +469,21 @@ func (r *Reader) _prepareRow() bool {
 						r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
 						r.byteIndex += uint64(di) + uint64(size)
 						r.rawIndex = idx + int(size)
+
+						// r.state = ... (unchanged)
 					case rStateInQuotedFieldAfterEscape:
-						panic("not implemented: handle after-escape state") // TODO: implement
+						r.setDone()
+						r.parsingErr(ErrInvalidEscSeqInQuotedField)
+						return false
 					case rStateEndOfQuotedField:
 						r.setDone()
 						r.parsingErr(ErrInvalidQuotedFieldEnding)
 						return false
 					case rStateInLineComment:
+						// TODO: zero out bytes
 						r.byteIndex += uint64(di) + uint64(size)
 						r.rawIndex = idx + int(size)
+						// continue
 					}
 
 					continue
@@ -422,14 +503,20 @@ func (r *Reader) _prepareRow() bool {
 				case rStateStartOfDoc, rStateStartOfRecord, rStateEndOfQuotedField, rStateInLineComment, rStateStartOfField, rStateInField:
 					r.recordSepLen = 1
 					r.recordSep[0] = c
+
+					// r.state = ... (unchanged)
 				case rStateInQuotedField:
 					// TODO: technically "skippable"
 
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					panic("not implemented: handle after-escape state") // TODO: implement
+					r.setDone()
+					r.parsingErr(ErrInvalidEscSeqInQuotedField)
+					return false
 				}
 			}
 		}
