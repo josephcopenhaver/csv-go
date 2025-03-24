@@ -52,48 +52,79 @@ func (r *Reader) handleEOF() bool {
 	panic(panicUnknownReaderStateDuringEOF)
 }
 
+const (
+	rMaxOverflowNumBytes = utf8.UTFMax - 1
+	rMinRawBufSize       = utf8.UTFMax + rMaxOverflowNumBytes // TODO: ensure through various options the bounds are always greater than this min - also export so higher level layers can implement bounds validation if they need to.
+)
+
 func (r *Reader) _prepareRow() bool {
 	var c rune
 	var size uint8
 
 	for {
-		if len(r.rawBuf) == r.rawIndex {
-			if (r.bitFlags & stEOF) != 0 {
-				r.setDone()
-				return r.handleEOF()
-			}
-			if r.readErr != nil {
-				r.setDone()
-				r.ioErr(r.readErr)
-				return false
-			}
-
-			for {
-				n, err := r.reader.Read(r.rawBuf[0:cap(r.rawBuf)])
-				r.rawIndex = 0
+		if len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex < rMinRawBufSize {
+			{
+				n := copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
 				r.rawBuf = r.rawBuf[0:n]
-				if err != nil {
-					if errors.Is(err, io.EOF) {
-						r.bitFlags |= stEOF
+			}
+			r.rawIndex = 0
+			r.rawNumHiddenBytes = 0
+
+			if (r.bitFlags & stEOF) != 0 {
+				if len(r.rawBuf) == 0 {
+					r.setDone()
+					return r.handleEOF()
+				}
+			} else if r.readErr != nil {
+				if len(r.rawBuf) != 0 {
+					r.setDone()
+					r.ioErr(r.readErr)
+					return false
+				}
+			} else {
+
+				for {
+					n, err := r.reader.Read(r.rawBuf[len(r.rawBuf):cap(r.rawBuf)])
+					n += len(r.rawBuf)
+					r.rawBuf = r.rawBuf[0:n]
+					if err != nil {
+						if errors.Is(err, io.EOF) {
+							r.bitFlags |= stEOF
+							if n == 0 {
+								r.setDone()
+								return r.handleEOF()
+							}
+							break
+						}
+
 						if n == 0 {
 							r.setDone()
-							return r.handleEOF()
+							r.ioErr(err)
+							return false
 						}
+
+						r.readErr = err
 						break
 					}
 
-					if n == 0 {
-						r.setDone()
-						r.ioErr(err)
-						return false
+					if n >= rMinRawBufSize {
+						if r.rawBuf[n-1] == '\r' {
+							if r.recordSepLen != 1 {
+								r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-1]
+								r.rawNumHiddenBytes = 1
+							}
+							break
+						}
+
+						for i := 0; i <= int(rMaxOverflowNumBytes); i++ {
+							if (r.rawBuf[n-i-1]&invalidControlRune) == 0 || endsInValidUTF8(r.rawBuf[n-rMinRawBufSize:n-i]) {
+								r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-i]
+								r.rawNumHiddenBytes = uint8(i)
+								break
+							}
+						}
+						break
 					}
-
-					r.readErr = err
-					break
-				}
-
-				if n != 0 {
-					break
 				}
 			}
 		}

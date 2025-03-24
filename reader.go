@@ -544,6 +544,7 @@ type Reader struct {
 	fieldSeparator    rune
 	comment           rune
 	state             rState
+	rawNumHiddenBytes uint8
 	// afterStartOfRecords is a flag set to communicate when the first records have been observed and potentially emitted
 	//
 	// this is useful for supporting comments after start of records explicitly with disabled being the default
