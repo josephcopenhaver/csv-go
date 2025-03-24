@@ -318,6 +318,7 @@ func (r *Reader) _prepareRow() bool {
 							return false
 						}
 
+						r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
 						r.byteIndex += uint64(di) + uint64(size)
 						r.rawIndex = idx + int(size)
 
@@ -367,10 +368,19 @@ func (r *Reader) _prepareRow() bool {
 					r.state = rStateInQuotedField
 				case rStateStartOfField:
 					if di != 0 {
-						r.byteIndex += uint64(di)
-						r.setDone()
-						r.parsingErr(ErrQuoteInUnquotedField)
-						return false
+						if (r.bitFlags & rFlagErrOnQInUF) != 0 {
+							r.byteIndex += uint64(di)
+							r.setDone()
+							r.parsingErr(ErrQuoteInUnquotedField)
+							return false
+						}
+
+						r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
+						r.byteIndex += uint64(di) + uint64(size)
+						r.rawIndex = idx + int(size)
+
+						r.state = rStateInField
+						continue
 					}
 
 					r.byteIndex += uint64(size)
@@ -378,10 +388,19 @@ func (r *Reader) _prepareRow() bool {
 
 					r.state = rStateInQuotedField
 				case rStateInField:
-					r.byteIndex += uint64(di)
-					r.setDone()
-					r.parsingErr(ErrQuoteInUnquotedField)
-					return false
+					if (r.bitFlags & rFlagErrOnQInUF) != 0 {
+						r.byteIndex += uint64(di)
+						r.setDone()
+						r.parsingErr(ErrQuoteInUnquotedField)
+						return false
+					}
+
+					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
+					continue
 				case rStateInLineComment:
 					// TODO: zero out bytes
 					r.byteIndex += uint64(di) + uint64(size)
