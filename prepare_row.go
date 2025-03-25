@@ -153,13 +153,33 @@ func (r *Reader) _prepareRow() bool {
 			}
 		}
 
+	CHUNK_PROCESSOR:
 		for {
 			di := bytes.IndexAny(r.rawBuf[r.rawIndex:], r.controlRunes)
 			if di == -1 {
 				// consume it all without adjustment
 
 				switch r.state {
-				case rStateStartOfDoc, rStateStartOfRecord, rStateStartOfField:
+				case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							if len(r.rawBuf) == r.rawIndex+bomSize {
+								r.byteIndex += uint64(bomSize)
+								r.rawIndex = len(r.rawBuf)
+
+								r.state = rStateStartOfRecord
+								break CHUNK_PROCESSOR
+							}
+							r.rawIndex++
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				case rStateStartOfRecord, rStateStartOfField:
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:]...)
 
 					r.state = rStateInField
@@ -206,7 +226,23 @@ func (r *Reader) _prepareRow() bool {
 			switch c {
 			case r.fieldSeparator:
 				switch r.state {
-				case rStateStartOfDoc, rStateStartOfRecord:
+				case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+							di -= bomSize
+
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				case rStateStartOfRecord:
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx]...)
 					r.byteIndex += uint64(di) + uint64(size)
 
@@ -287,7 +323,23 @@ func (r *Reader) _prepareRow() bool {
 				}
 			case r.escape:
 				switch r.state {
-				case rStateStartOfDoc, rStateStartOfRecord, rStateStartOfField:
+				case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+							di -= bomSize
+
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				case rStateStartOfRecord, rStateStartOfField:
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
@@ -331,7 +383,23 @@ func (r *Reader) _prepareRow() bool {
 				}
 			case r.quote:
 				switch r.state {
-				case rStateStartOfDoc, rStateStartOfRecord:
+				case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+							di -= bomSize
+
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				case rStateStartOfRecord:
 					if di != 0 {
 						if (r.bitFlags & rFlagErrOnQInUF) != 0 {
 							r.byteIndex += uint64(di)
@@ -445,7 +513,20 @@ func (r *Reader) _prepareRow() bool {
 						// so treat as a field data byte
 
 						switch r.state {
-						case rStateStartOfDoc, rStateStartOfRecord, rStateStartOfField:
+						case rStateStartOfDoc:
+							if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+								if (r.bitFlags & rFlagDropBOM) != 0 {
+									r.byteIndex += uint64(bomSize)
+									r.rawIndex += bomSize
+								}
+							} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+								r.parsingErr(ErrNoByteOrderMarker)
+								return false
+							}
+
+							r.state = rStateStartOfRecord // TODO: might be removable
+							fallthrough
+						case rStateStartOfRecord, rStateStartOfField:
 							r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:]...)
 
 							r.state = rStateInField
@@ -480,13 +561,21 @@ func (r *Reader) _prepareRow() bool {
 				}
 				switch r.state {
 				case rStateStartOfDoc:
-					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx]...)
-					r.byteIndex += uint64(di) + uint64(size)
-					r.rawIndex = idx + int(size)
-					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+							di -= bomSize
 
-					r.state = rStateStartOfRecord
-					return r.checkNumFields(nil)
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
 				case rStateStartOfRecord:
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx]...)
 					r.byteIndex += uint64(di) + uint64(size)
@@ -543,6 +632,19 @@ func (r *Reader) _prepareRow() bool {
 					// if discovered outside of a quoted state
 					switch r.state {
 					case rStateStartOfDoc:
+						if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+							if (r.bitFlags & rFlagDropBOM) != 0 {
+								r.byteIndex += uint64(bomSize)
+								r.rawIndex += bomSize
+								di -= bomSize
+
+								// idx = r.rawIndex + di // will be net unchanged
+							}
+						} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+							r.parsingErr(ErrNoByteOrderMarker)
+							return false
+						}
+
 						r.state = rStateStartOfRecord // TODO: might be removable
 						fallthrough
 					case rStateStartOfRecord, rStateStartOfField:
@@ -599,7 +701,22 @@ func (r *Reader) _prepareRow() bool {
 				//
 
 				switch r.state {
-				case rStateStartOfDoc, rStateStartOfRecord, rStateEndOfQuotedField, rStateInLineComment, rStateStartOfField, rStateInField:
+				case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				case rStateStartOfRecord, rStateEndOfQuotedField, rStateInLineComment, rStateStartOfField, rStateInField:
 					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
 						r.recordSepLen = 2
 						r.recordSep[0] = asciiCarriageReturn
