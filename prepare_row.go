@@ -58,8 +58,6 @@ const (
 )
 
 func (r *Reader) _prepareRow() bool {
-	var c rune
-	var size uint8
 
 	for {
 		if len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex < rMinRawBufSize {
@@ -68,6 +66,7 @@ func (r *Reader) _prepareRow() bool {
 				lastProcessedByte = r.rawBuf[r.rawIndex-1]
 			}
 
+			// TODO: experiment with doing this less when it would be a nop
 			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
 			r.rawBuf = r.rawBuf[0 : len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
 			r.rawIndex = 0
@@ -99,7 +98,7 @@ func (r *Reader) _prepareRow() bool {
 					return r.handleEOF()
 				}
 			} else if r.readErr != nil {
-				if len(r.rawBuf) != 0 {
+				if len(r.rawBuf) == 0 {
 					r.setDone()
 					r.ioErr(r.readErr)
 					return false
@@ -117,17 +116,13 @@ func (r *Reader) _prepareRow() bool {
 								r.setDone()
 								return r.handleEOF()
 							}
-							break
-						}
-
-						if n == 0 {
+						} else if n == 0 {
 							r.setDone()
 							r.ioErr(err)
 							return false
 						}
 
 						r.readErr = err
-						break
 					}
 
 					if n >= rMinRawBufSize {
@@ -147,6 +142,10 @@ func (r *Reader) _prepareRow() bool {
 							}
 						}
 
+						break
+					}
+
+					if err != nil {
 						break
 					}
 				}
@@ -207,7 +206,8 @@ func (r *Reader) _prepareRow() bool {
 			}
 			idx := r.rawIndex + di
 
-			c = rune(r.rawBuf[idx])
+			c := rune(r.rawBuf[idx])
+			var size uint8
 			if (c & invalidControlRune) == 0 {
 				size = 1
 			} else {
@@ -414,6 +414,10 @@ func (r *Reader) _prepareRow() bool {
 						r.rawIndex = idx + int(size)
 
 						r.state = rStateInField
+
+						if r.rawIndex >= len(r.rawBuf) {
+							break CHUNK_PROCESSOR
+						}
 						continue
 					}
 
@@ -452,7 +456,7 @@ func (r *Reader) _prepareRow() bool {
 						return false
 					}
 
-					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx:idx+int(size)]...)
+					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
 					r.byteIndex += uint64(size)
 					r.rawIndex += int(size)
 
@@ -471,6 +475,9 @@ func (r *Reader) _prepareRow() bool {
 						r.rawIndex = idx + int(size)
 
 						r.state = rStateInField
+						if r.rawIndex >= len(r.rawBuf) {
+							break CHUNK_PROCESSOR
+						}
 						continue
 					}
 
@@ -547,6 +554,9 @@ func (r *Reader) _prepareRow() bool {
 						r.byteIndex += uint64(di) + uint64(size)
 						r.rawIndex = idx + int(size)
 
+						if r.rawIndex >= len(r.rawBuf) {
+							break CHUNK_PROCESSOR
+						}
 						continue
 					}
 
@@ -647,6 +657,9 @@ func (r *Reader) _prepareRow() bool {
 						r.rawIndex = idx + int(size)
 
 						r.state = rStateInLineComment
+						if r.rawIndex >= len(r.rawBuf) {
+							break CHUNK_PROCESSOR
+						}
 						continue
 					}
 
@@ -744,6 +757,9 @@ func (r *Reader) _prepareRow() bool {
 						r.rawIndex = idx + int(size)
 					}
 
+					if r.rawIndex >= len(r.rawBuf) {
+						break CHUNK_PROCESSOR
+					}
 					continue
 				}
 
@@ -824,6 +840,10 @@ func (r *Reader) _prepareRow() bool {
 					r.parsingErr(ErrInvalidEscSeqInQuotedField)
 					return false
 				}
+			}
+
+			if r.rawIndex >= len(r.rawBuf) {
+				break
 			}
 		}
 	}
