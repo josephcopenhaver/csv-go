@@ -63,9 +63,9 @@ func (r *Reader) _prepareRow() bool {
 
 	for {
 		if len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex < rMinRawBufSize {
-			var lastByte byte
+			var lastProcessedByte byte
 			if r.rawIndex > 0 {
-				lastByte = r.rawBuf[r.rawIndex-1]
+				lastProcessedByte = r.rawBuf[r.rawIndex-1]
 			}
 
 			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
@@ -91,7 +91,7 @@ func (r *Reader) _prepareRow() bool {
 					// is off that this should also be off, but I will not be making that decision
 					// without a stronger opinion. A pull request with strong justification or a new
 					// option would be welcome here should you have a strong opinion dear reader.
-					if lastByte == asciiCarriageReturn && r.recordSepLen == 2 {
+					if lastProcessedByte == asciiCarriageReturn && r.recordSepLen == 2 {
 						r.parsingErr(ErrUnsafeCRFileEnd)
 						return false
 					}
@@ -308,7 +308,7 @@ func (r *Reader) _prepareRow() bool {
 
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
 					r.byteIndex += uint64(size)
-					r.rawIndex = idx + int(size)
+					r.rawIndex += int(size)
 
 					r.state = rStateInQuotedField
 				case rStateEndOfQuotedField:
@@ -370,7 +370,7 @@ func (r *Reader) _prepareRow() bool {
 
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
 					r.byteIndex += uint64(size)
-					r.rawIndex = idx + int(size)
+					r.rawIndex += int(size)
 
 					r.state = rStateInQuotedField
 				case rStateEndOfQuotedField:
@@ -387,8 +387,8 @@ func (r *Reader) _prepareRow() bool {
 					}
 
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx:idx+int(size)]...)
-					r.byteIndex++
-					r.rawIndex++
+					r.byteIndex += uint64(size)
+					r.rawIndex += int(size)
 
 					r.state = rStateInQuotedField
 				case rStateStartOfField:
@@ -438,7 +438,7 @@ func (r *Reader) _prepareRow() bool {
 					//
 					// if not a CRLF sequence then just process the CR as field data
 
-					if r.rawIndex+int(size) >= len(r.rawBuf) || r.rawBuf[r.rawIndex+int(size)] != asciiLineFeed {
+					if idx+int(size) >= len(r.rawBuf) || r.rawBuf[idx+int(size)] != asciiLineFeed {
 						// definitely not a CRLF sequence, just an isolated CR byte
 						// not followed by LF
 						//
@@ -600,7 +600,7 @@ func (r *Reader) _prepareRow() bool {
 
 				switch r.state {
 				case rStateStartOfDoc, rStateStartOfRecord, rStateEndOfQuotedField, rStateInLineComment, rStateStartOfField, rStateInField:
-					if c == asciiCarriageReturn && r.rawIndex+1 < len(r.rawBuf) && r.rawBuf[r.rawIndex+1] == asciiLineFeed {
+					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
 						r.recordSepLen = 2
 						r.recordSep[0] = asciiCarriageReturn
 						r.recordSep[1] = asciiLineFeed

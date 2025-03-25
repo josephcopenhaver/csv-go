@@ -11,7 +11,6 @@ import (
 )
 
 type errWriter struct {
-	t         *testing.T
 	writer    io.Writer
 	numWrites int
 	err       error
