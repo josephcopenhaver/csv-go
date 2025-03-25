@@ -319,7 +319,6 @@ func (r *Reader) _prepareRow() bool {
 					// TODO: zero out bytes
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
-					continue
 				}
 			case r.escape:
 				switch r.state {
@@ -379,7 +378,6 @@ func (r *Reader) _prepareRow() bool {
 					// TODO: zero out bytes
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
-					continue
 				}
 			case r.quote:
 				switch r.state {
@@ -493,12 +491,10 @@ func (r *Reader) _prepareRow() bool {
 					r.rawIndex = idx + int(size)
 
 					// r.state = ... (unchanged)
-					continue
 				case rStateInLineComment:
 					// TODO: zero out bytes
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
-					continue
 				}
 			case r.recordSep[0]:
 				if r.recordSepLen == 2 {
@@ -624,6 +620,66 @@ func (r *Reader) _prepareRow() bool {
 
 					r.state = rStateStartOfRecord
 				}
+			case r.comment:
+				switch r.state {
+				case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+							di -= bomSize
+
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				case rStateStartOfRecord:
+					if di == 0 && ((r.bitFlags&stAfterSOR) == 0 || (r.bitFlags&rFlagCommentAfterSOR) != 0) {
+						// definitely a line comment
+						//
+						// so mark bytes as handled and continue onwards
+						r.byteIndex += uint64(di) + uint64(size)
+						r.rawIndex = idx + int(size)
+
+						r.state = rStateInLineComment
+						continue
+					}
+
+					// not a line comment, rather data that happens to contain
+					// a comment rune
+					fallthrough
+				case rStateStartOfField:
+
+					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					r.state = rStateInField
+				case rStateInQuotedField, rStateInField:
+					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
+				case rStateInQuotedFieldAfterEscape:
+					r.setDone()
+					r.parsingErr(ErrInvalidEscSeqInQuotedField)
+					return false
+				case rStateEndOfQuotedField:
+					r.setDone()
+					r.parsingErr(ErrInvalidQuotedFieldEnding)
+					return false
+				case rStateInLineComment:
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
+				}
 			default:
 				if r.recordSepLen != 0 {
 					// record separator detection is disabled or already hardened
@@ -686,7 +742,6 @@ func (r *Reader) _prepareRow() bool {
 						// TODO: zero out bytes
 						r.byteIndex += uint64(di) + uint64(size)
 						r.rawIndex = idx + int(size)
-						// continue // can skip, very next instruction after the switch is this
 					}
 
 					continue
