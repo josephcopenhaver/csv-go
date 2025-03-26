@@ -12,6 +12,8 @@ import (
 )
 
 const (
+	defaultReaderBufferSize = 4096
+
 	asciiCarriageReturn = 0x0D
 	asciiLineFeed       = 0x0A
 	asciiVerticalTab    = 0x0B
@@ -23,6 +25,9 @@ const (
 	utf8ByteOrderMarker    = 0xEFBBBF
 	utf16ByteOrderMarkerBE = 0xFEFF
 	utf16ByteOrderMarkerLE = 0xFFFE
+
+	rMaxOverflowNumBytes = utf8.UTFMax - 1
+	rMinRawBufSize       = utf8.UTFMax + rMaxOverflowNumBytes // TODO: ensure through various options the bounds are always greater than this min - also export so higher level layers can implement bounds validation if they need to.
 )
 
 type rFlag uint16
@@ -471,6 +476,22 @@ func (ReaderOptions) InitialRecordBuffer(v []byte) ReaderOption {
 	}
 }
 
+// // TODO: implement
+// func (ReaderOptions) ReaderBufferSize(v []byte) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.rawBufSize = v
+// 		cfg.rawBufSizeSet = true
+// 	}
+// }
+
+// // TODO: implement
+// func (ReaderOptions) ReaderBuffer(v []byte) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.rawBuf = v
+// 		cfg.rawBufSet = true
+// 	}
+// }
+
 func ReaderOpts() ReaderOptions {
 	return ReaderOptions{}
 }
@@ -822,9 +843,17 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		}
 	}
 
+	var rawBuf []byte
+	{
+		// TODO: tie off conditionally with new config options
+		// ReaderBuffer / ReaderBufferSize
+		var p [defaultReaderBufferSize]byte
+		rawBuf = p[:0]
+	}
+
 	cr := Reader{
 		controlRunes:   string(controlRunes),
-		rawBuf:         make([]byte, 0, 4096),
+		rawBuf:         rawBuf,
 		quote:          cfg.quote,
 		escape:         cfg.escape,
 		numFields:      cfg.numFields,
@@ -1032,7 +1061,6 @@ func (r *Reader) checkNumFieldsWithDiscovery(errTrailer error) bool {
 func (r *Reader) resetRecordBuffers() {
 	r.fieldLengths = r.fieldLengths[:0]
 	r.fieldStart = 0
-	r.fieldIndex = 0
 	r.recordBuf = r.recordBuf[:0]
 }
 
@@ -1064,10 +1092,10 @@ func (r *Reader) defaultScan() bool {
 func (r *Reader) initPipeline(cfg rCfg) {
 
 	if cfg.clearMemoryAfterFree {
-		r.prepareRow = r.newPrepareRow(true)
+		r.prepareRow = r.prepareRow_memclearOn
 		r.close = r.closeWithMemClear
 	} else {
-		r.prepareRow = r.newPrepareRow(false)
+		r.prepareRow = r.prepareRow_memclearOff
 		r.close = r.defaultClose
 	}
 
@@ -1202,6 +1230,7 @@ func (r *Reader) initPipeline(cfg rCfg) {
 func (r *Reader) fieldNumOverflow() bool {
 	if len(r.fieldLengths) == r.numFields {
 		r.setDone()
+		r.byteIndex++ // convert to human index base 1
 		r.parsingErr(tooManyFieldsErr(r.numFields))
 		return true
 	}
@@ -1306,4 +1335,73 @@ func isByteOrderMarker(r uint32, size int) bool {
 	default:
 		return false
 	}
+}
+
+func (r *Reader) handleEOF() bool {
+	// r.done is always true when this function is called
+
+	// check if we're in a terminal state otherwise error
+	// there is no new character to process
+	switch r.state {
+	case rStateStartOfDoc:
+		if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+			r.parsingErr(errors.Join(ErrNoByteOrderMarker, io.ErrUnexpectedEOF))
+			return false
+		}
+
+		r.state = rStateStartOfRecord // TODO: might be removable
+		fallthrough
+	case rStateStartOfRecord:
+		if (r.bitFlags&rFlagTRSEmitsRecord) != 0 && r.numFields == 1 {
+			r.fieldLengths = append(r.fieldLengths, 0)
+			// field start is unchanged because the last one was zero length
+			// r.fieldStart = len(r.recordBuf)
+			return r.checkNumFields(io.ErrUnexpectedEOF)
+		}
+		return false
+	case rStateInQuotedField, rStateInQuotedFieldAfterEscape:
+		r.parsingErr(ErrIncompleteQuotedField)
+		return false
+	case rStateInLineComment:
+		return false
+	case rStateStartOfField:
+		r.fieldLengths = append(r.fieldLengths, 0)
+		// field start is unchanged because the last one was zero length
+		// r.fieldStart = len(r.recordBuf)
+		return r.checkNumFields(io.ErrUnexpectedEOF)
+	case rStateEndOfQuotedField, rStateInField:
+		r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+		return r.checkNumFields(io.ErrUnexpectedEOF)
+	}
+
+	panic(panicUnknownReaderStateDuringEOF)
+}
+
+func endsInValidUTF8(p []byte) bool {
+	r, s := utf8.DecodeLastRune(p)
+	return (r != utf8.RuneError || s > 1)
+}
+
+// decodeMBControlRune takes a slice that starts with a matched control rune which is known
+// to have byte starting under the value 0x80 and returns the full rune located at that location
+//
+// no other input type or context is valid and behavior under all other circumstances should
+// be treated as undefined
+//
+// ---
+//
+// TODO: conditionally compile and ensure this runs during tests in a panic'ing way
+//
+// in standard operations assuming memory passed in is not changed by a bad actor
+// outside the process the panic here is not possible
+//
+// this function call should easily get inlined in most places and should not contain
+// much complexity at all - ever
+func decodeMBControlRune(p []byte) (rune, uint8) {
+	r, s := utf8.DecodeRune(p)
+	if s <= 1 {
+		panic("decode rune failed") // so must have a bad control rune loaded via config options or memory was corrupted somehow
+	}
+
+	return r, uint8(s)
 }
