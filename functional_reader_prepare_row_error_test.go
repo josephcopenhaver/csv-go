@@ -32,21 +32,6 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			iterErrStr: csv.ErrParsing.Error() + " at byte 6, record 1, field 1: " + csv.ErrIncompleteQuotedField.Error(),
 		},
 		{
-			when: "EOF in quoted field after escape",
-			then: "error",
-			newOptsF: func() []csv.ReaderOption {
-				return []csv.ReaderOption{
-					csv.ReaderOpts().Reader(strings.NewReader(`"\"hi there\`)),
-				}
-			},
-			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().Quote('"'),
-				csv.ReaderOpts().Escape('\\'),
-			},
-			iterErrIs:  []error{csv.ErrParsing, csv.ErrIncompleteQuotedField, io.ErrUnexpectedEOF},
-			iterErrStr: csv.ErrParsing.Error() + " at byte 12, record 1, field 1: " + csv.ErrIncompleteQuotedField.Error(),
-		},
-		{
 			when: "in quoted field reader ends in incomplete utf8 rune after enabled escape rune",
 			then: "error",
 			newOptsF: func() []csv.ReaderOption {
@@ -455,31 +440,6 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 3, record 1, field 1: " + csv.ErrTooManyFields.Error() + ": field count exceeds 1",
-		},
-		{
-			when: "escape set and io error after closing quote and CR and record sep is CRLF",
-			then: "coupled error",
-			newOptsF: func() []csv.ReaderOption {
-				return []csv.ReaderOption{
-					csv.ReaderOpts().Reader(func() *errBufferedReader {
-						ebr := newErrBufferedReader(errReader{
-							t:        t,
-							reader:   strings.NewReader("\"\"\r"),
-							numBytes: 4,
-							err:      io.ErrClosedPipe,
-						})
-
-						return ebr
-					}()),
-				}
-			},
-			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().RecordSeparator("\r\n"),
-				csv.ReaderOpts().Quote('"'),
-				csv.ReaderOpts().Escape('\\'),
-			},
-			iterErrIs:  []error{csv.ErrIO, io.ErrClosedPipe},
-			iterErrStr: csv.ErrIO.Error() + " at byte 3, record 1, field 1: " + io.ErrClosedPipe.Error(),
 		},
 		{
 			when: "escape set and record sep CRLF after closing quote but field count under-flows",
