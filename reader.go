@@ -1065,6 +1065,13 @@ func (r *Reader) resetRecordBuffers() {
 }
 
 func (r *Reader) zeroRecordBuffers() {
+	{
+		v := r.rawBuf[:cap(r.rawBuf)]
+		for i := range v {
+			v[i] = 0
+		}
+	}
+
 	if r.fieldLengths != nil {
 		v := r.fieldLengths[:cap(r.fieldLengths)]
 		for i := range v {
