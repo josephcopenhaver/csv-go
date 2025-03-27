@@ -28,10 +28,6 @@ func (r *Reader) prepareRow_memclearOff() bool {
 				lastProcessedByte = r.rawBuf[r.rawIndex-1]
 			}
 
-			// TODO: experiment with doing this less when it would be a nop
-			//
-			// I believe we'll have 100% the same effect by placing within the r.rawIndex > 0 block above.
-			//
 			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
 			r.rawBuf = r.rawBuf[0 : len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
 			r.rawIndex = 0
@@ -40,6 +36,11 @@ func (r *Reader) prepareRow_memclearOff() bool {
 			if (r.bitFlags & stEOF) != 0 {
 				if len(r.rawBuf) == 0 {
 					r.setDone()
+
+					if r.readErr != nil {
+						r.ioErr(r.readErr)
+						return false
+					}
 
 					// if CRLF is the record sep, no error has been thrown before now
 					// and we've reached EOF with the last byte being a CR
@@ -54,19 +55,13 @@ func (r *Reader) prepareRow_memclearOff() bool {
 					// An argument could be made that this should be allowed when rFlagErrOnNLInUF
 					// is off that this should also be off, but I will not be making that decision
 					// without a stronger opinion. A pull request with strong justification or a new
-					// option would be welcome here should you have a strong opinion dear reader.
+					// option would be welcome here should you have a strong opinion.
 					if lastProcessedByte == asciiCarriageReturn && r.recordSepLen == 2 {
 						r.parsingErr(ErrUnsafeCRFileEnd)
 						return false
 					}
 
 					return r.handleEOF()
-				}
-			} else if r.readErr != nil {
-				if len(r.rawBuf) == 0 {
-					r.setDone()
-					r.ioErr(r.readErr)
-					return false
 				}
 			} else {
 
@@ -75,8 +70,8 @@ func (r *Reader) prepareRow_memclearOff() bool {
 					n += len(r.rawBuf)
 					r.rawBuf = r.rawBuf[0:n]
 					if err != nil {
+						r.bitFlags |= stEOF
 						if errors.Is(err, io.EOF) {
-							r.bitFlags |= stEOF
 							if n == 0 {
 								r.setDone()
 								return r.handleEOF()
@@ -85,26 +80,53 @@ func (r *Reader) prepareRow_memclearOff() bool {
 							r.setDone()
 							r.ioErr(err)
 							return false
+						} else {
+							r.readErr = err
 						}
-
-						r.readErr = err
 					}
 
 					if n >= rMinRawBufSize {
-						if r.rawBuf[n-1] == asciiCarriageReturn {
-							if r.recordSepLen != 1 {
+						if c := r.rawBuf[n-1]; c&invalidControlRune == 0 {
+							// ends in 1 byte ascii character
+
+							if c == asciiCarriageReturn && r.recordSepLen != 1 {
+								// hide a floating CR character if record separator
+								// could be CRLF
+								//
+								// TODO: perhaps only do this if not in a
+								// quoted state to reduce copying ops?
+								//
 								r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-1]
 								r.rawNumHiddenBytes = 1
 							}
+
 							break
 						}
 
-						for i := 0; i <= int(rMaxOverflowNumBytes); i++ {
-							if (r.rawBuf[n-i-1]&invalidControlRune) == 0 || endsInValidUTF8(r.rawBuf[n-rMinRawBufSize:n-i]) {
-								r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-i]
-								r.rawNumHiddenBytes = uint8(i)
-								break
+						if !endsInValidUTF8(r.rawBuf) {
+							// does not end in a valid utf8 rune byte sequence and it may have
+							// byte or more truncated from the end
+							//
+							// so search the last three bytes backwards for one that begins with
+							// 11xxxxxx (0xC0)
+							//
+							// if found, it could be the start of a utf8 rune that is truncated
+							// so hide it and the other bytes after it if they exist
+							//
+							// This ensures that control runes which must be valid utf8 sequences
+							// are reliably found and handled even if there are utf8 encoding errors
+							// present in blocks of data bytes that have been "csv" encoded at the
+							// "byte level" rather than the "rune level"
+
+							for i := 1; i <= rMaxOverflowNumBytes; i++ {
+								if (r.rawBuf[len(r.rawBuf)-i] & 0xC0) == 0xC0 {
+									r.rawNumHiddenBytes = uint8(i)
+									r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-i]
+									break
+								}
 							}
+
+							// break // is next instruction anyways, so commented out
 						}
 
 						break
@@ -863,10 +885,6 @@ func (r *Reader) prepareRow_memclearOn() bool {
 				lastProcessedByte = r.rawBuf[r.rawIndex-1]
 			}
 
-			// TODO: experiment with doing this less when it would be a nop
-			//
-			// I believe we'll have 100% the same effect by placing within the r.rawIndex > 0 block above.
-			//
 			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
 			r.rawBuf = r.rawBuf[0 : len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
 			r.rawIndex = 0
@@ -875,6 +893,11 @@ func (r *Reader) prepareRow_memclearOn() bool {
 			if (r.bitFlags & stEOF) != 0 {
 				if len(r.rawBuf) == 0 {
 					r.setDone()
+
+					if r.readErr != nil {
+						r.ioErr(r.readErr)
+						return false
+					}
 
 					// if CRLF is the record sep, no error has been thrown before now
 					// and we've reached EOF with the last byte being a CR
@@ -889,19 +912,13 @@ func (r *Reader) prepareRow_memclearOn() bool {
 					// An argument could be made that this should be allowed when rFlagErrOnNLInUF
 					// is off that this should also be off, but I will not be making that decision
 					// without a stronger opinion. A pull request with strong justification or a new
-					// option would be welcome here should you have a strong opinion dear reader.
+					// option would be welcome here should you have a strong opinion.
 					if lastProcessedByte == asciiCarriageReturn && r.recordSepLen == 2 {
 						r.parsingErr(ErrUnsafeCRFileEnd)
 						return false
 					}
 
 					return r.handleEOF()
-				}
-			} else if r.readErr != nil {
-				if len(r.rawBuf) == 0 {
-					r.setDone()
-					r.ioErr(r.readErr)
-					return false
 				}
 			} else {
 
@@ -910,8 +927,8 @@ func (r *Reader) prepareRow_memclearOn() bool {
 					n += len(r.rawBuf)
 					r.rawBuf = r.rawBuf[0:n]
 					if err != nil {
+						r.bitFlags |= stEOF
 						if errors.Is(err, io.EOF) {
-							r.bitFlags |= stEOF
 							if n == 0 {
 								r.setDone()
 								return r.handleEOF()
@@ -920,26 +937,53 @@ func (r *Reader) prepareRow_memclearOn() bool {
 							r.setDone()
 							r.ioErr(err)
 							return false
+						} else {
+							r.readErr = err
 						}
-
-						r.readErr = err
 					}
 
 					if n >= rMinRawBufSize {
-						if r.rawBuf[n-1] == asciiCarriageReturn {
-							if r.recordSepLen != 1 {
+						if c := r.rawBuf[n-1]; c&invalidControlRune == 0 {
+							// ends in 1 byte ascii character
+
+							if c == asciiCarriageReturn && r.recordSepLen != 1 {
+								// hide a floating CR character if record separator
+								// could be CRLF
+								//
+								// TODO: perhaps only do this if not in a
+								// quoted state to reduce copying ops?
+								//
 								r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-1]
 								r.rawNumHiddenBytes = 1
 							}
+
 							break
 						}
 
-						for i := 0; i <= int(rMaxOverflowNumBytes); i++ {
-							if (r.rawBuf[n-i-1]&invalidControlRune) == 0 || endsInValidUTF8(r.rawBuf[n-rMinRawBufSize:n-i]) {
-								r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-i]
-								r.rawNumHiddenBytes = uint8(i)
-								break
+						if !endsInValidUTF8(r.rawBuf) {
+							// does not end in a valid utf8 rune byte sequence and it may have
+							// byte or more truncated from the end
+							//
+							// so search the last three bytes backwards for one that begins with
+							// 11xxxxxx (0xC0)
+							//
+							// if found, it could be the start of a utf8 rune that is truncated
+							// so hide it and the other bytes after it if they exist
+							//
+							// This ensures that control runes which must be valid utf8 sequences
+							// are reliably found and handled even if there are utf8 encoding errors
+							// present in blocks of data bytes that have been "csv" encoded at the
+							// "byte level" rather than the "rune level"
+
+							for i := 1; i <= rMaxOverflowNumBytes; i++ {
+								if (r.rawBuf[len(r.rawBuf)-i] & 0xC0) == 0xC0 {
+									r.rawNumHiddenBytes = uint8(i)
+									r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-i]
+									break
+								}
 							}
+
+							// break // is next instruction anyways, so commented out
 						}
 
 						break
