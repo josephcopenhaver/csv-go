@@ -1,0 +1,892 @@
+{{define "recBufAppend"}}{{if .ClearMemoryAfterUse}}r.appendRecBuf({{else}}r.recordBuf = append(r.recordBuf, {{end}}{{end}}
+func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}() bool {
+
+	// TODO: experiment with removing "convert to human index base 1" increment statements and
+	// tracking that generally elsewhere
+	//
+	// reducing the instruction-space on the hot-positive path even after using code generation to filter
+	// blocks out and dynamic controlRunes per state will have a compounding positive effect
+	//
+	// next step is to thoroughly get coverage though over this new approach in the discrete form before
+	// it gets less verbose / more small via various tactics
+
+	for {
+		if len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex < rMinRawBufSize {
+			{{if .TwoRuneRecSep}}
+			var lastProcessedByte byte
+			if r.rawIndex > 0 {
+				lastProcessedByte = r.rawBuf[r.rawIndex-1]
+			}
+			{{end}}
+
+			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
+			r.rawBuf = r.rawBuf[0 : len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
+			r.rawIndex = 0
+			r.rawNumHiddenBytes = 0
+
+			if (r.bitFlags & stEOF) != 0 {
+				if len(r.rawBuf) == 0 {
+					r.setDone()
+
+					if r.readErr != nil {
+						r.ioErr(r.readErr)
+						return false
+					}
+
+					{{if .TwoRuneRecSep}}
+					// if CRLF is the record sep, no error has been thrown before now
+					// and we've reached EOF with the last byte being a CR
+					//
+					// It's unsafe to assume that the field has ended correctly and that
+					// the file has been generated reliably.
+					//
+					// In such cases where strict RFC compliance is enabled and CRLF is supported
+					// this character along with LF should be encased in quotes and an error should
+					// be raised.
+					//
+					// An argument could be made that this should be allowed when rFlagErrOnNLInUF
+					// is off that this should also be off, but I will not be making that decision
+					// without a stronger opinion. A pull request with strong justification or a new
+					// option would be welcome here should you have a strong opinion.
+					if lastProcessedByte == asciiCarriageReturn {
+						r.parsingErr(ErrUnsafeCRFileEnd)
+						return false
+					}
+					{{end}}
+
+					return r.handleEOF()
+				}
+			} else {
+
+				for {
+					n, err := r.reader.Read(r.rawBuf[len(r.rawBuf):cap(r.rawBuf)])
+					n += len(r.rawBuf)
+					r.rawBuf = r.rawBuf[0:n]
+					if err != nil {
+						r.bitFlags |= stEOF
+						if errors.Is(err, io.EOF) {
+							if n == 0 {
+								r.setDone()
+								return r.handleEOF()
+							}
+						} else if n == 0 {
+							r.setDone()
+							r.ioErr(err)
+							return false
+						} else {
+							r.readErr = err
+						}
+					}
+
+					if n >= rMinRawBufSize {
+						if c := r.rawBuf[n-1]; c & invalidControlRune == 0 {
+							// ends in 1 byte ascii character
+
+							{{if not .OneRuneRecSep}}
+							if c == asciiCarriageReturn {
+								// hide a floating CR character if record separator
+								// could be CRLF
+								//
+								// TODO: perhaps only do this if not in a
+								// quoted state to reduce copying ops?
+								//
+								r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-1]
+								r.rawNumHiddenBytes = 1
+							}
+							{{end}}
+
+							break
+						}
+
+						if !endsInValidUTF8(r.rawBuf) {
+							// does not end in a valid utf8 rune byte sequence and it may have
+							// a byte or more truncated from the end
+							//
+							// so search the last three bytes backwards for one that begins with
+							// 11xxxxxx (0xC0)
+							//
+							// if found, it could be the start of a utf8 rune that is truncated
+							// so hide it and the other bytes after it if they exist
+							//
+							// This ensures that control runes which must be valid utf8 sequences
+							// are reliably found and handled even if there are utf8 encoding errors
+							// present in blocks of data bytes that have been "csv" encoded at the
+							// "byte level" rather than the "rune level"
+
+							for i := 1; i <= rMaxOverflowNumBytes; i++ {
+								if (r.rawBuf[len(r.rawBuf)-i] & 0xC0) == 0xC0 {
+									r.rawNumHiddenBytes = uint8(i)
+									r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-i]
+									break
+								}
+							}
+
+							// break // is next instruction anyways, so commented out
+						}
+
+						break
+					}
+
+					if err != nil {
+						break
+					}
+				}
+			}
+		}
+
+	CHUNK_PROCESSOR:
+		for {
+			di := bytes.IndexAny(r.rawBuf[r.rawIndex:], r.controlRunes)
+			if di == -1 {
+				// consume it all without adjustment
+
+				switch r.state {
+				{{if or .DropBOM .ErrOnNoBOM}}case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							if len(r.rawBuf) == r.rawIndex+bomSize {
+								r.byteIndex += uint64(bomSize)
+								r.rawIndex = len(r.rawBuf)
+
+								r.state = rStateStartOfRecord
+								break CHUNK_PROCESSOR
+							}
+							r.rawIndex++
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				{{end}}case rStateStartOfRecord, rStateStartOfField:
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:]...)
+
+					r.state = rStateInField
+				case {{if .Quote}}rStateInQuotedField, {{end}}rStateInField:
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:]...)
+
+					// r.state = ... (unchanged)
+				{{if .Quote}}{{if .Escape}}case rStateInQuotedFieldAfterEscape:
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					r.parsingErr(ErrInvalidEscSeqInQuotedField)
+					return false
+				{{end}}case rStateEndOfQuotedField:
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					r.parsingErr(ErrInvalidQuotedFieldEnding)
+					return false
+				{{end}}case rStateInLineComment:
+					// TODO: zero out bytes
+
+					// r.state = ... (unchanged)
+				}
+
+				r.byteIndex += uint64(len(r.rawBuf) - r.rawIndex)
+				r.rawIndex = len(r.rawBuf)
+				break
+			}
+			idx := r.rawIndex + di
+
+			c := rune(r.rawBuf[idx])
+			size := uint8(1)
+			if (c & invalidControlRune) != 0 {
+				c, size = decodeMBControlRune(r.rawBuf[idx:])
+			}
+
+			// TODO: benchmark if skipping intermediate copies for signals not valid for a state saves time
+			//
+			// if it does then use multiple sets of runes for IndexAny operation
+
+			switch c {
+			case r.fieldSeparator:
+				switch r.state {
+				{{if or .DropBOM .ErrOnNoBOM}}case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+							di -= bomSize
+
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				{{end}}case rStateStartOfRecord:
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					r.byteIndex += uint64(di)
+
+					r.rawIndex = idx + int(size)
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+					r.fieldStart = len(r.recordBuf)
+
+					if r.fieldNumOverflow() {
+						return false
+					}
+					r.byteIndex += uint64(size)
+
+					r.fieldIndex++
+					r.state = rStateStartOfField
+				{{if .Quote}}case rStateInQuotedField:
+					// TODO: technically "skippable"
+
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
+				{{if .Escape}}case rStateInQuotedFieldAfterEscape:
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					r.parsingErr(ErrInvalidEscSeqInQuotedField)
+					return false
+				{{end}}case rStateEndOfQuotedField:
+					if di != 0 {
+						r.setDone()
+						r.byteIndex++ // convert to human index base 1
+						r.parsingErr(ErrInvalidQuotedFieldEnding)
+						return false
+					}
+
+					r.rawIndex += int(size)
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+					r.fieldStart = len(r.recordBuf)
+
+					if r.fieldNumOverflow() {
+						return false
+					}
+					r.byteIndex += uint64(size)
+
+					r.fieldIndex++
+					r.state = rStateStartOfField
+				{{end}}case rStateStartOfField:
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					r.byteIndex += uint64(di)
+					r.rawIndex = idx + int(size)
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+					r.fieldStart = len(r.recordBuf)
+
+					if r.fieldNumOverflow() {
+						return false
+					}
+					r.byteIndex += uint64(size)
+
+					r.fieldIndex++
+					// r.state = ... (unchanged)
+				case rStateInField:
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					r.byteIndex += uint64(di)
+					r.rawIndex = idx + int(size)
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+					r.fieldStart = len(r.recordBuf)
+
+					if r.fieldNumOverflow() {
+						return false
+					}
+					r.byteIndex += uint64(size)
+
+					r.fieldIndex++
+					r.state = rStateStartOfField
+				case rStateInLineComment:
+					// TODO: zero out bytes
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+				}
+			{{if .Escape}}case r.escape:
+				switch r.state {
+				{{if or .DropBOM .ErrOnNoBOM}}case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+							di -= bomSize
+
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				{{end}}case rStateStartOfRecord, rStateStartOfField:
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					r.state = rStateInField
+				{{if .Quote}}case rStateInQuotedField:
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					r.state = rStateInQuotedFieldAfterEscape
+				case rStateInQuotedFieldAfterEscape:
+					if di != 0 {
+						r.setDone()
+						r.byteIndex++ // convert to human index base 1
+						r.parsingErr(ErrInvalidEscSeqInQuotedField)
+						return false
+					}
+
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(size)
+					r.rawIndex += int(size)
+
+					r.state = rStateInQuotedField
+				case rStateEndOfQuotedField:
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					r.parsingErr(ErrInvalidQuotedFieldEnding)
+					return false
+				{{end}}case rStateInField:
+					// TODO: technically "skippable"
+
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
+				case rStateInLineComment:
+					// TODO: zero out bytes
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+				}
+			{{end}}{{if .Quote}}case r.quote:
+				switch r.state {
+				{{if or .DropBOM .ErrOnNoBOM}}case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+							di -= bomSize
+
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				{{end}}case rStateStartOfRecord:
+					if di != 0 {
+						{{if .ErrOnQInUF}}
+						// quote in unquoted field should cause an error
+
+						r.byteIndex += uint64(di)
+
+						r.state = rStateInField // TODO: might be removable
+
+						r.setDone()
+						r.byteIndex++ // convert to human index base 1
+						r.parsingErr(ErrQuoteInUnquotedField)
+						return false
+						{{else}}
+						// quote in unquoted field erroring is disabled
+
+						{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+						r.byteIndex += uint64(di) + uint64(size)
+						r.rawIndex = idx + int(size)
+
+						r.state = rStateInField
+
+						if r.rawIndex >= len(r.rawBuf) {
+							break CHUNK_PROCESSOR
+						}
+						continue
+						{{end}}
+					}
+
+					r.byteIndex += uint64(size)
+					r.rawIndex += int(size)
+
+					r.state = rStateInQuotedField
+				case rStateInQuotedField:
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					r.state = rStateEndOfQuotedField
+				{{if .Escape}}case rStateInQuotedFieldAfterEscape:
+					if di != 0 {
+						r.setDone()
+						r.byteIndex++ // convert to human index base 1
+						r.parsingErr(ErrInvalidEscSeqInQuotedField)
+						return false
+					}
+
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(size)
+					r.rawIndex += int(size)
+
+					r.state = rStateInQuotedField
+				{{end}}case rStateEndOfQuotedField:
+					if di != 0 {
+						r.setDone()
+						r.byteIndex++ // convert to human index base 1
+						r.parsingErr(ErrInvalidQuotedFieldEnding)
+						return false
+					}
+
+					if (r.bitFlags & rFlagEscape) != 0 {
+						r.setDone()
+						r.byteIndex++ // convert to human index base 1
+						r.parsingErr(ErrUnexpectedQuoteAfterField)
+						return false
+					}
+
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(size)
+					r.rawIndex += int(size)
+
+					r.state = rStateInQuotedField
+				case rStateStartOfField:
+					if di != 0 {
+						{{if .ErrOnQInUF}}
+						// quote in unquoted field should cause an error
+
+						r.byteIndex += uint64(di)
+						r.setDone()
+						r.byteIndex++ // convert to human index base 1
+						r.parsingErr(ErrQuoteInUnquotedField)
+						return false
+						{{else}}
+						// quote in unquoted field erroring is disabled
+
+						{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+						r.byteIndex += uint64(di) + uint64(size)
+						r.rawIndex = idx + int(size)
+
+						r.state = rStateInField
+						if r.rawIndex >= len(r.rawBuf) {
+							break CHUNK_PROCESSOR
+						}
+						continue
+						{{end}}
+					}
+
+					r.byteIndex += uint64(size)
+					r.rawIndex += int(size)
+
+					r.state = rStateInQuotedField
+				case rStateInField:
+					{{if .ErrOnQInUF}}
+					// quote in unquoted field should cause an error
+
+					r.byteIndex += uint64(di)
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					r.parsingErr(ErrQuoteInUnquotedField)
+					return false
+					{{else}}
+					// quote in unquoted field erroring is disabled
+
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
+					{{end}}
+				case rStateInLineComment:
+					// TODO: zero out bytes
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+				}
+			{{end}}{{if not (or .OneRuneRecSep .TwoRuneRecSep)}}case r.recordSep[0]:
+				{{if .TwoRuneRecSep}}
+				// checking for a full CRLF
+				//
+				// if not a CRLF sequence then just process the CR as field data
+
+				if idx+int(size) >= len(r.rawBuf) || r.rawBuf[idx+int(size)] != asciiLineFeed {
+					// definitely not a CRLF sequence, just an isolated CR byte
+					// not followed by LF
+					//
+					// so treat as a field data byte
+
+					switch r.state {
+					{{if or .DropBOM .ErrOnNoBOM}}case rStateStartOfDoc:
+						if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+							if (r.bitFlags & rFlagDropBOM) != 0 {
+								r.byteIndex += uint64(bomSize)
+								r.rawIndex += bomSize
+							}
+						} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+							r.parsingErr(ErrNoByteOrderMarker)
+							return false
+						}
+
+						r.state = rStateStartOfRecord // TODO: might be removable
+						fallthrough
+					{{end}}case rStateStartOfRecord, rStateStartOfField:
+						{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:]...)
+
+						r.state = rStateInField
+					case {{if .Quote}}rStateInQuotedField, {{end}}rStateInField:
+						{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:]...)
+
+						// r.state = ... (unchanged)
+					{{if .Quote}}{{if .Escape}}case rStateInQuotedFieldAfterEscape:
+						r.setDone()
+						r.byteIndex++ // convert to human index base 1
+						r.parsingErr(ErrInvalidEscSeqInQuotedField)
+						return false
+					{{end}}case rStateEndOfQuotedField:
+						r.setDone()
+						r.byteIndex++ // convert to human index base 1
+						r.parsingErr(ErrInvalidQuotedFieldEnding)
+						return false
+					{{end}}case rStateInLineComment:
+						// TODO: zero out bytes
+
+						// r.state = ... (unchanged)
+					}
+
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					if r.rawIndex >= len(r.rawBuf) {
+						break CHUNK_PROCESSOR
+					}
+					continue
+				}
+
+				// we are handling a CRLF sequence
+				// so increase size by the length of LF
+				// and continue with record separator processing
+				size++
+
+				{{else}}
+				//
+				// handling a single ascii byte record separator
+				//
+
+				{{end}}
+				switch r.state {
+				{{if or .DropBOM .ErrOnNoBOM}}case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+							di -= bomSize
+
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				{{end}}case rStateStartOfRecord:
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+
+					// r.state = ... (unchanged)
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
+					return false
+				{{if .Quote}}case rStateInQuotedField:
+					// TODO: technically "skippable"
+
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
+				{{if .Escape}}case rStateInQuotedFieldAfterEscape:
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					r.parsingErr(ErrInvalidEscSeqInQuotedField)
+					return false
+				{{end}}case rStateEndOfQuotedField:
+					if di != 0 {
+						r.setDone()
+						r.byteIndex++ // convert to human index base 1
+						r.parsingErr(ErrInvalidQuotedFieldEnding)
+						return false
+					}
+
+					r.byteIndex += uint64(size)
+					r.rawIndex += int(size)
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+
+					r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
+					return false
+				{{end}}case rStateStartOfField, rStateInField:
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
+
+					r.state = rStateStartOfRecord
+					if r.checkNumFields(nil) {
+						r.fieldIndex = 0
+						r.recordIndex++
+						return true
+					}
+					return false
+				case rStateInLineComment:
+					// TODO: zero out bytes
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					r.state = rStateStartOfRecord
+				}
+			{{end}}{{if .Escape}}case r.comment:
+				switch r.state {
+				{{if or .DropBOM .ErrOnNoBOM}}case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+							di -= bomSize
+
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				{{end}}case rStateStartOfRecord:
+					if di == 0 {{if not .CommentAfterSOR}}&& (r.bitFlags&stAfterSOR) == 0 {{end}}{
+						// definitely a line comment
+						//
+						// so mark bytes as handled and continue onwards
+						r.byteIndex += uint64(di) + uint64(size)
+						r.rawIndex = idx + int(size)
+
+						r.state = rStateInLineComment
+						if r.rawIndex >= len(r.rawBuf) {
+							break CHUNK_PROCESSOR
+						}
+						continue
+					}
+
+					// not a line comment, rather data that happens to contain
+					// a comment rune
+					fallthrough
+				case rStateStartOfField:
+
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					r.state = rStateInField
+				case {{if .Quote}}rStateInQuotedField, {{end}}rStateInField:
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
+				{{if .Quote}}{{if .Escape}}case rStateInQuotedFieldAfterEscape:
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					r.parsingErr(ErrInvalidEscSeqInQuotedField)
+					return false
+				{{end}}case rStateEndOfQuotedField:
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					r.parsingErr(ErrInvalidQuotedFieldEnding)
+					return false
+				{{end}}case rStateInLineComment:
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
+				}
+			{{end}}default:
+				{{if or .OneRuneRecSep .TwoRuneRecSep}}
+				// record separator detection is disabled or already hardened
+				//
+				// must have found a CR or LF character under circumstances where we're aiming to error
+				// if discovered outside of a quoted state
+				switch r.state {
+				{{if or .DropBOM .ErrOnNoBOM}}case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+							di -= bomSize
+
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				{{end}}case rStateStartOfRecord, rStateStartOfField:
+					if di > 0 {
+						r.state = rStateInField // TODO: might be removable
+						r.byteIndex += uint64(di)
+					}
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					if c == asciiLineFeed {
+						r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+					} else {
+						r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+					}
+					return false
+				case rStateInField:
+					r.byteIndex += uint64(di)
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					if c == asciiLineFeed {
+						r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+					} else {
+						r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+					}
+					return false
+				{{if .Quote}}case rStateInQuotedField:
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
+				{{if .Escape}}case rStateInQuotedFieldAfterEscape:
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					r.parsingErr(ErrInvalidEscSeqInQuotedField)
+					return false
+				{{end}}case rStateEndOfQuotedField:
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					r.parsingErr(ErrInvalidQuotedFieldEnding)
+					return false
+				{{end}}case rStateInLineComment:
+					// TODO: zero out bytes
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+				}
+
+				if r.rawIndex >= len(r.rawBuf) {
+					break CHUNK_PROCESSOR
+				}
+
+				{{else}}
+
+				//
+				// record separator discovery handling block
+				//
+				// c contains the first rune of the record separator sequence
+				//
+				// only CRLF is a valid two-rune sequence, all others are one rune
+				//
+
+				switch r.state {
+				{{if or .DropBOM .ErrOnNoBOM}}case rStateStartOfDoc:
+					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
+						if (r.bitFlags & rFlagDropBOM) != 0 {
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
+
+							// idx = r.rawIndex + di // will be net unchanged
+						}
+					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
+						r.parsingErr(ErrNoByteOrderMarker)
+						return false
+					}
+
+					r.state = rStateStartOfRecord // TODO: might be removable
+					fallthrough
+				{{end}}case rStateStartOfRecord, {{if .Quote}}rStateEndOfQuotedField, {{end}}rStateInLineComment, rStateStartOfField, rStateInField:
+					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
+						r.recordSepLen = 2
+						r.recordSep[0] = asciiCarriageReturn
+						r.recordSep[1] = asciiLineFeed
+
+						// TODO: alter prepareRow strategy accordingly
+					} else {
+						r.recordSepLen = 1
+						r.recordSep[0] = c
+
+						// TODO: alter prepareRow strategy accordingly
+					}
+
+					// preserve field separator
+					var buf [7]rune
+					controlRunes := append(buf[:0], r.fieldSeparator)
+					controlRunes = append(controlRunes, c)
+
+					if (r.bitFlags & rFlagQuote) != 0 {
+						controlRunes = append(controlRunes, r.quote)
+					}
+					if (r.bitFlags & rFlagEscape) != 0 {
+						controlRunes = append(controlRunes, r.escape)
+					}
+					if (r.bitFlags & rFlagComment) != 0 {
+						controlRunes = append(controlRunes, r.comment)
+					}
+
+					{{if .ErrOnNLInUF}}
+					{
+						// error on newline in unquoted field block
+
+						crs := []byte(string(controlRunes))
+
+						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
+							controlRunes = append(controlRunes, asciiCarriageReturn)
+						}
+
+						if !bytes.Contains(crs, []byte{asciiLineFeed}) {
+							controlRunes = append(controlRunes, asciiLineFeed)
+						}
+					}
+					{{end}}
+
+					r.controlRunes = string(controlRunes)
+
+					// r.state = ... (unchanged)
+				{{if .Quote}}case rStateInQuotedField:
+					// TODO: technically "skippable"
+
+					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					// r.state = ... (unchanged)
+				{{if .Escape}}
+				case rStateInQuotedFieldAfterEscape:
+					r.setDone()
+					r.byteIndex++ // convert to human index base 1
+					r.parsingErr(ErrInvalidEscSeqInQuotedField)
+					return false
+				{{end}}{{end}}
+				}
+				{{end}}
+			}
+
+			if r.rawIndex >= len(r.rawBuf) {
+				break
+			}
+		}
+	}
+}

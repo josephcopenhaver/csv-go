@@ -105,7 +105,7 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 						if !endsInValidUTF8(r.rawBuf) {
 							// does not end in a valid utf8 rune byte sequence and it may have
-							// byte or more truncated from the end
+							// a byte or more truncated from the end
 							//
 							// so search the last three bytes backwards for one that begins with
 							// 11xxxxxx (0xC0)
@@ -962,7 +962,7 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 						if !endsInValidUTF8(r.rawBuf) {
 							// does not end in a valid utf8 rune byte sequence and it may have
-							// byte or more truncated from the end
+							// a byte or more truncated from the end
 							//
 							// so search the last three bytes backwards for one that begins with
 							// 11xxxxxx (0xC0)
