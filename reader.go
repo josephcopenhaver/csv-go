@@ -1384,6 +1384,9 @@ func (r *Reader) handleEOF() bool {
 	panic(panicUnknownReaderStateDuringEOF)
 }
 
+// endsInValidUTF8 should get inlined by the compiler
+//
+// keep it small and only one function call
 func endsInValidUTF8(p []byte) bool {
 	r, s := utf8.DecodeLastRune(p)
 	return (r != utf8.RuneError || s > 1)
