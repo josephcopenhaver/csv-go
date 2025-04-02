@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 	"unsafe"
@@ -27,7 +28,7 @@ const (
 	utf16ByteOrderMarkerLE = 0xFFFE
 
 	rMaxOverflowNumBytes = utf8.UTFMax - 1
-	rMinRawBufSize       = utf8.UTFMax + rMaxOverflowNumBytes // TODO: ensure through various options the bounds are always greater than this min - also export so higher level layers can implement bounds validation if they need to.
+	rMinRawBufSize       = utf8.UTFMax + rMaxOverflowNumBytes // TODO: export in some fashion so callers can implement validation of their own
 )
 
 type rFlag uint16
@@ -476,32 +477,32 @@ func (ReaderOptions) InitialRecordBuffer(v []byte) ReaderOption {
 	}
 }
 
-// // TODO: implement
-// func (ReaderOptions) ReaderBufferSize(v []byte) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.rawBufSize = v
-// 		cfg.rawBufSizeSet = true
-// 	}
-// }
+func (ReaderOptions) ReaderBufferSize(v int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.rawBufSize = v
+		cfg.rawBufSizeSet = true
+	}
+}
 
-// // TODO: implement
-// func (ReaderOptions) ReaderBuffer(v []byte) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.rawBuf = v
-// 		cfg.rawBufSet = true
-// 	}
-// }
+func (ReaderOptions) ReaderBuffer(v []byte) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.rawBuf = v
+		cfg.rawBufSet = true
+	}
+}
 
 func ReaderOpts() ReaderOptions {
 	return ReaderOptions{}
 }
 
 type rCfg struct {
-	headers   []string
-	recordBuf []byte
-	reader    io.Reader
-	recordSep [2]rune
-	numFields int
+	headers    []string
+	rawBuf     []byte
+	recordBuf  []byte
+	reader     io.Reader
+	recordSep  [2]rune
+	rawBufSize int
+	numFields  int
 	// maxNumFields                       int
 	// maxNumRecords                      int
 	// maxNumRecordBytes                  int
@@ -531,6 +532,8 @@ type rCfg struct {
 	clearMemoryAfterFree               bool
 	initialRecordBufferSizeSet         bool
 	recordBufSet                       bool
+	rawBufSet                          bool
+	rawBufSizeSet                      bool
 }
 
 type Reader struct {
@@ -575,6 +578,18 @@ func (cfg *rCfg) validate() error {
 
 	if cfg.reader == nil {
 		return ErrNilReader
+	}
+
+	if cfg.rawBufSet && cfg.rawBufSizeSet {
+		return errors.New("cannot specify both ReaderBuffer and ReaderBufferSize")
+	}
+
+	if cfg.rawBufSet && len(cfg.rawBuf) < rMinRawBufSize {
+		return errors.New("a ReaderBuffer must have a length greater than or equal to " + strconv.Itoa(rMinRawBufSize))
+	}
+
+	if cfg.rawBufSizeSet && cfg.rawBufSize < rMinRawBufSize {
+		return errors.New("a ReaderBufferSize must be greater than or equal to " + strconv.Itoa(rMinRawBufSize))
 	}
 
 	if cfg.initialRecordBufferSizeSet && cfg.recordBufSet {
@@ -875,24 +890,16 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		}
 	}
 
-	var rawBuf []byte
-	{
-		// TODO: tie off conditionally with new config options
-		// ReaderBuffer / ReaderBufferSize
-		var p [defaultReaderBufferSize]byte
-		rawBuf = p[:0]
-	}
-
 	cr := Reader{
 		controlRunes:   string(controlRunes),
-		rawBuf:         rawBuf,
+		rawBuf:         cfg.rawBuf[0:0:len(cfg.rawBuf)],
 		quote:          cfg.quote,
 		escape:         cfg.escape,
 		numFields:      cfg.numFields,
 		fieldSeparator: cfg.fieldSeparator,
 		comment:        cfg.comment,
 		headers:        headers,
-		recordBuf:      cfg.recordBuf[:0],
+		recordBuf:      cfg.recordBuf[0:0:len(cfg.recordBuf)],
 		recordSep:      cfg.recordSep,
 		recordSepLen:   cfg.recordSepLen,
 		bitFlags:       bitFlags,
@@ -1136,6 +1143,13 @@ func (r *Reader) initPipeline(cfg rCfg) {
 	} else {
 		r.close = r.closeWithMemClear
 		r.prepareRow = r.prepareRow_memclearOn
+	}
+
+	if cfg.rawBufSizeSet {
+		r.rawBuf = make([]byte, 0, cfg.rawBufSize)
+	} else if !cfg.rawBufSet {
+		var p [defaultReaderBufferSize]byte
+		r.rawBuf = p[:0]
 	}
 
 	if cfg.initialRecordBufferSize > 0 {
