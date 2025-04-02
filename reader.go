@@ -606,6 +606,17 @@ func (cfg *rCfg) validate() error {
 
 	if cfg.discoverRecordSeparator {
 		cfg.recordSepLen = 0
+		// TODO: instead of setting a default value that is not reachable
+		// under normal circumstances, lets make sure the value cannot be used
+		// until after the separator is fully resolved by switching handlers.
+		//
+		// note that there is a problem
+		//
+		// the original loop design is not re-entrant whenever the record sep is discovered
+		// so loops and older strategies continue
+		//
+		// current generated code also allows the loops to continue by keeping the runtime discovery checks rather
+		// than the compile time strategies
 		cfg.recordSep = [2]rune{invalidControlRune, 0}
 	}
 
@@ -766,6 +777,27 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 			p += s
 		}
 	}
+
+	// a mode affects what runes are relevant
+	// and the reachable set of control-rune handlers
+	// because of that change to relevancy
+	//
+	// it may not be ideal to have the switch statements
+	// change dynamically as that could lead to cache
+	// misses
+	//
+	// however at least dynamically adjusting the set
+	// of control runes should be effective and likely
+	// not cause cache misses if allocated in one block
+	//
+	// TODO: implement it and see if it is more efficient
+	//
+	// ---
+	//
+	// modes:
+	// - in-comment
+	// - in-quoted-field
+	// - in-escape
 
 	var controlRunes []rune
 	if cfg.recordSepLen == 0 {
@@ -1098,12 +1130,12 @@ func (r *Reader) defaultScan() bool {
 
 func (r *Reader) initPipeline(cfg rCfg) {
 
-	if cfg.clearMemoryAfterFree {
-		r.prepareRow = r.prepareRow_memclearOn
-		r.close = r.closeWithMemClear
-	} else {
-		r.prepareRow = r.prepareRow_memclearOff
+	if !cfg.clearMemoryAfterFree {
 		r.close = r.defaultClose
+		r.prepareRow = r.prepareRow_memclearOff
+	} else {
+		r.close = r.closeWithMemClear
+		r.prepareRow = r.prepareRow_memclearOn
 	}
 
 	if cfg.initialRecordBufferSize > 0 {

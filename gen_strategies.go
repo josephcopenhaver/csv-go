@@ -386,6 +386,8 @@ func (r *Reader) prepareRow_memclearOff() bool {
 				case rStateStartOfRecord:
 					if di != 0 {
 						if (r.bitFlags & rFlagErrOnQInUF) != 0 {
+							// quote in unquoted field should cause an error
+
 							r.byteIndex += uint64(di)
 
 							r.state = rStateInField // TODO: might be removable
@@ -395,6 +397,8 @@ func (r *Reader) prepareRow_memclearOff() bool {
 							r.parsingErr(ErrQuoteInUnquotedField)
 							return false
 						}
+
+						// quote in unquoted field erroring is disabled
 
 						r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
 						r.byteIndex += uint64(di) + uint64(size)
@@ -454,12 +458,16 @@ func (r *Reader) prepareRow_memclearOff() bool {
 				case rStateStartOfField:
 					if di != 0 {
 						if (r.bitFlags & rFlagErrOnQInUF) != 0 {
+							// quote in unquoted field should cause an error
+
 							r.byteIndex += uint64(di)
 							r.setDone()
 							r.byteIndex++ // convert to human index base 1
 							r.parsingErr(ErrQuoteInUnquotedField)
 							return false
 						}
+
+						// quote in unquoted field erroring is disabled
 
 						r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
 						r.byteIndex += uint64(di) + uint64(size)
@@ -478,12 +486,16 @@ func (r *Reader) prepareRow_memclearOff() bool {
 					r.state = rStateInQuotedField
 				case rStateInField:
 					if (r.bitFlags & rFlagErrOnQInUF) != 0 {
+						// quote in unquoted field should cause an error
+
 						r.byteIndex += uint64(di)
 						r.setDone()
 						r.byteIndex++ // convert to human index base 1
 						r.parsingErr(ErrQuoteInUnquotedField)
 						return false
 					}
+
+					// quote in unquoted field erroring is disabled
 
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
 					r.byteIndex += uint64(di) + uint64(size)
@@ -777,6 +789,7 @@ func (r *Reader) prepareRow_memclearOff() bool {
 					if r.rawIndex >= len(r.rawBuf) {
 						break CHUNK_PROCESSOR
 					}
+
 					continue
 				}
 
@@ -830,6 +843,8 @@ func (r *Reader) prepareRow_memclearOff() bool {
 					}
 
 					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
+						// error on newline in unquoted field block
+
 						crs := []byte(string(controlRunes))
 
 						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
@@ -1243,6 +1258,8 @@ func (r *Reader) prepareRow_memclearOn() bool {
 				case rStateStartOfRecord:
 					if di != 0 {
 						if (r.bitFlags & rFlagErrOnQInUF) != 0 {
+							// quote in unquoted field should cause an error
+
 							r.byteIndex += uint64(di)
 
 							r.state = rStateInField // TODO: might be removable
@@ -1252,6 +1269,8 @@ func (r *Reader) prepareRow_memclearOn() bool {
 							r.parsingErr(ErrQuoteInUnquotedField)
 							return false
 						}
+
+						// quote in unquoted field erroring is disabled
 
 						r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...)
 						r.byteIndex += uint64(di) + uint64(size)
@@ -1311,12 +1330,16 @@ func (r *Reader) prepareRow_memclearOn() bool {
 				case rStateStartOfField:
 					if di != 0 {
 						if (r.bitFlags & rFlagErrOnQInUF) != 0 {
+							// quote in unquoted field should cause an error
+
 							r.byteIndex += uint64(di)
 							r.setDone()
 							r.byteIndex++ // convert to human index base 1
 							r.parsingErr(ErrQuoteInUnquotedField)
 							return false
 						}
+
+						// quote in unquoted field erroring is disabled
 
 						r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...)
 						r.byteIndex += uint64(di) + uint64(size)
@@ -1335,12 +1358,16 @@ func (r *Reader) prepareRow_memclearOn() bool {
 					r.state = rStateInQuotedField
 				case rStateInField:
 					if (r.bitFlags & rFlagErrOnQInUF) != 0 {
+						// quote in unquoted field should cause an error
+
 						r.byteIndex += uint64(di)
 						r.setDone()
 						r.byteIndex++ // convert to human index base 1
 						r.parsingErr(ErrQuoteInUnquotedField)
 						return false
 					}
+
+					// quote in unquoted field erroring is disabled
 
 					r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...)
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1634,6 +1661,7 @@ func (r *Reader) prepareRow_memclearOn() bool {
 					if r.rawIndex >= len(r.rawBuf) {
 						break CHUNK_PROCESSOR
 					}
+
 					continue
 				}
 
@@ -1687,6 +1715,8 @@ func (r *Reader) prepareRow_memclearOn() bool {
 					}
 
 					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
+						// error on newline in unquoted field block
+
 						crs := []byte(string(controlRunes))
 
 						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
