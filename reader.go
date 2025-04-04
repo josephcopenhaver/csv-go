@@ -1437,27 +1437,3 @@ func endsInValidUTF8(p []byte) bool {
 	r, s := utf8.DecodeLastRune(p)
 	return (r != utf8.RuneError || s > 1)
 }
-
-// decodeMBControlRune takes a slice that starts with a matched control rune which is known
-// to have byte starting under the value 0x80 and returns the full rune located at that location
-//
-// no other input type or context is valid and behavior under all other circumstances should
-// be treated as undefined
-//
-// ---
-//
-// TODO: conditionally compile and ensure this runs during tests in a panic'ing way
-//
-// in standard operations assuming memory passed in is not changed by a bad actor
-// outside the process the panic here is not possible
-//
-// this function call should easily get inlined in most places and should not contain
-// much complexity at all - ever
-func decodeMBControlRune(p []byte) (rune, uint8) {
-	r, s := utf8.DecodeRune(p)
-	if s <= 1 {
-		panic("decode rune failed") // so must have a bad control rune loaded via config options or memory was corrupted somehow
-	}
-
-	return r, uint8(s)
-}
