@@ -327,4 +327,47 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			assert.Nil(t, cr)
 		})
 	})
+
+	t.Run("when creating a CSV reader and specifying a reader buffer length and a reader buffer", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			buf := [7]byte{}
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().ReaderBufferSize(len(buf)),
+				csv.ReaderOpts().ReaderBuffer(buf[:]),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`cannot specify both ReaderBuffer and ReaderBufferSize`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader and specifying a reader buffer length that is too small", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			bufLen := 6
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().ReaderBufferSize(bufLen),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`ReaderBufferSize must be greater than or equal to 7`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader and specifying a reader buffer that is too small", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			buf := [6]byte{}
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().ReaderBuffer(buf[:]),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`ReaderBuffer must have a length greater than or equal to 7`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
 }

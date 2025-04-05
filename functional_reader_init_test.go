@@ -47,4 +47,43 @@ func TestFunctionalReaderInitializationPaths(t *testing.T) {
 			assert.Nil(t, cr.Close())
 		})
 	})
+
+	t.Run("when creating a csv reader and specifying reader buffer", func(t *testing.T) {
+		t.Run("should not error", func(t *testing.T) {
+			buf := [7]byte{}
+			header := "a,b,c"
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader(header)),
+				csv.ReaderOpts().ReaderBuffer(buf[:]),
+			)
+			assert.Nil(t, err)
+			assert.NotNil(t, cr)
+
+			for row := range cr.IntoIter() {
+				_ = row
+			}
+
+			assert.Nil(t, cr.Err())
+			assert.Nil(t, cr.Close())
+		})
+	})
+
+	t.Run("when creating a csv reader and specifying reader buffer size", func(t *testing.T) {
+		t.Run("should not error", func(t *testing.T) {
+			header := "a,b,c"
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader(header)),
+				csv.ReaderOpts().ReaderBufferSize(7),
+			)
+			assert.Nil(t, err)
+			assert.NotNil(t, cr)
+
+			for row := range cr.IntoIter() {
+				_ = row
+			}
+
+			assert.Nil(t, cr.Err())
+			assert.Nil(t, cr.Close())
+		})
+	})
 }

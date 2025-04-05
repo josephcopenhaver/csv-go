@@ -585,11 +585,11 @@ func (cfg *rCfg) validate() error {
 	}
 
 	if cfg.rawBufSet && len(cfg.rawBuf) < rMinRawBufSize {
-		return errors.New("a ReaderBuffer must have a length greater than or equal to " + strconv.Itoa(rMinRawBufSize))
+		return errors.New("ReaderBuffer must have a length greater than or equal to " + strconv.Itoa(rMinRawBufSize))
 	}
 
 	if cfg.rawBufSizeSet && cfg.rawBufSize < rMinRawBufSize {
-		return errors.New("a ReaderBufferSize must be greater than or equal to " + strconv.Itoa(rMinRawBufSize))
+		return errors.New("ReaderBufferSize must be greater than or equal to " + strconv.Itoa(rMinRawBufSize))
 	}
 
 	if cfg.initialRecordBufferSizeSet && cfg.recordBufSet {
