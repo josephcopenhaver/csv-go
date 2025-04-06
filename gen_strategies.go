@@ -156,7 +156,8 @@ func (r *Reader) prepareRow_memclearOff() bool {
 								r.state = rStateStartOfRecord
 								break CHUNK_PROCESSOR
 							}
-							r.rawIndex++
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
 						}
 					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
 						r.parsingErr(ErrNoByteOrderMarker)
@@ -322,7 +323,14 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 					r.state = rStateStartOfRecord // TODO: might be removable
 					fallthrough
-				case rStateStartOfRecord, rStateStartOfField:
+				case rStateStartOfRecord:
+					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					r.state = rStateInField
+				case rStateStartOfField:
+					// TODO: collapse up
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
@@ -525,6 +533,7 @@ func (r *Reader) prepareRow_memclearOff() bool {
 								if (r.bitFlags & rFlagDropBOM) != 0 {
 									r.byteIndex += uint64(bomSize)
 									r.rawIndex += bomSize
+									di -= bomSize
 								}
 							} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
 								r.parsingErr(ErrNoByteOrderMarker)
@@ -534,11 +543,11 @@ func (r *Reader) prepareRow_memclearOff() bool {
 							r.state = rStateStartOfRecord // TODO: might be removable
 							fallthrough
 						case rStateStartOfRecord, rStateStartOfField:
-							r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:]...)
+							r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+1]...)
 
 							r.state = rStateInField
 						case rStateInQuotedField, rStateInField:
-							r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:]...)
+							r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+1]...)
 
 							// r.state = ... (unchanged)
 						case rStateInQuotedFieldAfterEscape:
@@ -741,7 +750,21 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 						r.state = rStateStartOfRecord // TODO: might be removable
 						fallthrough
-					case rStateStartOfRecord, rStateStartOfField:
+					case rStateStartOfRecord:
+						if di > 0 {
+							r.state = rStateInField // TODO: might be removable
+							r.byteIndex += uint64(di)
+						}
+						r.setDone()
+						r.byteIndex++ // convert to human index base 1
+						if c == asciiLineFeed {
+							r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+						} else {
+							r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+						}
+						return false
+					case rStateStartOfField:
+						// TODO: collapse up
 						if di > 0 {
 							r.state = rStateInField // TODO: might be removable
 							r.byteIndex += uint64(di)
@@ -817,7 +840,179 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 					r.state = rStateStartOfRecord // TODO: might be removable
 					fallthrough
-				case rStateStartOfRecord, rStateEndOfQuotedField, rStateInLineComment, rStateStartOfField, rStateInField:
+				case rStateStartOfRecord:
+					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
+						r.recordSepLen = 2
+						r.recordSep[0] = asciiCarriageReturn
+						r.recordSep[1] = asciiLineFeed
+					} else {
+						r.recordSepLen = 1
+						r.recordSep[0] = c
+					}
+
+					// preserve field separator
+					var buf [7]rune
+					controlRunes := append(buf[:0], r.fieldSeparator)
+					controlRunes = append(controlRunes, c)
+
+					if (r.bitFlags & rFlagQuote) != 0 {
+						controlRunes = append(controlRunes, r.quote)
+					}
+					if (r.bitFlags & rFlagEscape) != 0 {
+						controlRunes = append(controlRunes, r.escape)
+					}
+					if (r.bitFlags & rFlagComment) != 0 {
+						controlRunes = append(controlRunes, r.comment)
+					}
+
+					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
+						// error on newline in unquoted field block
+
+						crs := []byte(string(controlRunes))
+
+						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
+							controlRunes = append(controlRunes, asciiCarriageReturn)
+						}
+
+						if !bytes.Contains(crs, []byte{asciiLineFeed}) {
+							controlRunes = append(controlRunes, asciiLineFeed)
+						}
+					}
+
+					r.controlRunes = string(controlRunes)
+
+					// r.state = ... (unchanged)
+				case rStateEndOfQuotedField:
+					// TODO: collapse up
+					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
+						r.recordSepLen = 2
+						r.recordSep[0] = asciiCarriageReturn
+						r.recordSep[1] = asciiLineFeed
+					} else {
+						r.recordSepLen = 1
+						r.recordSep[0] = c
+					}
+
+					// preserve field separator
+					var buf [7]rune
+					controlRunes := append(buf[:0], r.fieldSeparator)
+					controlRunes = append(controlRunes, c)
+
+					if (r.bitFlags & rFlagQuote) != 0 {
+						controlRunes = append(controlRunes, r.quote)
+					}
+					if (r.bitFlags & rFlagEscape) != 0 {
+						controlRunes = append(controlRunes, r.escape)
+					}
+					if (r.bitFlags & rFlagComment) != 0 {
+						controlRunes = append(controlRunes, r.comment)
+					}
+
+					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
+						// error on newline in unquoted field block
+
+						crs := []byte(string(controlRunes))
+
+						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
+							controlRunes = append(controlRunes, asciiCarriageReturn)
+						}
+
+						if !bytes.Contains(crs, []byte{asciiLineFeed}) {
+							controlRunes = append(controlRunes, asciiLineFeed)
+						}
+					}
+
+					r.controlRunes = string(controlRunes)
+
+					// r.state = ... (unchanged)
+				case rStateInLineComment:
+					// TODO: collapse up
+					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
+						r.recordSepLen = 2
+						r.recordSep[0] = asciiCarriageReturn
+						r.recordSep[1] = asciiLineFeed
+					} else {
+						r.recordSepLen = 1
+						r.recordSep[0] = c
+					}
+
+					// preserve field separator
+					var buf [7]rune
+					controlRunes := append(buf[:0], r.fieldSeparator)
+					controlRunes = append(controlRunes, c)
+
+					if (r.bitFlags & rFlagQuote) != 0 {
+						controlRunes = append(controlRunes, r.quote)
+					}
+					if (r.bitFlags & rFlagEscape) != 0 {
+						controlRunes = append(controlRunes, r.escape)
+					}
+					if (r.bitFlags & rFlagComment) != 0 {
+						controlRunes = append(controlRunes, r.comment)
+					}
+
+					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
+						// error on newline in unquoted field block
+
+						crs := []byte(string(controlRunes))
+
+						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
+							controlRunes = append(controlRunes, asciiCarriageReturn)
+						}
+
+						if !bytes.Contains(crs, []byte{asciiLineFeed}) {
+							controlRunes = append(controlRunes, asciiLineFeed)
+						}
+					}
+
+					r.controlRunes = string(controlRunes)
+
+					// r.state = ... (unchanged)
+				case rStateStartOfField:
+					// TODO: collapse up
+					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
+						r.recordSepLen = 2
+						r.recordSep[0] = asciiCarriageReturn
+						r.recordSep[1] = asciiLineFeed
+					} else {
+						r.recordSepLen = 1
+						r.recordSep[0] = c
+					}
+
+					// preserve field separator
+					var buf [7]rune
+					controlRunes := append(buf[:0], r.fieldSeparator)
+					controlRunes = append(controlRunes, c)
+
+					if (r.bitFlags & rFlagQuote) != 0 {
+						controlRunes = append(controlRunes, r.quote)
+					}
+					if (r.bitFlags & rFlagEscape) != 0 {
+						controlRunes = append(controlRunes, r.escape)
+					}
+					if (r.bitFlags & rFlagComment) != 0 {
+						controlRunes = append(controlRunes, r.comment)
+					}
+
+					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
+						// error on newline in unquoted field block
+
+						crs := []byte(string(controlRunes))
+
+						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
+							controlRunes = append(controlRunes, asciiCarriageReturn)
+						}
+
+						if !bytes.Contains(crs, []byte{asciiLineFeed}) {
+							controlRunes = append(controlRunes, asciiLineFeed)
+						}
+					}
+
+					r.controlRunes = string(controlRunes)
+
+					// r.state = ... (unchanged)
+				case rStateInField:
+					// TODO: collapse up
 					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
 						r.recordSepLen = 2
 						r.recordSep[0] = asciiCarriageReturn
@@ -1028,7 +1223,8 @@ func (r *Reader) prepareRow_memclearOn() bool {
 								r.state = rStateStartOfRecord
 								break CHUNK_PROCESSOR
 							}
-							r.rawIndex++
+							r.byteIndex += uint64(bomSize)
+							r.rawIndex += bomSize
 						}
 					} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
 						r.parsingErr(ErrNoByteOrderMarker)
@@ -1194,7 +1390,14 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 					r.state = rStateStartOfRecord // TODO: might be removable
 					fallthrough
-				case rStateStartOfRecord, rStateStartOfField:
+				case rStateStartOfRecord:
+					r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...)
+					r.byteIndex += uint64(di) + uint64(size)
+					r.rawIndex = idx + int(size)
+
+					r.state = rStateInField
+				case rStateStartOfField:
+					// TODO: collapse up
 					r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...)
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
@@ -1397,6 +1600,7 @@ func (r *Reader) prepareRow_memclearOn() bool {
 								if (r.bitFlags & rFlagDropBOM) != 0 {
 									r.byteIndex += uint64(bomSize)
 									r.rawIndex += bomSize
+									di -= bomSize
 								}
 							} else if (r.bitFlags & rFlagErrOnNoBOM) != 0 {
 								r.parsingErr(ErrNoByteOrderMarker)
@@ -1406,11 +1610,11 @@ func (r *Reader) prepareRow_memclearOn() bool {
 							r.state = rStateStartOfRecord // TODO: might be removable
 							fallthrough
 						case rStateStartOfRecord, rStateStartOfField:
-							r.appendRecBuf(r.rawBuf[r.rawIndex:]...)
+							r.appendRecBuf(r.rawBuf[r.rawIndex : idx+1]...)
 
 							r.state = rStateInField
 						case rStateInQuotedField, rStateInField:
-							r.appendRecBuf(r.rawBuf[r.rawIndex:]...)
+							r.appendRecBuf(r.rawBuf[r.rawIndex : idx+1]...)
 
 							// r.state = ... (unchanged)
 						case rStateInQuotedFieldAfterEscape:
@@ -1613,7 +1817,21 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 						r.state = rStateStartOfRecord // TODO: might be removable
 						fallthrough
-					case rStateStartOfRecord, rStateStartOfField:
+					case rStateStartOfRecord:
+						if di > 0 {
+							r.state = rStateInField // TODO: might be removable
+							r.byteIndex += uint64(di)
+						}
+						r.setDone()
+						r.byteIndex++ // convert to human index base 1
+						if c == asciiLineFeed {
+							r.parsingErr(errNewlineInUnquotedFieldLineFeed)
+						} else {
+							r.parsingErr(errNewlineInUnquotedFieldCarriageReturn)
+						}
+						return false
+					case rStateStartOfField:
+						// TODO: collapse up
 						if di > 0 {
 							r.state = rStateInField // TODO: might be removable
 							r.byteIndex += uint64(di)
@@ -1689,7 +1907,179 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 					r.state = rStateStartOfRecord // TODO: might be removable
 					fallthrough
-				case rStateStartOfRecord, rStateEndOfQuotedField, rStateInLineComment, rStateStartOfField, rStateInField:
+				case rStateStartOfRecord:
+					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
+						r.recordSepLen = 2
+						r.recordSep[0] = asciiCarriageReturn
+						r.recordSep[1] = asciiLineFeed
+					} else {
+						r.recordSepLen = 1
+						r.recordSep[0] = c
+					}
+
+					// preserve field separator
+					var buf [7]rune
+					controlRunes := append(buf[:0], r.fieldSeparator)
+					controlRunes = append(controlRunes, c)
+
+					if (r.bitFlags & rFlagQuote) != 0 {
+						controlRunes = append(controlRunes, r.quote)
+					}
+					if (r.bitFlags & rFlagEscape) != 0 {
+						controlRunes = append(controlRunes, r.escape)
+					}
+					if (r.bitFlags & rFlagComment) != 0 {
+						controlRunes = append(controlRunes, r.comment)
+					}
+
+					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
+						// error on newline in unquoted field block
+
+						crs := []byte(string(controlRunes))
+
+						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
+							controlRunes = append(controlRunes, asciiCarriageReturn)
+						}
+
+						if !bytes.Contains(crs, []byte{asciiLineFeed}) {
+							controlRunes = append(controlRunes, asciiLineFeed)
+						}
+					}
+
+					r.controlRunes = string(controlRunes)
+
+					// r.state = ... (unchanged)
+				case rStateEndOfQuotedField:
+					// TODO: collapse up
+					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
+						r.recordSepLen = 2
+						r.recordSep[0] = asciiCarriageReturn
+						r.recordSep[1] = asciiLineFeed
+					} else {
+						r.recordSepLen = 1
+						r.recordSep[0] = c
+					}
+
+					// preserve field separator
+					var buf [7]rune
+					controlRunes := append(buf[:0], r.fieldSeparator)
+					controlRunes = append(controlRunes, c)
+
+					if (r.bitFlags & rFlagQuote) != 0 {
+						controlRunes = append(controlRunes, r.quote)
+					}
+					if (r.bitFlags & rFlagEscape) != 0 {
+						controlRunes = append(controlRunes, r.escape)
+					}
+					if (r.bitFlags & rFlagComment) != 0 {
+						controlRunes = append(controlRunes, r.comment)
+					}
+
+					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
+						// error on newline in unquoted field block
+
+						crs := []byte(string(controlRunes))
+
+						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
+							controlRunes = append(controlRunes, asciiCarriageReturn)
+						}
+
+						if !bytes.Contains(crs, []byte{asciiLineFeed}) {
+							controlRunes = append(controlRunes, asciiLineFeed)
+						}
+					}
+
+					r.controlRunes = string(controlRunes)
+
+					// r.state = ... (unchanged)
+				case rStateInLineComment:
+					// TODO: collapse up
+					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
+						r.recordSepLen = 2
+						r.recordSep[0] = asciiCarriageReturn
+						r.recordSep[1] = asciiLineFeed
+					} else {
+						r.recordSepLen = 1
+						r.recordSep[0] = c
+					}
+
+					// preserve field separator
+					var buf [7]rune
+					controlRunes := append(buf[:0], r.fieldSeparator)
+					controlRunes = append(controlRunes, c)
+
+					if (r.bitFlags & rFlagQuote) != 0 {
+						controlRunes = append(controlRunes, r.quote)
+					}
+					if (r.bitFlags & rFlagEscape) != 0 {
+						controlRunes = append(controlRunes, r.escape)
+					}
+					if (r.bitFlags & rFlagComment) != 0 {
+						controlRunes = append(controlRunes, r.comment)
+					}
+
+					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
+						// error on newline in unquoted field block
+
+						crs := []byte(string(controlRunes))
+
+						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
+							controlRunes = append(controlRunes, asciiCarriageReturn)
+						}
+
+						if !bytes.Contains(crs, []byte{asciiLineFeed}) {
+							controlRunes = append(controlRunes, asciiLineFeed)
+						}
+					}
+
+					r.controlRunes = string(controlRunes)
+
+					// r.state = ... (unchanged)
+				case rStateStartOfField:
+					// TODO: collapse up
+					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
+						r.recordSepLen = 2
+						r.recordSep[0] = asciiCarriageReturn
+						r.recordSep[1] = asciiLineFeed
+					} else {
+						r.recordSepLen = 1
+						r.recordSep[0] = c
+					}
+
+					// preserve field separator
+					var buf [7]rune
+					controlRunes := append(buf[:0], r.fieldSeparator)
+					controlRunes = append(controlRunes, c)
+
+					if (r.bitFlags & rFlagQuote) != 0 {
+						controlRunes = append(controlRunes, r.quote)
+					}
+					if (r.bitFlags & rFlagEscape) != 0 {
+						controlRunes = append(controlRunes, r.escape)
+					}
+					if (r.bitFlags & rFlagComment) != 0 {
+						controlRunes = append(controlRunes, r.comment)
+					}
+
+					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
+						// error on newline in unquoted field block
+
+						crs := []byte(string(controlRunes))
+
+						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
+							controlRunes = append(controlRunes, asciiCarriageReturn)
+						}
+
+						if !bytes.Contains(crs, []byte{asciiLineFeed}) {
+							controlRunes = append(controlRunes, asciiLineFeed)
+						}
+					}
+
+					r.controlRunes = string(controlRunes)
+
+					// r.state = ... (unchanged)
+				case rStateInField:
+					// TODO: collapse up
 					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
 						r.recordSepLen = 2
 						r.recordSep[0] = asciiCarriageReturn

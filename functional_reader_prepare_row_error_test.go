@@ -18,6 +18,272 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 
 	tcs := []functionalReaderTestCase{
 		{
+			when: "In unquoted field, encounter CR without LF then EOF with RecSep=CRLF",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(newPartReader("a234567", "\r")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().RecordSeparator("\r\n"),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrUnsafeCRFileEnd, io.ErrUnexpectedEOF},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 8, record 1, field 1: " + csv.ErrUnsafeCRFileEnd.Error(),
+		},
+		{
+			when: "In quoted field, encounter CR without LF then EOF with RecSep=CRLF",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(newPartReader("\"234567", "\r")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().RecordSeparator("\r\n"),
+				csv.ReaderOpts().Quote('"'),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrUnsafeCRFileEnd, io.ErrUnexpectedEOF},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 8, record 1, field 1: " + csv.ErrUnsafeCRFileEnd.Error(),
+		},
+		{
+			when: "CR without LF at start of doc after a BOM while DropBOM=true and RecSep=CRLF",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(string(bomBytes()) + "\r")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().RemoveByteOrderMarker(true),
+				csv.ReaderOpts().RecordSeparator("\r\n"),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrUnsafeCRFileEnd, io.ErrUnexpectedEOF},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 4, record 1, field 1: " + csv.ErrUnsafeCRFileEnd.Error(),
+		},
+		{
+			when: "CR without LF at start of doc while DropBOM=true and RecSep=CRLF",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\r")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().RemoveByteOrderMarker(true),
+				csv.ReaderOpts().RecordSeparator("\r\n"),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrUnsafeCRFileEnd, io.ErrUnexpectedEOF},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 1, record 1, field 1: " + csv.ErrUnsafeCRFileEnd.Error(),
+		},
+		{
+			when: "CR without LF at start of doc while BOM required and RecSep=CRLF",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\r")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),
+				csv.ReaderOpts().RecordSeparator("\r\n"),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNoByteOrderMarker},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 0, record 0, field 0: " + csv.ErrNoByteOrderMarker.Error(),
+		},
+		{
+			when: "quote char found in middle of field and rFlagErrOnQInUF=true explicitly",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(newPartReader(`a234567`, `"`)),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().ErrorOnQuotesInUnquotedField(true),
+				csv.ReaderOpts().Quote('"'),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrQuoteInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 8, record 1, field 1: " + csv.ErrQuoteInUnquotedField.Error(),
+		},
+		{
+			when: "quote char found in middle of field and rFlagErrOnQInUF=true implicitly",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(newPartReader(`a234567`, `"`)),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrQuoteInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 8, record 1, field 1: " + csv.ErrQuoteInUnquotedField.Error(),
+		},
+		{
+			when: "quote char found in after quoted field end but not in first char after the escape",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(newPartReader(`"23456"`, `a"`)),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().Escape('\\'),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidQuotedFieldEnding},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 8, record 1, field 1: " + csv.ErrInvalidQuotedFieldEnding.Error(),
+		},
+		{
+			when: "quote char found in quoted field after escape but not in first char after the escape",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(newPartReader(`"23456\`, `a"`)),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().Escape('\\'),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidEscSeqInQuotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 8, record 1, field 1: " + csv.ErrInvalidEscSeqInQuotedField.Error(),
+		},
+		{
+			when: "quote char found at start of record but not in first char and rFlagErrOnQInUF=true explicitly",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(`a"b"`)),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().ErrorOnQuotesInUnquotedField(true),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrQuoteInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 1: " + csv.ErrQuoteInUnquotedField.Error(),
+		},
+		{
+			when: "quote char found at start of record but not in first char and rFlagErrOnQInUF=true implicitly",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(`a"b"`)),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrQuoteInUnquotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 1: " + csv.ErrQuoteInUnquotedField.Error(),
+		},
+		{
+			when: "quote char found at start of doc while ErrOnNoBOM=true",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(`"`)),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNoByteOrderMarker},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 0, record 0, field 0: " + csv.ErrNoByteOrderMarker.Error(),
+		},
+		{
+			when: "escape char found after the end of a quoted field",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(newPartReader("a234,\"\"", "\\")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().Escape('\\'),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidQuotedFieldEnding},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 8, record 1, field 2: " + csv.ErrInvalidQuotedFieldEnding.Error(),
+		},
+		{
+			when: "escape char found after the first escape in a quoted field, but not right after",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(newPartReader("a234,\"\\", "z\\nice\"")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().Escape('\\'),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidEscSeqInQuotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 8, record 1, field 2: " + csv.ErrInvalidEscSeqInQuotedField.Error(),
+		},
+		{
+			when: "require BOM and starts with escape char",
+			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("\\,b,c")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().Escape('\\'),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNoByteOrderMarker},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 0, record 0, field 0: " + csv.ErrNoByteOrderMarker.Error(),
+		},
+		{
+			when: "field count mismatch after in-field state and a read flush operation",
+			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(newPartReader(`1,2-flush-padding`, `,3`)),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().NumFields(2),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 18, record 1, field 2: " + csv.ErrTooManyFields.Error() + ": field count exceeds 2",
+		},
+		{
+			when: "field separator after quoted field with data between end of field and separator",
+			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(`"a" ,`)),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidQuotedFieldEnding},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 4, record 1, field 1: " + csv.ErrInvalidQuotedFieldEnding.Error(),
+		},
+		{
+			when: "field separator in quoted field after escape rune",
+			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader(`"\,"`)),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().Quote('"'),
+				csv.ReaderOpts().Escape('\\'),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidEscSeqInQuotedField},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 3, record 1, field 1: " + csv.ErrInvalidEscSeqInQuotedField.Error(),
+		},
+		{
+			when: "Err on no BOM, no BOM in input, input has a row",
+			then: "error",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("a,b,c")),
+				}
+			},
+			newOpts: []csv.ReaderOption{
+				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),
+			},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrNoByteOrderMarker},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 0, record 0, field 0: " + csv.ErrNoByteOrderMarker.Error(),
+		},
+		{
 			when: "EOF in quoted field",
 			then: "error",
 			newOptsF: func() []csv.ReaderOption {
@@ -479,4 +745,37 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 	for i := range tcs {
 		tcs[i].Run(t)
 	}
+}
+
+type partReader struct {
+	p     []string
+	i, i2 int
+}
+
+func (r *partReader) eof() bool {
+	return (r.i >= len(r.p)-1 && r.i2 >= len(r.p[len(r.p)-1]))
+}
+
+func (r *partReader) Read(p []byte) (int, error) {
+	var n int
+
+	if r.eof() {
+		return 0, io.EOF
+	}
+
+	if len(p) != 0 {
+		n = copy(p, ([]byte(r.p[r.i]))[r.i2:])
+		if n == 0 {
+			r.i++
+			r.i2 = 0
+			n = copy(p, []byte(r.p[r.i]))
+		}
+		r.i2 += n
+	}
+
+	return n, nil
+}
+
+func newPartReader(p ...string) *partReader {
+	return &partReader{p: p}
 }
