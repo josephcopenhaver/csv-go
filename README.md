@@ -6,3 +6,7 @@
 
 ## Why does this exist?
 I am tired of rewriting this over and over to cover edge cases where other language standard csv implementations have assertions on the format and formatting I cannot guarantee are valid for a given file and how it was constructed. I've written variations that cover far fewer concerns over the years, and I figured I'll make a superset of one that does everything I need. Feel free to use however you may wish.
+
+---
+
+[![Go Documentation](https://godocs.io/github.com/josephcopenhaver/csv-go?status.svg)](https://godocs.io/github.com/josephcopenhaver/csv-go)
