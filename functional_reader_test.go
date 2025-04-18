@@ -291,6 +291,7 @@ func TestFunctionalReaderOKPaths(t *testing.T) {
 				},
 				newOpts: []csv.ReaderOption{
 					csv.ReaderOpts().BorrowRow(true),
+					csv.ReaderOpts().BorrowFields(true),
 				},
 				rows:     [][]string{strings.Split("a,b,c", ","), strings.Split(",,3", ",")},
 				selfInit: selfInit,

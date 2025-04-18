@@ -370,4 +370,31 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			assert.Nil(t, cr)
 		})
 	})
+
+	t.Run("when creating a CSV reader and specifying field borrowing is enabled with row borrowing implicitly disabled", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().BorrowFields(true),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`field borrowing cannot be enabled without enabling row borrowing`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader and specifying field borrowing is enabled with row borrowing explicitly disabled", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().BorrowFields(true),
+				csv.ReaderOpts().BorrowRow(false),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`field borrowing cannot be enabled without enabling row borrowing`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
 }

@@ -370,15 +370,29 @@ func (ReaderOptions) TerminalRecordSeparatorEmitsRecord(b bool) ReaderOption {
 	}
 }
 
-// BorrowRow alters the row function to return the underlying string slice every time it is called rather than a copy.
+// BorrowRow alters the Row function to return the same slice instance each time with the strings inside set to different values.
 //
-// Only set to true if the returned row slice and field strings within it are never used after the next call to Scan or Close. You must copy the slice and copy the strings within it via strings.Copy() if doing otherwise.
+// Only set to true if the returned row slice is never used or modified after the next call to Scan or Close. You must clone the slice if doing otherwise.
+//
+// See BorrowFields() if you wish to also remove allocations related to cloning strings into the slice.
 //
 // Please consider this to be a micro optimization in most circumstances just because is tightens the usage
 // contract of the returned row in ways most would not normally consider.
 func (ReaderOptions) BorrowRow(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.borrowRow = b
+	}
+}
+
+// BorrowFields alters the Row function to return an underlying string slice for each field unsafe for storing outside the slice without first cloning the fields every time Row is called. Specifying this option as true while BorrowRow is false/unspecified will result in an error.
+//
+// Only set to true if the returned row slice and field strings within it are never used or modified after the next call to Scan or Close. You must clone the slice and clone the strings within it via strings.Clone() if doing otherwise.
+//
+// Please consider this to be a micro optimization in most circumstances just because is tightens the usage
+// contract of the returned row in ways most would not normally consider.
+func (ReaderOptions) BorrowFields(b bool) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.borrowFields = b
 	}
 }
 
@@ -521,6 +535,7 @@ type rCfg struct {
 	commentSet                         bool
 	errOnNoRows                        bool
 	borrowRow                          bool
+	borrowFields                       bool
 	trsEmitsRecord                     bool
 	numFieldsSet                       bool
 	removeByteOrderMarker              bool
@@ -735,6 +750,10 @@ func (cfg *rCfg) validate() error {
 
 	if cfg.numFieldsSet && cfg.numFields <= 0 {
 		return errors.New("num fields must be greater than zero or not specified")
+	}
+
+	if cfg.borrowFields && !cfg.borrowRow {
+		return errors.New("field borrowing cannot be enabled without enabling row borrowing")
 	}
 
 	// if cfg.maxNumFields != 0 || cfg.maxNumRecordBytes != 0 || cfg.maxNumRecords != 0 || cfg.maxNumBytes != 0 {
@@ -994,7 +1013,33 @@ func (r *Reader) ioErr(err error) {
 	}
 }
 
-func (r *Reader) borrowedRow() []string {
+func (r *Reader) borrowedRowAndClonedFields() []string {
+	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
+		return nil
+	}
+
+	row := make([]string, len(r.fieldLengths))
+
+	r.row = func() []string {
+		if len(r.fieldLengths) != r.numFields || r.err != nil {
+			return nil
+		}
+
+		strBuf := string(r.recordBuf)
+
+		var p int
+		for i, s := range r.fieldLengths {
+			row[i] = strBuf[p : p+s]
+			p += s
+		}
+
+		return row
+	}
+
+	return r.row()
+}
+
+func (r *Reader) borrowedRowAndBorrowedFields() []string {
 	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
 		return nil
 	}
@@ -1162,10 +1207,12 @@ func (r *Reader) initPipeline(cfg rCfg) {
 
 	r.reader = cfg.reader
 
-	if cfg.borrowRow {
-		r.row = r.borrowedRow
-	} else {
+	if !cfg.borrowRow {
 		r.row = r.defaultRow
+	} else if cfg.borrowFields {
+		r.row = r.borrowedRowAndBorrowedFields
+	} else {
+		r.row = r.borrowedRowAndClonedFields
 	}
 
 	if r.numFields == -1 {
