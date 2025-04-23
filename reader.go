@@ -28,7 +28,19 @@ const (
 	utf16ByteOrderMarkerLE = 0xFFFE
 
 	rMaxOverflowNumBytes = utf8.UTFMax - 1
-	ReaderMinBufferSize  = utf8.UTFMax + rMaxOverflowNumBytes
+	// ReaderMinBufferSize is the minimum value a ReaderBufferSize
+	// option will allow. It is also the minimum length for any
+	// ReaderBuffer slice argument. This is exported so
+	// configuration which may not be hardcoded by the utilizing
+	// author can mot easily define validation logic and cite
+	// the reason for the limit.
+	//
+	// Algorithms used in this lib cannot work with a smaller buffer
+	// size than this - however in general ReaderBufferSize and
+	// ReaderBuffer options should be used to tune and balance mem
+	// constraints with performance gained via using larger amounts
+	// of buffer space.
+	ReaderMinBufferSize = utf8.UTFMax + rMaxOverflowNumBytes
 )
 
 type rFlag uint16
@@ -378,12 +390,35 @@ func (ReaderOptions) BorrowRow(b bool) ReaderOption {
 	}
 }
 
-// BorrowFields alters the Row function to return an underlying string slice for each field unsafe for storing outside the slice without first cloning the fields every time Row is called. Specifying this option as true while BorrowRow is false/unspecified will result in an error.
+// BorrowFields alters the Row function to return strings that directly reference the internal buffer
+// without copying. This is UNSAFE and can lead to memory corruption if not handled properly.
 //
-// Only set to true if the returned row slice and field strings within it are never used or modified after the next call to Scan or Close. You must clone the slice and clone the strings within it via strings.Clone() if doing otherwise.
+// WARNING: Specifying this option as true while BorrowRow is false will result in an error.
 //
-// Please consider this to be a micro optimization in most circumstances just because is tightens the usage
-// contract of the returned row in ways most would not normally consider.
+// DANGER: Only set to true if you guarantee that field strings are NEVER used after the next call to
+// Scan or Close. Otherwise, you MUST clone both the slice AND the strings within it via strings.Clone().
+// Failure to do so can lead to memory corruption as the underlying buffer will be reused.
+//
+// Example of safe usage:
+//
+//	for reader.Scan() {
+//	  row := reader.Row()
+//	  // Process row immediately without storing references
+//	  processRow(row[0], row[1])
+//	}
+//	if reader.Err() != nil { ... }
+//
+// Example of UNSAFE usage that will lead to bugs:
+//
+//	var savedStrings []string
+//	for reader.Scan() {
+//	  row := reader.Row()
+//	  savedStrings = append(savedStrings, row[0]) // WRONG! Will be corrupted
+//	}
+//	if reader.Err() != nil { ... }
+//
+// This should be considered a micro-optimization only for performance-critical code paths
+// where profiling has identified string copying as a bottleneck.
 func (ReaderOptions) BorrowFields(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.borrowFields = b
@@ -495,7 +530,9 @@ func (ReaderOptions) ReaderBufferSize(v int) ReaderOption {
 }
 
 // ReaderBuffer will only accept a slice with a length greater than or equal to ReaderMinBufferSize
-// otherwise an error will be thrown when creating the reader instance.
+// otherwise an error will be thrown when creating the reader instance. Only up to the length of the
+// slice is utilized during buffering operations. Capacity of the provided slice is not utilized in
+// any way.
 func (ReaderOptions) ReaderBuffer(v []byte) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.rawBuf = v
