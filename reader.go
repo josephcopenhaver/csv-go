@@ -32,7 +32,7 @@ const (
 	// option will allow. It is also the minimum length for any
 	// ReaderBuffer slice argument. This is exported so
 	// configuration which may not be hardcoded by the utilizing
-	// author can mot easily define validation logic and cite
+	// author can more easily define validation logic and cite
 	// the reason for the limit.
 	//
 	// Algorithms used in this lib cannot work with a smaller buffer
