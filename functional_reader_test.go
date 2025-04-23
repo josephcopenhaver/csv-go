@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go"
+	"github.com/josephcopenhaver/csv-go/v2"
 	"github.com/stretchr/testify/assert"
 )
 
