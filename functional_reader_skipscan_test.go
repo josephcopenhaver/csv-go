@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go"
+	"github.com/josephcopenhaver/csv-go/v2"
 )
 
 func TestFunctionalReaderSkipscanPaths(t *testing.T) {
@@ -27,6 +27,7 @@ func TestFunctionalReaderSkipscanPaths(t *testing.T) {
 			},
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().BorrowRow(false),
+				csv.ReaderOpts().BorrowFields(false),
 			},
 		},
 		{
@@ -38,6 +39,7 @@ func TestFunctionalReaderSkipscanPaths(t *testing.T) {
 			},
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().BorrowRow(true),
+				csv.ReaderOpts().BorrowFields(true),
 			},
 		},
 	}

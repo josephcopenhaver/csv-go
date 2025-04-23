@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"strings"
 
-	"github.com/josephcopenhaver/csv-go"
+	"github.com/josephcopenhaver/csv-go/v2"
 )
 
 //go:embed example.csv

@@ -6,12 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go"
+	"github.com/josephcopenhaver/csv-go/v2"
 	"github.com/stretchr/testify/assert"
 )
 
 type errWriter struct {
-	t         *testing.T
 	writer    io.Writer
 	numWrites int
 	err       error

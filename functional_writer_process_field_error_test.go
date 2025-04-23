@@ -3,7 +3,7 @@ package csv_test
 import (
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go"
+	"github.com/josephcopenhaver/csv-go/v2"
 )
 
 func TestFunctionalWriterProcessFieldErrorPaths(t *testing.T) {
