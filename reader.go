@@ -210,6 +210,8 @@ func (ReaderOptions) ClearFreedDataMemory(b bool) ReaderOption {
 	}
 }
 
+// ErrorOnNoRows causes cr.Err() to return ErrNoRows should the reader
+// stream terminate before any data records are parsed.
 func (ReaderOptions) ErrorOnNoRows(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.errOnNoRows = b
@@ -222,6 +224,8 @@ func (ReaderOptions) TrimHeaders(b bool) ReaderOption {
 		cfg.trimHeaders = b
 	}
 }
+
+// TODO: in V3 alter ExpectHeaders to be vararg rather than a single slice
 
 // ExpectHeaders causes the first row to be recognized as a header row.
 //
@@ -1245,8 +1249,7 @@ func (r *Reader) initPipeline(cfg rCfg) {
 	if cfg.rawBufSizeSet {
 		r.rawBuf = make([]byte, 0, cfg.rawBufSize)
 	} else if !cfg.rawBufSet {
-		var p [defaultReaderBufferSize]byte
-		r.rawBuf = p[:0]
+		r.rawBuf = make([]byte, 0, defaultReaderBufferSize)
 	}
 
 	if cfg.initialRecordBufferSize > 0 {
