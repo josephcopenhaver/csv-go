@@ -7,12 +7,14 @@ csv-go
 ![code-coverage](https://img.shields.io/badge/code_coverage-100%25-rgb%2852%2C208%2C88%29)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-This package is a highly flexible and performant csv stream reader and writer that opts for strictness and nearly all options off by default. By using the option functions pattern on Reader and Writer creation extreme flexibility can be offered and configuration can be validated up-front. This creates an immutable, clear execution of the strategy.
+This package is a highly flexible and performant single threaded csv stream reader and writer. It opts for strictness with nearly all options off by default. Using the option functions pattern on Reader and Writer creation ensures extreme flexibility can be offered while configuration can be validated up-front in cold paths. This creates an immutable, clear execution of the csv file/stream parsing strategy.
 
-That being said, the reader is also more performant at the moment than the standard go csv package when compared in an apples-to-apples configuration between the two.
+The reader is also more performant at the moment than the standard go csv package when compared in an apples-to-apples configuration between the two. I expect mileage here to vary over time. My primary goals with this lib was to solve my own edge case problems like suspect-encodings/loose-rules and offer something back more aligned with others that think like myself.
 
 ```go
 package main
+
+// this is a toy example that reads a csv file and writes to another
 
 import (
 	"os"
@@ -29,6 +31,9 @@ func main() {
 
 	cr, err := csv.NewReader(
 		csv.ReaderOpts().Reader(r),
+		// by default quotes have no meaning
+		// so must be specified to match RFC 4180
+		// csv.ReaderOpts().Quote('"'),
 	)
 	if err != nil {
 		panic(err)
