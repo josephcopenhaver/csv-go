@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	defaultReaderBufferSize = 4096
+	defaultReaderBufferSize = (1 << 12) // 4096
 
 	asciiCarriageReturn = 0x0D
 	asciiLineFeed       = 0x0A
@@ -32,7 +32,7 @@ const (
 	// option will allow. It is also the minimum length for any
 	// ReaderBuffer slice argument. This is exported so
 	// configuration which may not be hardcoded by the utilizing
-	// author can mot easily define validation logic and cite
+	// author can more easily define validation logic and cite
 	// the reason for the limit.
 	//
 	// Algorithms used in this lib cannot work with a smaller buffer
@@ -210,6 +210,8 @@ func (ReaderOptions) ClearFreedDataMemory(b bool) ReaderOption {
 	}
 }
 
+// ErrorOnNoRows causes cr.Err() to return ErrNoRows should the reader
+// stream terminate before any data records are parsed.
 func (ReaderOptions) ErrorOnNoRows(b bool) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.errOnNoRows = b
@@ -222,6 +224,8 @@ func (ReaderOptions) TrimHeaders(b bool) ReaderOption {
 		cfg.trimHeaders = b
 	}
 }
+
+// TODO: in V3 alter ExpectHeaders to be vararg rather than a single slice
 
 // ExpectHeaders causes the first row to be recognized as a header row.
 //
@@ -602,6 +606,7 @@ type Reader struct {
 	recordSep         [2]rune
 	recordBuf         []byte
 	fieldLengths      []int
+	rowBuf            []string
 	headers           []string
 	fieldStart        int
 	numFields         int
@@ -944,6 +949,11 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		}
 	}
 
+	var rowBuf []string
+	if cfg.numFields > 0 {
+		rowBuf = make([]string, cfg.numFields)
+	}
+
 	cr := Reader{
 		controlRunes:   string(controlRunes),
 		rawBuf:         cfg.rawBuf[0:0:len(cfg.rawBuf)],
@@ -954,6 +964,7 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		comment:        cfg.comment,
 		headers:        headers,
 		recordBuf:      cfg.recordBuf[0:0:len(cfg.recordBuf)],
+		rowBuf:         rowBuf,
 		recordSep:      cfg.recordSep,
 		recordSepLen:   cfg.recordSepLen,
 		bitFlags:       bitFlags,
@@ -1065,12 +1076,36 @@ func (r *Reader) ioErr(err error) {
 	}
 }
 
-func (r *Reader) borrowedRowAndClonedFields() []string {
-	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
-		return nil
-	}
+func (r *Reader) setRowBorrowedAndFieldsCloned() {
+	if r.rowBuf == nil {
+		r.row = func() []string {
+			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
+				return nil
+			}
 
-	row := make([]string, len(r.fieldLengths))
+			r.rowBuf = make([]string, len(r.fieldLengths))
+
+			r.row = func() []string {
+				if len(r.fieldLengths) != r.numFields || r.err != nil {
+					return nil
+				}
+
+				strBuf := string(r.recordBuf)
+
+				var p int
+				for i, s := range r.fieldLengths {
+					r.rowBuf[i] = strBuf[p : p+s]
+					p += s
+				}
+
+				return r.rowBuf
+			}
+
+			return r.row()
+		}
+
+		return
+	}
 
 	r.row = func() []string {
 		if len(r.fieldLengths) != r.numFields || r.err != nil {
@@ -1081,22 +1116,57 @@ func (r *Reader) borrowedRowAndClonedFields() []string {
 
 		var p int
 		for i, s := range r.fieldLengths {
-			row[i] = strBuf[p : p+s]
+			r.rowBuf[i] = strBuf[p : p+s]
 			p += s
 		}
 
-		return row
+		return r.rowBuf
 	}
-
-	return r.row()
 }
 
-func (r *Reader) borrowedRowAndBorrowedFields() []string {
-	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
-		return nil
-	}
+func (r *Reader) setRowBorrowedAndFieldsBorrowed() {
+	if r.rowBuf == nil {
+		r.row = func() []string {
+			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
+				return nil
+			}
 
-	row := make([]string, len(r.fieldLengths))
+			r.rowBuf = make([]string, len(r.fieldLengths))
+
+			r.row = func() []string {
+				if len(r.fieldLengths) != r.numFields || r.err != nil {
+					return nil
+				}
+
+				var p int
+				for i, s := range r.fieldLengths {
+					if s == 0 {
+						r.rowBuf[i] = ""
+						continue
+					}
+
+					// Usage of unsafe here is what empowers borrowing.
+					//
+					// This is why this option is NOT enabled by default
+					// and never will be. The caller must assure that they
+					// will never write to the backing slice or utilize it
+					// beyond the next call to Row() or Close()
+					//
+					// It will also never be called if the len is zero,
+					// just as an extra precaution.
+					r.rowBuf[i] = unsafe.String(&r.recordBuf[p], s)
+
+					p += s
+				}
+
+				return r.rowBuf
+			}
+
+			return r.row()
+		}
+
+		return
+	}
 
 	r.row = func() []string {
 		if len(r.fieldLengths) != r.numFields || r.err != nil {
@@ -1106,7 +1176,7 @@ func (r *Reader) borrowedRowAndBorrowedFields() []string {
 		var p int
 		for i, s := range r.fieldLengths {
 			if s == 0 {
-				row[i] = ""
+				r.rowBuf[i] = ""
 				continue
 			}
 
@@ -1119,15 +1189,13 @@ func (r *Reader) borrowedRowAndBorrowedFields() []string {
 			//
 			// It will also never be called if the len is zero,
 			// just as an extra precaution.
-			row[i] = unsafe.String(&r.recordBuf[p], s)
+			r.rowBuf[i] = unsafe.String(&r.recordBuf[p], s)
 
 			p += s
 		}
 
-		return row
+		return r.rowBuf
 	}
-
-	return r.row()
 }
 
 func (r *Reader) defaultRow() []string {
@@ -1222,6 +1290,13 @@ func (r *Reader) zeroRecordBuffers() {
 		}
 	}
 
+	if r.rowBuf != nil {
+		v := r.rowBuf[:cap(r.rowBuf)]
+		for i := range v {
+			v[i] = ""
+		}
+	}
+
 	r.resetRecordBuffers()
 }
 
@@ -1245,8 +1320,7 @@ func (r *Reader) initPipeline(cfg rCfg) {
 	if cfg.rawBufSizeSet {
 		r.rawBuf = make([]byte, 0, cfg.rawBufSize)
 	} else if !cfg.rawBufSet {
-		var p [defaultReaderBufferSize]byte
-		r.rawBuf = p[:0]
+		r.rawBuf = make([]byte, 0, defaultReaderBufferSize)
 	}
 
 	if cfg.initialRecordBufferSize > 0 {
@@ -1259,20 +1333,25 @@ func (r *Reader) initPipeline(cfg rCfg) {
 
 	r.reader = cfg.reader
 
+	if r.numFields == -1 {
+		r.checkNumFields = r.checkNumFieldsWithDiscovery
+	} else {
+		if r.numFields > 0 {
+			r.fieldLengths = make([]int, 0, r.numFields)
+		}
+		if (r.bitFlags & rFlagComment) != 0 {
+			r.checkNumFields = r.checkNumFieldsWithStartOfRecordTracking
+		} else {
+			r.checkNumFields = r.defaultCheckNumFields
+		}
+	}
+
 	if !cfg.borrowRow {
 		r.row = r.defaultRow
 	} else if cfg.borrowFields {
-		r.row = r.borrowedRowAndBorrowedFields
+		r.setRowBorrowedAndFieldsBorrowed()
 	} else {
-		r.row = r.borrowedRowAndClonedFields
-	}
-
-	if r.numFields == -1 {
-		r.checkNumFields = r.checkNumFieldsWithDiscovery
-	} else if (r.bitFlags & rFlagComment) != 0 {
-		r.checkNumFields = r.checkNumFieldsWithStartOfRecordTracking
-	} else {
-		r.checkNumFields = r.defaultCheckNumFields
+		r.setRowBorrowedAndFieldsCloned()
 	}
 
 	// letting any valid utf8 end of line act as the record separator

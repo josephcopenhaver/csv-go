@@ -1,0 +1,14 @@
+Pizza Type,Origin Locality,Is Round
+Neapolitan,"Naples, Italy",TRUE
+New York Style,"New York, USA",TRUE
+Chicago Deep Dish,"Chicago, USA",TRUE
+Sicilian,"Sicily, Italy",FALSE
+Detroit Style,"Detroit, USA",FALSE
+Roman Pizza,"Rome, Italy",FALSE
+St. Louis Style,"St. Louis, USA",TRUE
+Greek Pizza,Greece,TRUE
+California Style,"California, USA",TRUE
+Turkish Pide,Turkey,FALSE
+Fugazza,Argentina,TRUE
+Okonomiyaki,Japan,TRUE
+Khachapuri,Georgia,FALSE
