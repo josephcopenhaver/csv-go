@@ -8,6 +8,13 @@
 | allocs/op | (usually) less is better |
 | Samples | (usually) more is better |
 
+| Host Detail | Value |
+|-|-|
+| goos | darwin |
+| goarch | arm64 |
+| cpu | Apple M1 Max |
+
+
 #### Types of Tests
 
 - Post-Init - focuses on the details of the parsing method after initialization of the resources involved all the way to their deallocation
@@ -29,4 +36,5 @@
 | [SOURCE](../bench_reader_test.go) | BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBuf | 15,142 | 160 | 8 | 80,788 |
 | [SOURCE](../bench_reader_test.go) | BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsRecBuf | 15,010 | 144 | 6 | 79,084 |
 | [SOURCE](../bench_reader_test.go) | BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBufRecBuf | 14,864 | 144 | 6 | 81,040 |
-| [SOURCE](../bench_reader_test.go) | BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBufRecBufNumFields | 14,458 | 0 | 0 | 83,269 |
+| [SOURCE](../bench_reader_test.go) | BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsRecBufNumFields | 14,674 | 0 | 0 | 82,454 |
+| [SOURCE](../bench_reader_test.go) | BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBufRecBufNumFields | 14,436 | 0 | 0 | 83,895 |

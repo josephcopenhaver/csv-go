@@ -306,6 +306,42 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBufRecBufNumFields(b *
 	}
 }
 
+func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsRecBufNumFields(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+
+	strReader := strings.NewReader("")
+	opts := csv.ReaderOpts()
+	var recBuf [recBufSize]byte
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		strReader.Reset(fileContents3c256Rows)
+		cr, err := csv.NewReader(
+			opts.Reader(strReader),
+			opts.BorrowRow(true),
+			opts.BorrowFields(true),
+			opts.InitialRecordBuffer(recBuf[:]),
+			opts.NumFields(3),
+		)
+		if err != nil {
+			panic(err)
+		}
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		b.StartTimer()
+
+		for cr.Scan() {
+			_ = cr.Row()
+		}
+		if err := cr.Err(); err != nil {
+			panic(err)
+		}
+
+		_ = cr.Close()
+	}
+}
+
 const fileContents3c256Rows = `a,b,c
 1,odd,r1
 2,even,r2
