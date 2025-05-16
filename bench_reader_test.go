@@ -9,6 +9,303 @@ import (
 	"github.com/josephcopenhaver/csv-go/v2"
 )
 
+const (
+	readBufSize = (1 << 12) // 4096
+	recBufSize  = (1 << 5)  // 32
+)
+
+func BenchmarkSTDReadPostInit256Rows(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+
+	strReader := strings.NewReader("")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		strReader.Reset(fileContents3c256Rows)
+		cr := std_csv.NewReader(strReader)
+		b.StartTimer()
+
+		for {
+			_, err := cr.Read()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				panic(err)
+			}
+		}
+	}
+}
+
+func BenchmarkReadPostInit256Rows(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+
+	strReader := strings.NewReader("")
+	opts := csv.ReaderOpts()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		strReader.Reset(fileContents3c256Rows)
+		cr, err := csv.NewReader(
+			opts.Reader(strReader),
+		)
+		if err != nil {
+			panic(err)
+		}
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		b.StartTimer()
+
+		for cr.Scan() {
+			_ = cr.Row()
+		}
+		if err := cr.Err(); err != nil {
+			panic(err)
+		}
+
+		_ = cr.Close()
+	}
+}
+
+func BenchmarkSTDReadPostInit256RowsBorrowRow(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+
+	strReader := strings.NewReader("")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		strReader.Reset(fileContents3c256Rows)
+		cr := std_csv.NewReader(strReader)
+		cr.ReuseRecord = true
+		b.StartTimer()
+
+		for {
+			_, err := cr.Read()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				panic(err)
+			}
+		}
+	}
+}
+
+func BenchmarkReadPostInit256RowsBorrowRow(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+
+	strReader := strings.NewReader("")
+	opts := csv.ReaderOpts()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		strReader.Reset(fileContents3c256Rows)
+		cr, err := csv.NewReader(
+			opts.Reader(strReader),
+			opts.BorrowRow(true),
+		)
+		if err != nil {
+			panic(err)
+		}
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		b.StartTimer()
+
+		for cr.Scan() {
+			_ = cr.Row()
+		}
+		if err := cr.Err(); err != nil {
+			panic(err)
+		}
+
+		_ = cr.Close()
+	}
+}
+
+func BenchmarkReadPostInit256RowsBorrowRowBorrowFields(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+
+	strReader := strings.NewReader("")
+	opts := csv.ReaderOpts()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		strReader.Reset(fileContents3c256Rows)
+		cr, err := csv.NewReader(
+			opts.Reader(strReader),
+			opts.BorrowRow(true),
+			opts.BorrowFields(true),
+		)
+		if err != nil {
+			panic(err)
+		}
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		b.StartTimer()
+
+		for cr.Scan() {
+			_ = cr.Row()
+		}
+		if err := cr.Err(); err != nil {
+			panic(err)
+		}
+
+		_ = cr.Close()
+	}
+}
+
+func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBuf(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+
+	strReader := strings.NewReader("")
+	opts := csv.ReaderOpts()
+	var readerBuf [readBufSize]byte
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		strReader.Reset(fileContents3c256Rows)
+		cr, err := csv.NewReader(
+			opts.Reader(strReader),
+			opts.BorrowRow(true),
+			opts.BorrowFields(true),
+			opts.ReaderBuffer(readerBuf[:]),
+		)
+		if err != nil {
+			panic(err)
+		}
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		b.StartTimer()
+
+		for cr.Scan() {
+			_ = cr.Row()
+		}
+		if err := cr.Err(); err != nil {
+			panic(err)
+		}
+
+		_ = cr.Close()
+	}
+}
+
+func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsRecBuf(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+
+	strReader := strings.NewReader("")
+	opts := csv.ReaderOpts()
+	var recBuf [recBufSize]byte
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		strReader.Reset(fileContents3c256Rows)
+		cr, err := csv.NewReader(
+			opts.Reader(strReader),
+			opts.BorrowRow(true),
+			opts.BorrowFields(true),
+			opts.InitialRecordBuffer(recBuf[:]),
+		)
+		if err != nil {
+			panic(err)
+		}
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		b.StartTimer()
+
+		for cr.Scan() {
+			_ = cr.Row()
+		}
+		if err := cr.Err(); err != nil {
+			panic(err)
+		}
+
+		_ = cr.Close()
+	}
+}
+
+func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBufRecBuf(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+
+	strReader := strings.NewReader("")
+	opts := csv.ReaderOpts()
+	var readerBuf [readBufSize]byte
+	var recBuf [recBufSize]byte
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		strReader.Reset(fileContents3c256Rows)
+		cr, err := csv.NewReader(
+			opts.Reader(strReader),
+			opts.BorrowRow(true),
+			opts.BorrowFields(true),
+			opts.ReaderBuffer(readerBuf[:]),
+			opts.InitialRecordBuffer(recBuf[:]),
+		)
+		if err != nil {
+			panic(err)
+		}
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		b.StartTimer()
+
+		for cr.Scan() {
+			_ = cr.Row()
+		}
+		if err := cr.Err(); err != nil {
+			panic(err)
+		}
+
+		_ = cr.Close()
+	}
+}
+
+func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBufRecBufNumFields(b *testing.B) {
+	b.ReportAllocs()
+	b.StopTimer()
+
+	strReader := strings.NewReader("")
+	opts := csv.ReaderOpts()
+	var readerBuf [readBufSize]byte
+	var recBuf [recBufSize]byte
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		strReader.Reset(fileContents3c256Rows)
+		cr, err := csv.NewReader(
+			opts.Reader(strReader),
+			opts.BorrowRow(true),
+			opts.BorrowFields(true),
+			opts.ReaderBuffer(readerBuf[:]),
+			opts.InitialRecordBuffer(recBuf[:]),
+			opts.NumFields(3),
+		)
+		if err != nil {
+			panic(err)
+		}
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		b.StartTimer()
+
+		for cr.Scan() {
+			_ = cr.Row()
+		}
+		if err := cr.Err(); err != nil {
+			panic(err)
+		}
+
+		_ = cr.Close()
+	}
+}
+
 const fileContents3c256Rows = `a,b,c
 1,odd,r1
 2,even,r2
@@ -267,226 +564,3 @@ const fileContents3c256Rows = `a,b,c
 255,odd,r255
 256,even,r256
 `
-
-func BenchmarkRead256Rows(b *testing.B) {
-
-	strReader := strings.NewReader(fileContents3c256Rows)
-	opts := csv.ReaderOpts()
-
-	for b.Loop() {
-		if _, err := strReader.Seek(0, io.SeekStart); err != nil {
-			panic(err)
-		}
-		cr, err := csv.NewReader(
-			opts.Reader(strReader),
-		)
-		if err != nil {
-			panic(err)
-		}
-		defer cr.Close()
-
-		for row := range cr.IntoIter() {
-			_ = row
-		}
-		if err := cr.Err(); err != nil {
-			panic(err)
-		}
-	}
-}
-
-func BenchmarkSTDRead256Rows(b *testing.B) {
-
-	strReader := strings.NewReader(fileContents3c256Rows)
-
-	for b.Loop() {
-		if _, err := strReader.Seek(0, io.SeekStart); err != nil {
-			panic(err)
-		}
-		cr := std_csv.NewReader(strReader)
-
-		for {
-			row, err := cr.Read()
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				panic(err)
-			}
-			_ = row
-		}
-	}
-}
-
-func BenchmarkRead256RowsBorrowRow(b *testing.B) {
-
-	strReader := strings.NewReader(fileContents3c256Rows)
-	opts := csv.ReaderOpts()
-
-	for b.Loop() {
-		if _, err := strReader.Seek(0, io.SeekStart); err != nil {
-			panic(err)
-		}
-		cr, err := csv.NewReader(
-			opts.Reader(strReader),
-			opts.BorrowRow(true),
-		)
-		if err != nil {
-			panic(err)
-		}
-		defer cr.Close()
-
-		for row := range cr.IntoIter() {
-			_ = row
-		}
-		if err := cr.Err(); err != nil {
-			panic(err)
-		}
-	}
-}
-
-func BenchmarkSTDRead256RowsBorrowRow(b *testing.B) {
-
-	strReader := strings.NewReader(fileContents3c256Rows)
-
-	for b.Loop() {
-		if _, err := strReader.Seek(0, io.SeekStart); err != nil {
-			panic(err)
-		}
-		cr := std_csv.NewReader(strReader)
-		cr.ReuseRecord = true
-
-		for {
-			row, err := cr.Read()
-			if err != nil {
-				if err == io.EOF {
-					break
-				}
-				panic(err)
-			}
-			_ = row
-		}
-	}
-}
-
-func BenchmarkRead256RowsBorrowRowBorrowFields(b *testing.B) {
-
-	strReader := strings.NewReader(fileContents3c256Rows)
-	opts := csv.ReaderOpts()
-
-	for b.Loop() {
-		if _, err := strReader.Seek(0, io.SeekStart); err != nil {
-			panic(err)
-		}
-		cr, err := csv.NewReader(
-			opts.Reader(strReader),
-			opts.BorrowRow(true),
-			opts.BorrowFields(true),
-		)
-		if err != nil {
-			panic(err)
-		}
-		defer cr.Close()
-
-		for row := range cr.IntoIter() {
-			_ = row
-		}
-		if err := cr.Err(); err != nil {
-			panic(err)
-		}
-	}
-}
-
-func BenchmarkRead256RowsBorrowRowBorrowFieldsRecBuf(b *testing.B) {
-
-	strReader := strings.NewReader(fileContents3c256Rows)
-	opts := csv.ReaderOpts()
-	var recBuf [32]byte
-
-	for b.Loop() {
-		if _, err := strReader.Seek(0, io.SeekStart); err != nil {
-			panic(err)
-		}
-		cr, err := csv.NewReader(
-			opts.Reader(strReader),
-			opts.BorrowRow(true),
-			opts.BorrowFields(true),
-			opts.InitialRecordBuffer(recBuf[:]),
-		)
-		if err != nil {
-			panic(err)
-		}
-		defer cr.Close()
-
-		for row := range cr.IntoIter() {
-			_ = row
-		}
-		if err := cr.Err(); err != nil {
-			panic(err)
-		}
-	}
-}
-
-func BenchmarkRead256RowsBorrowRowBorrowFieldsRecBufReadBuf(b *testing.B) {
-
-	strReader := strings.NewReader(fileContents3c256Rows)
-	opts := csv.ReaderOpts()
-	var recBuf [32]byte
-	var readerBuf [32]byte
-
-	for b.Loop() {
-		if _, err := strReader.Seek(0, io.SeekStart); err != nil {
-			panic(err)
-		}
-		cr, err := csv.NewReader(
-			opts.Reader(strReader),
-			opts.BorrowRow(true),
-			opts.BorrowFields(true),
-			opts.InitialRecordBuffer(recBuf[:]),
-			opts.ReaderBuffer(readerBuf[:]),
-		)
-		if err != nil {
-			panic(err)
-		}
-		defer cr.Close()
-
-		for row := range cr.IntoIter() {
-			_ = row
-		}
-		if err := cr.Err(); err != nil {
-			panic(err)
-		}
-	}
-}
-
-func BenchmarkRead256RowsBorrowRowBorrowFieldsRecBufReadBufRecSepLF(b *testing.B) {
-
-	strReader := strings.NewReader(fileContents3c256Rows)
-	opts := csv.ReaderOpts()
-	var recBuf [32]byte
-	var readerBuf [32]byte
-
-	for b.Loop() {
-		if _, err := strReader.Seek(0, io.SeekStart); err != nil {
-			panic(err)
-		}
-		cr, err := csv.NewReader(
-			opts.Reader(strReader),
-			opts.BorrowRow(true),
-			opts.BorrowFields(true),
-			opts.InitialRecordBuffer(recBuf[:]),
-			opts.ReaderBuffer(readerBuf[:]),
-			opts.RecordSeparator("\n"),
-		)
-		if err != nil {
-			panic(err)
-		}
-		defer cr.Close()
-
-		for row := range cr.IntoIter() {
-			_ = row
-		}
-		if err := cr.Err(); err != nil {
-			panic(err)
-		}
-	}
-}
