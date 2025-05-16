@@ -9,7 +9,7 @@ csv-go
 
 This package is a highly flexible and performant single threaded csv stream reader and writer. It opts for strictness with nearly all options off by default. Using the option functions pattern on Reader and Writer creation ensures extreme flexibility can be offered while configuration can be validated up-front in cold paths. This creates an immutable, clear execution of the csv file/stream parsing strategy.
 
-The reader is also [more performant](./docs/BENCHMARKS.md) at the moment than the standard go csv package when compared in an apples-to-apples configuration between the two. I expect mileage here to vary over time. My primary goal with this lib was to solve my own edge case problems like suspect-encodings/loose-rules and offer something back more aligned with others that think like myself.
+The reader is also [more performant than the standard go csv package](docs/BENCHMARKS.md) when compared in an apples-to-apples configuration between the two. I expect mileage here to vary over time. My primary goal with this lib was to solve my own edge case problems like suspect-encodings/loose-rules and offer something back more aligned with others that think like myself.
 
 ```go
 package main
@@ -65,13 +65,13 @@ func main() {
 }
 ```
 
-See the [Reader](./internal/examples/reader/main.go) and [Writer](./internal/examples/writer/main.go) examples for more in-depth usages.
+See the [Reader](internal/examples/reader/main.go) and [Writer](internal/examples/writer/main.go) examples for more in-depth usages.
 
 ## Reader Features
 
 | Name | option(s) |
 | - | - |
-| Zero allocations | BorrowRow + BorrowFields + InitialRecordBuffer + InitialRecordBufferSize |
+| Zero allocations during processing | BorrowRow + BorrowFields + InitialRecordBuffer + InitialRecordBufferSize + NumFields |
 | Format Specification | Comment + CommentsAllowedAfterStartOfRecords + Escape + FieldSeparator + Quote + RecordSeparator + NumFields |
 | Format Discovery | DiscoverRecordSeparator |
 | Data Loss Prevention | ClearFreedDataMemory |
@@ -94,7 +94,7 @@ See the [Reader](./internal/examples/reader/main.go) and [Writer](./internal/exa
 
 ---
 
-[CHANGELOG](./docs/version/v2/CHANGELOG.md)
+[CHANGELOG](docs/version/v2/CHANGELOG.md)
 
 ---
 
