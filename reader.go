@@ -89,7 +89,9 @@ var (
 	ErrFieldCount = errors.New("field count error")
 	ErrBadConfig  = errors.New("bad config")
 	// instances
-	ErrTooManyFields               = errors.New("too many fields")
+	ErrTooManyFields = errors.New("too many fields")
+	// is a sub-instance of ErrTooManyFields
+	ErrFieldCountAboveMax          = errors.New("field count exceeds max")
 	ErrNotEnoughFields             = errors.New("not enough fields")
 	ErrReaderClosed                = errors.New("reader closed")
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
@@ -175,6 +177,22 @@ func (e errTooManyFields) Error() string {
 
 func tooManyFieldsErr(exp int) errTooManyFields {
 	return errTooManyFields{exp}
+}
+
+type errTooManyFieldsAboveMax struct {
+	max int
+}
+
+func (e errTooManyFieldsAboveMax) Unwrap() []error {
+	return []error{ErrFieldCount, ErrTooManyFields, ErrFieldCountAboveMax}
+}
+
+func (e errTooManyFieldsAboveMax) Error() string {
+	return fmt.Sprintf("%s: %s %d", ErrTooManyFields.Error(), ErrFieldCountAboveMax.Error(), e.max)
+}
+
+func tooManyFieldsAboveMaxErr(exp int) errTooManyFieldsAboveMax {
+	return errTooManyFieldsAboveMax{exp}
 }
 
 type ReaderOption func(*rCfg)
@@ -268,34 +286,6 @@ func (ReaderOptions) ErrorOnNewlineInUnquotedField(b bool) ReaderOption {
 		cfg.errOnNewlineInUnquotedField = b
 	}
 }
-
-// // MaxNumFields does nothing at the moment except cause a panic
-// func (ReaderOptions) MaxNumFields(n int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxNumFields = n
-// 	}
-// }
-
-// // MaxNumBytes does nothing at the moment except cause a panic
-// func (ReaderOptions) MaxNumBytes(n int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxNumBytes = n
-// 	}
-// }
-
-// // MaxNumRecords does nothing at the moment except cause a panic
-// func (ReaderOptions) MaxNumRecords(n int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxNumRecords = n
-// 	}
-// }
-
-// // MaxNumRecordBytes does nothing at the moment except cause a panic
-// func (ReaderOptions) MaxNumRecordBytes(n int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxNumRecordBytes = n
-// 	}
-// }
 
 func (ReaderOptions) FieldSeparator(r rune) ReaderOption {
 	return func(cfg *rCfg) {
@@ -544,6 +534,38 @@ func (ReaderOptions) ReaderBuffer(v []byte) ReaderOption {
 	}
 }
 
+// MaxNumFields is a security option that limits the number of fields allowed to be detected automatically
+//
+// using this option at the same time as the NumFields option will lead to an error on reader creation
+// since using both is counter intuitive in general
+func (ReaderOptions) MaxNumFields(v int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxNumFields = v
+		cfg.maxNumFieldsSet = true
+	}
+}
+
+// // MaxNumBytes does nothing at the moment except cause a panic
+// func (ReaderOptions) MaxNumBytes(n int) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.maxNumBytes = n
+// 	}
+// }
+
+// // MaxNumRecords does nothing at the moment except cause a panic
+// func (ReaderOptions) MaxNumRecords(n int) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.maxNumRecords = n
+// 	}
+// }
+
+// // MaxNumRecordBytes does nothing at the moment except cause a panic
+// func (ReaderOptions) MaxNumRecordBytes(n int) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.maxNumRecordBytes = n
+// 	}
+// }
+
 func ReaderOpts() ReaderOptions {
 	return ReaderOptions{}
 }
@@ -556,10 +578,14 @@ type rCfg struct {
 	recordSep  [2]rune
 	rawBufSize int
 	numFields  int
-	// maxNumFields                       int
+
+	// security attributes
+
+	maxNumFields int
 	// maxNumRecords                      int
 	// maxNumRecordBytes                  int
 	// maxNumBytes                        int
+
 	initialRecordBufferSize            int
 	fieldSeparator                     rune
 	quote                              rune
@@ -588,6 +614,10 @@ type rCfg struct {
 	recordBufSet                       bool
 	rawBufSet                          bool
 	rawBufSizeSet                      bool
+
+	//
+
+	maxNumFieldsSet bool
 }
 
 type Reader struct {
@@ -595,7 +625,10 @@ type Reader struct {
 	rawBuf       []byte
 	rawIndex     int
 	//
-	readErr           error
+	readErr error
+	//
+	fieldNumOverflow func() bool
+	//
 	prepareRow        func() bool
 	scan              func() bool
 	err               error
@@ -788,12 +821,20 @@ func (cfg *rCfg) validate() error {
 		}
 	}
 
+	if cfg.maxNumFieldsSet && cfg.numFieldsSet {
+		return errors.New("MaxNumFields and NumFields options cannot be used at the same time")
+	}
+
 	if cfg.numFieldsSet && cfg.numFields <= 0 {
 		return errors.New("num fields must be greater than zero or not specified")
 	}
 
 	if cfg.borrowFields && !cfg.borrowRow {
 		return errors.New("field borrowing cannot be enabled without enabling row borrowing")
+	}
+
+	if cfg.maxNumFieldsSet && cfg.maxNumFields <= 1 {
+		return errors.New("max num fields cannot be set to a value less than or equal to one")
 	}
 
 	// if cfg.maxNumFields != 0 || cfg.maxNumRecordBytes != 0 || cfg.maxNumRecords != 0 || cfg.maxNumBytes != 0 {
@@ -1354,6 +1395,12 @@ func (r *Reader) initPipeline(cfg rCfg) {
 		r.setRowBorrowedAndFieldsCloned()
 	}
 
+	if !cfg.maxNumFieldsSet {
+		r.fieldNumOverflow = r.defaultFieldNumOverflow
+	} else {
+		r.setFieldNumOverflowMax(cfg.maxNumFields)
+	}
+
 	// letting any valid utf8 end of line act as the record separator
 	// also building preflight and post-flight pipeline dynamically
 	r.scan = r.defaultScan
@@ -1458,7 +1505,7 @@ func (r *Reader) initPipeline(cfg rCfg) {
 	}
 }
 
-// fieldNumOverflow invokes streamParsingErr if
+// defaultFieldNumOverflow invokes streamParsingErr if
 // the current field length currently matches configured
 // max limit
 //
@@ -1470,13 +1517,29 @@ func (r *Reader) initPipeline(cfg rCfg) {
 // of fields when processing the stream and short circuit
 // that processes - returning the error path - when the result
 // of this function is true
-func (r *Reader) fieldNumOverflow() bool {
+func (r *Reader) defaultFieldNumOverflow() bool {
 	if len(r.fieldLengths) == r.numFields {
 		r.streamParsingErr(tooManyFieldsErr(r.numFields))
 		return true
 	}
 
 	return false
+}
+
+func (r *Reader) setFieldNumOverflowMax(max int) {
+	r.fieldNumOverflow = func() bool {
+		if r.numFields > 0 {
+			r.fieldNumOverflow = r.defaultFieldNumOverflow
+			return r.fieldNumOverflow()
+		}
+
+		if len(r.fieldLengths) == max {
+			r.streamParsingErr(tooManyFieldsAboveMaxErr(max))
+			return true
+		}
+
+		return r.defaultFieldNumOverflow()
+	}
 }
 
 func (r *Reader) setDone() {

@@ -1089,6 +1089,17 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrInvalidQuotedFieldEnding},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 3, record 1, field 1: " + csv.ErrInvalidQuotedFieldEnding.Error(),
 		},
+		{
+			when: "MaxNumFields(2) and reader has 3 fields",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("a,b,c")),
+					csv.ReaderOpts().MaxNumFields(2),
+				}
+			},
+			iterErrIs:  []error{csv.ErrFieldCount, csv.ErrTooManyFields, csv.ErrFieldCountAboveMax},
+			iterErrStr: csv.ErrParsing.Error() + " at byte 4, record 1, field 2: " + csv.ErrTooManyFields.Error() + ": " + csv.ErrFieldCountAboveMax.Error() + " 2",
+		},
 	}
 
 	for _, tc := range tcs {

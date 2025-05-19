@@ -1031,6 +1031,16 @@ func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
 			},
 			rows: [][]string{{""}},
 		},
+		{
+			when: "MaxNumFields(2) and no other options",
+			newOptsF: func() []csv.ReaderOption {
+				return []csv.ReaderOption{
+					csv.ReaderOpts().Reader(strings.NewReader("a,b\n1,2")),
+					csv.ReaderOpts().MaxNumFields(2),
+				}
+			},
+			rows: [][]string{strings.Split("a,b", ","), strings.Split("1,2", ",")},
+		},
 	}
 
 	for _, tc := range tcs {
