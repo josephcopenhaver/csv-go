@@ -88,10 +88,12 @@ var (
 	ErrParsing    = errors.New("parsing error")
 	ErrFieldCount = errors.New("field count error")
 	ErrBadConfig  = errors.New("bad config")
+	ErrSecOp      = errors.New("security error")
 	// instances
-	ErrTooManyFields = errors.New("too many fields")
+	ErrTooManyFields                = errors.New("too many fields")
+	ErrSecOpRecordByteCountAboveMax = errors.New("record byte count exceeds limit")
 	// is a sub-instance of ErrTooManyFields
-	ErrFieldCountAboveMax          = errors.New("field count exceeds max")
+	ErrSecOpFieldCountAboveMax     = errors.New("field count exceeds max")
 	ErrNotEnoughFields             = errors.New("not enough fields")
 	ErrReaderClosed                = errors.New("reader closed")
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
@@ -163,6 +165,22 @@ func notEnoughFieldsErr(exp, act int) errNotEnoughFields {
 	return errNotEnoughFields{exp, act}
 }
 
+type secOpErrWrapper struct {
+	err error
+}
+
+func (e secOpErrWrapper) Unwrap() []error {
+	return []error{ErrSecOp, e.err}
+}
+
+func (e secOpErrWrapper) Error() string {
+	return fmt.Sprintf("%s: %s", ErrSecOp.Error(), e.err.Error())
+}
+
+func secOpErr(err error) secOpErrWrapper {
+	return secOpErrWrapper{err}
+}
+
 type errTooManyFields struct {
 	expected int
 }
@@ -184,11 +202,11 @@ type errTooManyFieldsAboveMax struct {
 }
 
 func (e errTooManyFieldsAboveMax) Unwrap() []error {
-	return []error{ErrFieldCount, ErrTooManyFields, ErrFieldCountAboveMax}
+	return []error{ErrSecOp, ErrFieldCount, ErrTooManyFields, ErrSecOpFieldCountAboveMax}
 }
 
 func (e errTooManyFieldsAboveMax) Error() string {
-	return fmt.Sprintf("%s: %s %d", ErrTooManyFields.Error(), ErrFieldCountAboveMax.Error(), e.max)
+	return fmt.Sprintf("%s: %s: %s %d", ErrSecOp.Error(), ErrTooManyFields.Error(), ErrSecOpFieldCountAboveMax.Error(), e.max)
 }
 
 func tooManyFieldsAboveMaxErr(exp int) errTooManyFieldsAboveMax {
@@ -545,12 +563,13 @@ func (ReaderOptions) MaxNumFields(v int) ReaderOption {
 	}
 }
 
-// // MaxNumBytes does nothing at the moment except cause a panic
-// func (ReaderOptions) MaxNumBytes(n int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxNumBytes = n
-// 	}
-// }
+// MaxNumRecordBytes is a security option that limits the number of bytes allowed to be detected in a record row
+func (ReaderOptions) MaxNumRecordBytes(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxNumRecordBytes = n
+		cfg.maxNumRecordBytesSet = true
+	}
+}
 
 // // MaxNumRecords does nothing at the moment except cause a panic
 // func (ReaderOptions) MaxNumRecords(n int) ReaderOption {
@@ -559,12 +578,7 @@ func (ReaderOptions) MaxNumFields(v int) ReaderOption {
 // 	}
 // }
 
-// // MaxNumRecordBytes does nothing at the moment except cause a panic
-// func (ReaderOptions) MaxNumRecordBytes(n int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxNumRecordBytes = n
-// 	}
-// }
+// MaxNumBytes for an overall csv document is not getting implemented because it's trivial to implement that as a io.Reader wrapper.
 
 func ReaderOpts() ReaderOptions {
 	return ReaderOptions{}
@@ -580,11 +594,9 @@ type rCfg struct {
 	numFields  int
 
 	// security attributes
-
-	maxNumFields int
+	maxNumFields      int
+	maxNumRecordBytes int
 	// maxNumRecords                      int
-	// maxNumRecordBytes                  int
-	// maxNumBytes                        int
 
 	initialRecordBufferSize            int
 	fieldSeparator                     rune
@@ -617,7 +629,8 @@ type rCfg struct {
 
 	//
 
-	maxNumFieldsSet bool
+	maxNumFieldsSet      bool
+	maxNumRecordBytesSet bool
 }
 
 type Reader struct {
@@ -627,7 +640,8 @@ type Reader struct {
 	//
 	readErr error
 	//
-	fieldNumOverflow func() bool
+	fieldNumOverflow     func() bool
+	appendRecBufMaxCheck func(...byte) bool
 	//
 	prepareRow        func() bool
 	scan              func() bool
@@ -837,9 +851,9 @@ func (cfg *rCfg) validate() error {
 		return errors.New("max num fields cannot be set to a value less than or equal to one")
 	}
 
-	// if cfg.maxNumFields != 0 || cfg.maxNumRecordBytes != 0 || cfg.maxNumRecords != 0 || cfg.maxNumBytes != 0 {
-	// 	panic("unimplemented config selections")
-	// }
+	if cfg.maxNumRecordBytesSet && cfg.maxNumRecordBytes <= 0 {
+		return errors.New("max num record bytes cannot be less than or equal to zero")
+	}
 
 	return nil
 }
@@ -1352,10 +1366,20 @@ func (r *Reader) initPipeline(cfg rCfg) {
 
 	if !cfg.clearMemoryAfterFree {
 		r.close = r.defaultClose
-		r.prepareRow = r.prepareRow_memclearOff
+		if cfg.maxNumRecordBytesSet {
+			r.appendRecBufMaxCheck = r.defaultAppendRecBufMaxCheck(cfg.maxNumRecordBytes)
+			r.prepareRow = r.prepareRow_maxCheck
+		} else {
+			r.prepareRow = r.prepareRow_memclearOff
+		}
 	} else {
 		r.close = r.closeWithMemClear
-		r.prepareRow = r.prepareRow_memclearOn
+		if cfg.maxNumRecordBytesSet {
+			r.appendRecBufMaxCheck = r.appendRecBufMaxCheckMemClear(cfg.maxNumRecordBytes)
+			r.prepareRow = r.prepareRow_maxCheck
+		} else {
+			r.prepareRow = r.prepareRow_memclearOn
+		}
 	}
 
 	if cfg.rawBufSizeSet {
@@ -1549,6 +1573,58 @@ func (r *Reader) setDone() {
 	r.bitFlags |= stDone
 
 	r.scan = func() bool {
+		return false
+	}
+}
+
+func (r *Reader) defaultAppendRecBufMaxCheck(max int) func(...byte) bool {
+	return func(b ...byte) bool {
+		// check if addition exceeds max or overflows
+		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
+			// the append would exceed the limits configured
+			// don't bother trying to write a partial amount of it
+			//
+			// just short circuit
+			r.parsingErr(secOpErr(ErrSecOpRecordByteCountAboveMax))
+			return true
+		}
+
+		r.recordBuf = append(r.recordBuf, b...)
+
+		return false
+	}
+}
+
+func (r *Reader) appendRecBufMaxCheckMemClear(max int) func(...byte) bool {
+	return func(b ...byte) bool {
+		// check if addition exceeds max or overflows
+		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
+			// the append would exceed the limits configured
+			// don't bother trying to write a partial amount of it
+			//
+			// just short circuit
+			r.parsingErr(secOpErr(ErrSecOpRecordByteCountAboveMax))
+			return true
+		}
+
+		oldRef := r.recordBuf
+
+		r.recordBuf = append(r.recordBuf, b...)
+
+		if cap(oldRef) == 0 {
+			return false
+		}
+
+		oldRef = oldRef[:cap(oldRef)]
+
+		if &oldRef[0] == &(r.recordBuf[:1])[0] {
+			return false
+		}
+
+		for i := range oldRef {
+			oldRef[i] = 0
+		}
+
 		return false
 	}
 }

@@ -100,12 +100,14 @@ func main() {
 		t := parse(tsPrepareRow)
 
 		type cfg struct {
-			ClearMemoryAfterUse bool
+			ClearMemoryAfterUse  bool
+			HasMaxNumRecordBytes bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
+			{HasMaxNumRecordBytes: true},
 			{ClearMemoryAfterUse: false},
 			{ClearMemoryAfterUse: true},
 		})

@@ -1,5 +1,6 @@
-{{define "recBufAppend"}}{{if .ClearMemoryAfterUse}}r.appendRecBuf({{else}}r.recordBuf = append(r.recordBuf, {{end}}{{end}}
-func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}() bool {
+{{define "recBufAppend0"}}{{if not .HasMaxNumRecordBytes}}{{if .ClearMemoryAfterUse}}r.appendRecBuf({{else}}r.recordBuf = append(r.recordBuf, {{end}}{{else}}if r.appendRecBufMaxCheck({{end}}{{end}}
+{{define "recBufAppend1"}}{{if not .HasMaxNumRecordBytes}}){{else}}) { return false }{{end}}{{end}}
+func (r *Reader) prepareRow_{{if not .HasMaxNumRecordBytes}}memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}{{else}}maxCheck{{end}}() bool {
 
 	// TODO: reducing the instruction-space on the hot-positive path even after using code generation to filter
 	// blocks out and dynamic controlRunes per state will have a compounding positive effect
@@ -153,11 +154,11 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:]...{{template "recBufAppend1" .}}
 
 					r.state = rStateInField
 				case rStateInQuotedField, rStateInField:
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:]...{{template "recBufAppend1" .}}
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
@@ -208,7 +209,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 					r.state = rStateStartOfRecord // might be removable, but leaving because could leave this context with the state set here
 					fallthrough
 				case rStateStartOfRecord:
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di)
 
 					r.rawIndex = idx + int(size)
@@ -225,7 +226,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 				case rStateInQuotedField:
 					// TODO: technically "skippable"
 
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
@@ -251,7 +252,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 					r.fieldIndex++
 					r.state = rStateStartOfField
 				case rStateStartOfField:
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di)
 					r.rawIndex = idx + int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
@@ -265,7 +266,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 					r.fieldIndex++
 					// r.state = ... (unchanged)
 				case rStateInField:
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di)
 					r.rawIndex = idx + int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
@@ -302,13 +303,13 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
 					r.state = rStateInField
 				case rStateInQuotedField:
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
@@ -319,7 +320,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 						return false
 					}
 
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(size)
 					r.rawIndex += int(size)
 
@@ -330,7 +331,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 				case rStateInField:
 					// TODO: technically "skippable"
 
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
@@ -373,7 +374,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 
 						// quote in unquoted field erroring is disabled
 
-						{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+						{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 						r.byteIndex += uint64(di) + uint64(size)
 						r.rawIndex = idx + int(size)
 
@@ -390,7 +391,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 
 					r.state = rStateInQuotedField
 				case rStateInQuotedField:
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
@@ -401,7 +402,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 						return false
 					}
 
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(size)
 					r.rawIndex += int(size)
 
@@ -417,7 +418,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 						return false
 					}
 
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(size)
 					r.rawIndex += int(size)
 
@@ -434,7 +435,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 
 						// quote in unquoted field erroring is disabled
 
-						{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+						{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 						r.byteIndex += uint64(di) + uint64(size)
 						r.rawIndex = idx + int(size)
 
@@ -460,7 +461,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 
 					// quote in unquoted field erroring is disabled
 
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
@@ -498,11 +499,11 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 							// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
 							fallthrough
 						case rStateStartOfRecord, rStateStartOfField:
-							{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+1]...)
+							{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+1]...{{template "recBufAppend1" .}}
 
 							r.state = rStateInField
 						case rStateInQuotedField, rStateInField:
-							{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+1]...)
+							{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+1]...{{template "recBufAppend1" .}}
 
 							// r.state = ... (unchanged)
 						case rStateInQuotedFieldAfterEscape:
@@ -549,7 +550,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 					r.state = rStateStartOfRecord // might be removable, but leaving because could leave this context with the state set here
 					fallthrough
 				case rStateStartOfRecord:
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
@@ -564,7 +565,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 				case rStateInQuotedField:
 					// TODO: technically "skippable"
 
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
@@ -590,7 +591,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 					}
 					return false
 				case rStateStartOfField, rStateInField:
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
@@ -647,13 +648,13 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 					fallthrough
 				case rStateStartOfField:
 
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
 					r.state = rStateInField
 				case rStateInQuotedField, rStateInField:
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
@@ -717,7 +718,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 						r.streamParsingErr(errNewlineInUnquotedFieldCarriageReturn)
 						return false
 					case rStateInQuotedField:
-						{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+						{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 						r.byteIndex += uint64(di) + uint64(size)
 						r.rawIndex = idx + int(size)
 
@@ -810,7 +811,7 @@ func (r *Reader) prepareRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 				case rStateInQuotedField:
 					// TODO: technically "skippable"
 
-					{{template "recBufAppend" .}}r.rawBuf[r.rawIndex:idx+int(size)]...)
+					{{template "recBufAppend0" .}}r.rawBuf[r.rawIndex:idx+int(size)]...{{template "recBufAppend1" .}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 

@@ -4,7 +4,7 @@ csv-go
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/josephcopenhaver/csv-go)](https://goreportcard.com/report/github.com/josephcopenhaver/csv-go/v2)
 ![tests](https://github.com/josephcopenhaver/csv-go/actions/workflows/tests.yaml/badge.svg)
-![code-coverage](https://img.shields.io/badge/code_coverage-100%25-rgb%2852%2C208%2C88%29)
+![code-coverage](https://img.shields.io/badge/code_coverage-98%25-teal)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 This package is a highly flexible and performant single threaded csv stream reader and writer. It opts for strictness with nearly all options off by default. Using the option functions pattern on Reader and Writer creation ensures extreme flexibility can be offered while configuration can be validated up-front in cold paths. This creates an immutable, clear execution of the csv file/stream parsing strategy. It has been battle tested thoroughly in production contexts for both correctness and speed so feel free to use in any way you like.
@@ -79,7 +79,7 @@ See the [Reader](internal/examples/reader/main.go) and [Writer](internal/example
 | Headers Support | ExpectHeaders + RemoveHeaderRow + TrimHeaders |
 | Reader Buffer tuning | ReaderBuffer + ReaderBufferSize |
 | Format Validation | ErrorOnNoRows + ErrorOnNewlineInUnquotedField + ErrorOnQuotesInUnquotedField |
-| Security Limits | MaxNumFields |
+| Security Limits | MaxNumFields + MaxNumRecordBytes |
 
 ## Writer Features
 
