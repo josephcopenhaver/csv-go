@@ -176,10 +176,10 @@ func (r *Reader) prepareRow_maxCheck() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
-					r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+					r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 					return false
 				case rStateInLineComment:
 					// could zero out bytes immediately
@@ -250,11 +250,11 @@ func (r *Reader) prepareRow_maxCheck() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+						r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 						return false
 					}
 
@@ -342,7 +342,7 @@ func (r *Reader) prepareRow_maxCheck() bool {
 					r.state = rStateInQuotedFieldAfterEscape
 				case rStateInQuotedFieldAfterEscape:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+						r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 						return false
 					}
 
@@ -354,7 +354,7 @@ func (r *Reader) prepareRow_maxCheck() bool {
 
 					r.state = rStateInQuotedField
 				case rStateEndOfQuotedField:
-					r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+					r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 					return false
 				case rStateInField:
 					// TODO: technically "skippable"
@@ -398,7 +398,7 @@ func (r *Reader) prepareRow_maxCheck() bool {
 
 							r.state = rStateInField // might be removable, but leaving because could leave this context with the state set here
 
-							r.streamParsingErr(ErrQuoteInUnquotedField)
+							r.streamErr(r.parsingErr, ErrQuoteInUnquotedField)
 							return false
 						}
 
@@ -432,7 +432,7 @@ func (r *Reader) prepareRow_maxCheck() bool {
 					r.state = rStateEndOfQuotedField
 				case rStateInQuotedFieldAfterEscape:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+						r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 						return false
 					}
 
@@ -445,12 +445,12 @@ func (r *Reader) prepareRow_maxCheck() bool {
 					r.state = rStateInQuotedField
 				case rStateEndOfQuotedField:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+						r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 						return false
 					}
 
 					if (r.bitFlags & rFlagEscape) != 0 {
-						r.streamParsingErr(ErrUnexpectedQuoteAfterField)
+						r.streamErr(r.parsingErr, ErrUnexpectedQuoteAfterField)
 						return false
 					}
 
@@ -467,7 +467,7 @@ func (r *Reader) prepareRow_maxCheck() bool {
 							// quote in unquoted field should cause an error
 
 							r.byteIndex += uint64(di)
-							r.streamParsingErr(ErrQuoteInUnquotedField)
+							r.streamErr(r.parsingErr, ErrQuoteInUnquotedField)
 							return false
 						}
 
@@ -495,7 +495,7 @@ func (r *Reader) prepareRow_maxCheck() bool {
 						// quote in unquoted field should cause an error
 
 						r.byteIndex += uint64(di)
-						r.streamParsingErr(ErrQuoteInUnquotedField)
+						r.streamErr(r.parsingErr, ErrQuoteInUnquotedField)
 						return false
 					}
 
@@ -553,10 +553,10 @@ func (r *Reader) prepareRow_maxCheck() bool {
 
 							// r.state = ... (unchanged)
 						case rStateInQuotedFieldAfterEscape:
-							r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+							r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 							return false
 						case rStateEndOfQuotedField:
-							r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+							r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 							return false
 						case rStateInLineComment:
 							// could zero out bytes immediately
@@ -621,11 +621,11 @@ func (r *Reader) prepareRow_maxCheck() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+						r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 						return false
 					}
 
@@ -716,10 +716,10 @@ func (r *Reader) prepareRow_maxCheck() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
-					r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+					r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 					return false
 				case rStateInLineComment:
 					r.byteIndex += uint64(di) + uint64(size)
@@ -757,21 +757,21 @@ func (r *Reader) prepareRow_maxCheck() bool {
 						}
 
 						if c == asciiLineFeed {
-							r.streamParsingErr(errNewlineInUnquotedFieldLineFeed)
+							r.streamErr(r.parsingErr, errNewlineInUnquotedFieldLineFeed)
 							return false
 						}
 
-						r.streamParsingErr(errNewlineInUnquotedFieldCarriageReturn)
+						r.streamErr(r.parsingErr, errNewlineInUnquotedFieldCarriageReturn)
 						return false
 					case rStateInField:
 						r.byteIndex += uint64(di)
 
 						if c == asciiLineFeed {
-							r.streamParsingErr(errNewlineInUnquotedFieldLineFeed)
+							r.streamErr(r.parsingErr, errNewlineInUnquotedFieldLineFeed)
 							return false
 						}
 
-						r.streamParsingErr(errNewlineInUnquotedFieldCarriageReturn)
+						r.streamErr(r.parsingErr, errNewlineInUnquotedFieldCarriageReturn)
 						return false
 					case rStateInQuotedField:
 						if r.appendRecBufMaxCheck(r.rawBuf[r.rawIndex : idx+int(size)]...) {
@@ -782,10 +782,10 @@ func (r *Reader) prepareRow_maxCheck() bool {
 
 						// r.state = ... (unchanged)
 					case rStateInQuotedFieldAfterEscape:
-						r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+						r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 						return false
 					case rStateEndOfQuotedField:
-						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+						r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 						return false
 					case rStateInLineComment:
 						// could zero out bytes immediately
@@ -877,7 +877,7 @@ func (r *Reader) prepareRow_maxCheck() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				}
 			}
@@ -1051,10 +1051,10 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
-					r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+					r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 					return false
 				case rStateInLineComment:
 					// could zero out bytes immediately
@@ -1121,11 +1121,11 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+						r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 						return false
 					}
 
@@ -1205,7 +1205,7 @@ func (r *Reader) prepareRow_memclearOff() bool {
 					r.state = rStateInQuotedFieldAfterEscape
 				case rStateInQuotedFieldAfterEscape:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+						r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 						return false
 					}
 
@@ -1215,7 +1215,7 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 					r.state = rStateInQuotedField
 				case rStateEndOfQuotedField:
-					r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+					r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 					return false
 				case rStateInField:
 					// TODO: technically "skippable"
@@ -1257,7 +1257,7 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 							r.state = rStateInField // might be removable, but leaving because could leave this context with the state set here
 
-							r.streamParsingErr(ErrQuoteInUnquotedField)
+							r.streamErr(r.parsingErr, ErrQuoteInUnquotedField)
 							return false
 						}
 
@@ -1287,7 +1287,7 @@ func (r *Reader) prepareRow_memclearOff() bool {
 					r.state = rStateEndOfQuotedField
 				case rStateInQuotedFieldAfterEscape:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+						r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 						return false
 					}
 
@@ -1298,12 +1298,12 @@ func (r *Reader) prepareRow_memclearOff() bool {
 					r.state = rStateInQuotedField
 				case rStateEndOfQuotedField:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+						r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 						return false
 					}
 
 					if (r.bitFlags & rFlagEscape) != 0 {
-						r.streamParsingErr(ErrUnexpectedQuoteAfterField)
+						r.streamErr(r.parsingErr, ErrUnexpectedQuoteAfterField)
 						return false
 					}
 
@@ -1318,7 +1318,7 @@ func (r *Reader) prepareRow_memclearOff() bool {
 							// quote in unquoted field should cause an error
 
 							r.byteIndex += uint64(di)
-							r.streamParsingErr(ErrQuoteInUnquotedField)
+							r.streamErr(r.parsingErr, ErrQuoteInUnquotedField)
 							return false
 						}
 
@@ -1344,7 +1344,7 @@ func (r *Reader) prepareRow_memclearOff() bool {
 						// quote in unquoted field should cause an error
 
 						r.byteIndex += uint64(di)
-						r.streamParsingErr(ErrQuoteInUnquotedField)
+						r.streamErr(r.parsingErr, ErrQuoteInUnquotedField)
 						return false
 					}
 
@@ -1396,10 +1396,10 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 							// r.state = ... (unchanged)
 						case rStateInQuotedFieldAfterEscape:
-							r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+							r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 							return false
 						case rStateEndOfQuotedField:
-							r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+							r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 							return false
 						case rStateInLineComment:
 							// could zero out bytes immediately
@@ -1460,11 +1460,11 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+						r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 						return false
 					}
 
@@ -1549,10 +1549,10 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
-					r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+					r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 					return false
 				case rStateInLineComment:
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1590,21 +1590,21 @@ func (r *Reader) prepareRow_memclearOff() bool {
 						}
 
 						if c == asciiLineFeed {
-							r.streamParsingErr(errNewlineInUnquotedFieldLineFeed)
+							r.streamErr(r.parsingErr, errNewlineInUnquotedFieldLineFeed)
 							return false
 						}
 
-						r.streamParsingErr(errNewlineInUnquotedFieldCarriageReturn)
+						r.streamErr(r.parsingErr, errNewlineInUnquotedFieldCarriageReturn)
 						return false
 					case rStateInField:
 						r.byteIndex += uint64(di)
 
 						if c == asciiLineFeed {
-							r.streamParsingErr(errNewlineInUnquotedFieldLineFeed)
+							r.streamErr(r.parsingErr, errNewlineInUnquotedFieldLineFeed)
 							return false
 						}
 
-						r.streamParsingErr(errNewlineInUnquotedFieldCarriageReturn)
+						r.streamErr(r.parsingErr, errNewlineInUnquotedFieldCarriageReturn)
 						return false
 					case rStateInQuotedField:
 						r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx+int(size)]...)
@@ -1613,10 +1613,10 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 						// r.state = ... (unchanged)
 					case rStateInQuotedFieldAfterEscape:
-						r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+						r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 						return false
 					case rStateEndOfQuotedField:
-						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+						r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 						return false
 					case rStateInLineComment:
 						// could zero out bytes immediately
@@ -1706,7 +1706,7 @@ func (r *Reader) prepareRow_memclearOff() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				}
 			}
@@ -1880,10 +1880,10 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
-					r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+					r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 					return false
 				case rStateInLineComment:
 					// could zero out bytes immediately
@@ -1950,11 +1950,11 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+						r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 						return false
 					}
 
@@ -2034,7 +2034,7 @@ func (r *Reader) prepareRow_memclearOn() bool {
 					r.state = rStateInQuotedFieldAfterEscape
 				case rStateInQuotedFieldAfterEscape:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+						r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 						return false
 					}
 
@@ -2044,7 +2044,7 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 					r.state = rStateInQuotedField
 				case rStateEndOfQuotedField:
-					r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+					r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 					return false
 				case rStateInField:
 					// TODO: technically "skippable"
@@ -2086,7 +2086,7 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 							r.state = rStateInField // might be removable, but leaving because could leave this context with the state set here
 
-							r.streamParsingErr(ErrQuoteInUnquotedField)
+							r.streamErr(r.parsingErr, ErrQuoteInUnquotedField)
 							return false
 						}
 
@@ -2116,7 +2116,7 @@ func (r *Reader) prepareRow_memclearOn() bool {
 					r.state = rStateEndOfQuotedField
 				case rStateInQuotedFieldAfterEscape:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+						r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 						return false
 					}
 
@@ -2127,12 +2127,12 @@ func (r *Reader) prepareRow_memclearOn() bool {
 					r.state = rStateInQuotedField
 				case rStateEndOfQuotedField:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+						r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 						return false
 					}
 
 					if (r.bitFlags & rFlagEscape) != 0 {
-						r.streamParsingErr(ErrUnexpectedQuoteAfterField)
+						r.streamErr(r.parsingErr, ErrUnexpectedQuoteAfterField)
 						return false
 					}
 
@@ -2147,7 +2147,7 @@ func (r *Reader) prepareRow_memclearOn() bool {
 							// quote in unquoted field should cause an error
 
 							r.byteIndex += uint64(di)
-							r.streamParsingErr(ErrQuoteInUnquotedField)
+							r.streamErr(r.parsingErr, ErrQuoteInUnquotedField)
 							return false
 						}
 
@@ -2173,7 +2173,7 @@ func (r *Reader) prepareRow_memclearOn() bool {
 						// quote in unquoted field should cause an error
 
 						r.byteIndex += uint64(di)
-						r.streamParsingErr(ErrQuoteInUnquotedField)
+						r.streamErr(r.parsingErr, ErrQuoteInUnquotedField)
 						return false
 					}
 
@@ -2225,10 +2225,10 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 							// r.state = ... (unchanged)
 						case rStateInQuotedFieldAfterEscape:
-							r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+							r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 							return false
 						case rStateEndOfQuotedField:
-							r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+							r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 							return false
 						case rStateInLineComment:
 							// could zero out bytes immediately
@@ -2289,11 +2289,11 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
 					if di != 0 {
-						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+						r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 						return false
 					}
 
@@ -2378,10 +2378,10 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
-					r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+					r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 					return false
 				case rStateInLineComment:
 					r.byteIndex += uint64(di) + uint64(size)
@@ -2419,21 +2419,21 @@ func (r *Reader) prepareRow_memclearOn() bool {
 						}
 
 						if c == asciiLineFeed {
-							r.streamParsingErr(errNewlineInUnquotedFieldLineFeed)
+							r.streamErr(r.parsingErr, errNewlineInUnquotedFieldLineFeed)
 							return false
 						}
 
-						r.streamParsingErr(errNewlineInUnquotedFieldCarriageReturn)
+						r.streamErr(r.parsingErr, errNewlineInUnquotedFieldCarriageReturn)
 						return false
 					case rStateInField:
 						r.byteIndex += uint64(di)
 
 						if c == asciiLineFeed {
-							r.streamParsingErr(errNewlineInUnquotedFieldLineFeed)
+							r.streamErr(r.parsingErr, errNewlineInUnquotedFieldLineFeed)
 							return false
 						}
 
-						r.streamParsingErr(errNewlineInUnquotedFieldCarriageReturn)
+						r.streamErr(r.parsingErr, errNewlineInUnquotedFieldCarriageReturn)
 						return false
 					case rStateInQuotedField:
 						r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...)
@@ -2442,10 +2442,10 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 						// r.state = ... (unchanged)
 					case rStateInQuotedFieldAfterEscape:
-						r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+						r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 						return false
 					case rStateEndOfQuotedField:
-						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
+						r.streamErr(r.parsingErr, ErrInvalidQuotedFieldEnding)
 						return false
 					case rStateInLineComment:
 						// could zero out bytes immediately
@@ -2535,7 +2535,7 @@ func (r *Reader) prepareRow_memclearOn() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
+					r.streamErr(r.parsingErr, ErrInvalidEscSeqInQuotedField)
 					return false
 				}
 			}

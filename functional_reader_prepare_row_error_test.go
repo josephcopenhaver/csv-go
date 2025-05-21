@@ -1097,8 +1097,8 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 					csv.ReaderOpts().MaxNumFields(2),
 				}
 			},
-			iterErrIs:  []error{csv.ErrParsing, csv.ErrSecOp, csv.ErrFieldCount, csv.ErrTooManyFields, csv.ErrSecOpFieldCountAboveMax},
-			iterErrStr: csv.ErrParsing.Error() + " at byte 4, record 1, field 2: " + csv.ErrSecOp.Error() + ": " + csv.ErrTooManyFields.Error() + ": " + csv.ErrSecOpFieldCountAboveMax.Error() + " 2",
+			iterErrIs:  []error{csv.ErrSecOp, csv.ErrFieldCount, csv.ErrTooManyFields, csv.ErrSecOpFieldCountAboveMax},
+			iterErrStr: csv.ErrSecOp.Error() + " at byte 4, record 1, field 2: " + csv.ErrTooManyFields.Error() + ": " + csv.ErrSecOpFieldCountAboveMax.Error() + " 2",
 		},
 	}
 

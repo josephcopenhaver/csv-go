@@ -433,3 +433,62 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 		tc.Run(t)
 	}
 }
+
+func TestMaxRecordBytesError(t *testing.T) {
+	t.Run("when csv reader MemClear=off MaxNumRecordBytes=1 and 2 bytes in stream record", func(t *testing.T) {
+		t.Run("then a parsing secops error due to record byte length should be raised", func(t *testing.T) {
+			is := assert.New(t)
+
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("12")),
+				csv.ReaderOpts().MaxNumRecordBytes(1),
+			)
+			is.Nil(err)
+			is.NotNil(cr)
+			defer cr.Close()
+
+			var iterCount int
+			for _ = range cr.IntoIter() {
+				iterCount++
+			}
+			err = cr.Err()
+
+			is.Zero(iterCount)
+			is.NotNil(err)
+			isErrs := []error{csv.ErrSecOp, csv.ErrSecOpRecordByteCountAboveMax}
+			for _, v := range isErrs {
+				is.ErrorIs(err, v)
+			}
+			is.Equal(csv.ErrSecOp.Error()+" at byte 2, record 1, field 1: "+csv.ErrSecOpRecordByteCountAboveMax.Error(), err.Error())
+		})
+	})
+
+	t.Run("when csv reader MemClear=on MaxNumRecordBytes=1 and 1 bytes in stream record", func(t *testing.T) {
+		t.Run("then a parsing secops error due to record byte length should be raised", func(t *testing.T) {
+			is := assert.New(t)
+
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("12")),
+				csv.ReaderOpts().ClearFreedDataMemory(true),
+				csv.ReaderOpts().MaxNumRecordBytes(1),
+			)
+			is.Nil(err)
+			is.NotNil(cr)
+			defer cr.Close()
+
+			var iterCount int
+			for _ = range cr.IntoIter() {
+				iterCount++
+			}
+			err = cr.Err()
+
+			is.Zero(iterCount)
+			is.NotNil(err)
+			isErrs := []error{csv.ErrSecOp, csv.ErrSecOpRecordByteCountAboveMax}
+			for _, v := range isErrs {
+				is.ErrorIs(err, v)
+			}
+			is.Equal(csv.ErrSecOp.Error()+" at byte 2, record 1, field 1: "+csv.ErrSecOpRecordByteCountAboveMax.Error(), err.Error())
+		})
+	})
+}

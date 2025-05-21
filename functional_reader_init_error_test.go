@@ -429,4 +429,19 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			is.Nil(cr)
 		})
 	})
+
+	t.Run("when creating a CSV reader with MaxNumRecordBytes set to zero", func(t *testing.T) {
+		t.Run("should return an error indicating cannot less than or equal to zero", func(t *testing.T) {
+			is := assert.New(t)
+
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().MaxNumRecordBytes(0),
+			)
+			is.NotNil(err)
+			is.ErrorIs(err, csv.ErrBadConfig)
+			is.Equal(err.Error(), errors.Join(csv.ErrBadConfig, errors.New("max num record bytes cannot be less than or equal to zero")).Error())
+			is.Nil(cr)
+		})
+	})
 }

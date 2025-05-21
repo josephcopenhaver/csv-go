@@ -149,6 +149,16 @@ func newParsingError(byteIndex, recordIndex uint64, fieldIndex uint, err error) 
 	}
 }
 
+func newSecOpError(byteIndex, recordIndex uint64, fieldIndex uint, err error) posTracedErr {
+	return posTracedErr{
+		errType:     ErrSecOp,
+		err:         err,
+		byteIndex:   byteIndex,
+		recordIndex: recordIndex,
+		fieldIndex:  fieldIndex,
+	}
+}
+
 type errNotEnoughFields struct {
 	Expected, Actual int
 }
@@ -163,22 +173,6 @@ func (e errNotEnoughFields) Error() string {
 
 func notEnoughFieldsErr(exp, act int) errNotEnoughFields {
 	return errNotEnoughFields{exp, act}
-}
-
-type secOpErrWrapper struct {
-	err error
-}
-
-func (e secOpErrWrapper) Unwrap() []error {
-	return []error{ErrSecOp, e.err}
-}
-
-func (e secOpErrWrapper) Error() string {
-	return fmt.Sprintf("%s: %s", ErrSecOp.Error(), e.err.Error())
-}
-
-func secOpErr(err error) secOpErrWrapper {
-	return secOpErrWrapper{err}
 }
 
 type errTooManyFields struct {
@@ -202,11 +196,11 @@ type errTooManyFieldsAboveMax struct {
 }
 
 func (e errTooManyFieldsAboveMax) Unwrap() []error {
-	return []error{ErrSecOp, ErrFieldCount, ErrTooManyFields, ErrSecOpFieldCountAboveMax}
+	return []error{ErrFieldCount, ErrTooManyFields, ErrSecOpFieldCountAboveMax}
 }
 
 func (e errTooManyFieldsAboveMax) Error() string {
-	return fmt.Sprintf("%s: %s: %s %d", ErrSecOp.Error(), ErrTooManyFields.Error(), ErrSecOpFieldCountAboveMax.Error(), e.max)
+	return fmt.Sprintf("%s: %s %d", ErrTooManyFields.Error(), ErrSecOpFieldCountAboveMax.Error(), e.max)
 }
 
 func tooManyFieldsAboveMaxErr(exp int) errTooManyFieldsAboveMax {
@@ -575,6 +569,7 @@ func (ReaderOptions) MaxNumRecordBytes(n int) ReaderOption {
 // func (ReaderOptions) MaxNumRecords(n int) ReaderOption {
 // 	return func(cfg *rCfg) {
 // 		cfg.maxNumRecords = n
+// 		cfg.maxNumRecordsSet = true
 // 	}
 // }
 
@@ -596,7 +591,7 @@ type rCfg struct {
 	// security attributes
 	maxNumFields      int
 	maxNumRecordBytes int
-	// maxNumRecords                      int
+	maxNumRecords     int
 
 	initialRecordBufferSize            int
 	fieldSeparator                     rune
@@ -631,6 +626,7 @@ type rCfg struct {
 
 	maxNumFieldsSet      bool
 	maxNumRecordBytesSet bool
+	maxNumRecordsSet     bool
 }
 
 type Reader struct {
@@ -853,6 +849,10 @@ func (cfg *rCfg) validate() error {
 
 	if cfg.maxNumRecordBytesSet && cfg.maxNumRecordBytes <= 0 {
 		return errors.New("max num record bytes cannot be less than or equal to zero")
+	}
+
+	if cfg.maxNumRecordsSet && cfg.maxNumRecords <= 0 {
+		return errors.New("max num records cannot be less than or equal to zero")
 	}
 
 	return nil
@@ -1107,12 +1107,19 @@ func (r *Reader) parsingErr(err error) {
 	}
 }
 
-// streamParsingErr performs a side effect of increasing the byteIndex of state
+func (r *Reader) secOpErr(err error) {
+	if r.err == nil {
+		recordIndex, fieldIndex := r.humanIndexes()
+		r.err = newSecOpError(r.byteIndex, recordIndex, fieldIndex, err)
+	}
+}
+
+// streamErr performs a side effect of increasing the byteIndex of state
 //
-// therefore it should never be called more than once in an invocation to Scan
+// therefore it should never be called more than once in a reader's lifecycle
 // and it should always be followed with logic that short circuits the scan
 // and returns false for the scan operation
-func (r *Reader) streamParsingErr(err error) {
+func (r *Reader) streamErr(h func(error), err error) {
 	r.setDone()
 
 	// r.byteIndex++ moves from control byte idx
@@ -1121,7 +1128,7 @@ func (r *Reader) streamParsingErr(err error) {
 	// this matches v1 flow
 	r.byteIndex++
 
-	r.parsingErr(err)
+	h(err)
 }
 
 func (r *Reader) ioErr(err error) {
@@ -1364,6 +1371,8 @@ func (r *Reader) defaultScan() bool {
 
 func (r *Reader) initPipeline(cfg rCfg) {
 
+	// TODO: maxNumRecords -- recordIndex
+
 	if !cfg.clearMemoryAfterFree {
 		r.close = r.defaultClose
 		if cfg.maxNumRecordBytesSet {
@@ -1529,12 +1538,12 @@ func (r *Reader) initPipeline(cfg rCfg) {
 	}
 }
 
-// defaultFieldNumOverflow invokes streamParsingErr if
+// defaultFieldNumOverflow invokes streamErr if
 // the current field length currently matches configured
 // max limit
 //
-// all caveats of calling streamParsingErr apply here including
-// side effects caused by streamParsingErr when return value is
+// all caveats of calling streamErr apply here including
+// side effects caused by streamErr when return value is
 // true
 //
 // only call when the state machine would increment the number
@@ -1543,7 +1552,7 @@ func (r *Reader) initPipeline(cfg rCfg) {
 // of this function is true
 func (r *Reader) defaultFieldNumOverflow() bool {
 	if len(r.fieldLengths) == r.numFields {
-		r.streamParsingErr(tooManyFieldsErr(r.numFields))
+		r.streamErr(r.parsingErr, tooManyFieldsErr(r.numFields))
 		return true
 	}
 
@@ -1558,7 +1567,7 @@ func (r *Reader) setFieldNumOverflowMax(max int) {
 		}
 
 		if len(r.fieldLengths) == max {
-			r.streamParsingErr(tooManyFieldsAboveMaxErr(max))
+			r.streamErr(r.secOpErr, tooManyFieldsAboveMaxErr(max))
 			return true
 		}
 
@@ -1581,11 +1590,10 @@ func (r *Reader) defaultAppendRecBufMaxCheck(max int) func(...byte) bool {
 	return func(b ...byte) bool {
 		// check if addition exceeds max or overflows
 		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
-			// the append would exceed the limits configured
-			// don't bother trying to write a partial amount of it
-			//
-			// just short circuit
-			r.parsingErr(secOpErr(ErrSecOpRecordByteCountAboveMax))
+			// simulate adding bytes up to the max
+			// note that r.streamErr will make the index a "human" value and add 1
+			r.byteIndex += uint64(max - len(r.recordBuf))
+			r.streamErr(r.secOpErr, ErrSecOpRecordByteCountAboveMax)
 			return true
 		}
 
@@ -1599,11 +1607,10 @@ func (r *Reader) appendRecBufMaxCheckMemClear(max int) func(...byte) bool {
 	return func(b ...byte) bool {
 		// check if addition exceeds max or overflows
 		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
-			// the append would exceed the limits configured
-			// don't bother trying to write a partial amount of it
-			//
-			// just short circuit
-			r.parsingErr(secOpErr(ErrSecOpRecordByteCountAboveMax))
+			// simulate adding bytes up to the max
+			// note that r.streamErr will make the index a "human" value and add 1
+			r.byteIndex += uint64(max - len(r.recordBuf))
+			r.streamErr(r.secOpErr, ErrSecOpRecordByteCountAboveMax)
 			return true
 		}
 
