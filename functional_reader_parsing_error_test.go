@@ -435,13 +435,13 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 }
 
 func TestMaxRecordBytesError(t *testing.T) {
-	t.Run("when csv reader MemClear=off MaxNumRecordBytes=1 and 2 bytes in stream record", func(t *testing.T) {
+	t.Run("when csv reader MemClear=off MaxRecordBytes=1 and 2 bytes in stream record", func(t *testing.T) {
 		t.Run("then a secops error due to record byte length should be raised", func(t *testing.T) {
 			is := assert.New(t)
 
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("12")),
-				csv.ReaderOpts().MaxNumRecordBytes(1),
+				csv.ReaderOpts().MaxRecordBytes(1),
 			)
 			is.Nil(err)
 			is.NotNil(cr)
@@ -463,14 +463,14 @@ func TestMaxRecordBytesError(t *testing.T) {
 		})
 	})
 
-	t.Run("when csv reader MemClear=on MaxNumRecordBytes=1 and 1 bytes in stream record", func(t *testing.T) {
+	t.Run("when csv reader MemClear=on MaxRecordBytes=1 and 1 bytes in stream record", func(t *testing.T) {
 		t.Run("then a secops error due to record byte length should be raised", func(t *testing.T) {
 			is := assert.New(t)
 
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("12")),
 				csv.ReaderOpts().ClearFreedDataMemory(true),
-				csv.ReaderOpts().MaxNumRecordBytes(1),
+				csv.ReaderOpts().MaxRecordBytes(1),
 			)
 			is.Nil(err)
 			is.NotNil(cr)
@@ -494,13 +494,13 @@ func TestMaxRecordBytesError(t *testing.T) {
 }
 
 func TestMaxRecordsError(t *testing.T) {
-	t.Run("when csv reader DiscoverRecordSeparator=implicit-true MaxNumRecords=1 and 2 records", func(t *testing.T) {
+	t.Run("when csv reader DiscoverRecordSeparator=implicit-true MaxRecords=1 and 2 records", func(t *testing.T) {
 		t.Run("then a secops error due to record count should be raised", func(t *testing.T) {
 			is := assert.New(t)
 
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("a\n1")),
-				csv.ReaderOpts().MaxNumRecords(1),
+				csv.ReaderOpts().MaxRecords(1),
 			)
 			is.Nil(err)
 			is.NotNil(cr)
@@ -522,13 +522,13 @@ func TestMaxRecordsError(t *testing.T) {
 		})
 	})
 
-	t.Run("when csv reader DiscoverRecordSeparator=true MaxNumRecords=1 and 2 records", func(t *testing.T) {
+	t.Run("when csv reader DiscoverRecordSeparator=true MaxRecords=1 and 2 records", func(t *testing.T) {
 		t.Run("then a secops error due to record count should be raised", func(t *testing.T) {
 			is := assert.New(t)
 
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("a\n1")),
-				csv.ReaderOpts().MaxNumRecords(1),
+				csv.ReaderOpts().MaxRecords(1),
 				csv.ReaderOpts().DiscoverRecordSeparator(true),
 			)
 			is.Nil(err)
@@ -551,13 +551,13 @@ func TestMaxRecordsError(t *testing.T) {
 		})
 	})
 
-	t.Run("when csv reader NumFields=1 MaxNumRecords=1 and 2 records", func(t *testing.T) {
+	t.Run("when csv reader NumFields=1 MaxRecords=1 and 2 records", func(t *testing.T) {
 		t.Run("then a secops error due to record count should be raised", func(t *testing.T) {
 			is := assert.New(t)
 
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("a\n1")),
-				csv.ReaderOpts().MaxNumRecords(1),
+				csv.ReaderOpts().MaxRecords(1),
 				csv.ReaderOpts().NumFields(1),
 			)
 			is.Nil(err)
@@ -580,13 +580,13 @@ func TestMaxRecordsError(t *testing.T) {
 		})
 	})
 
-	t.Run("when csv reader NumFields=1 MaxNumRecords=1 Comment=hashtag and 2 records", func(t *testing.T) {
+	t.Run("when csv reader NumFields=1 MaxRecords=1 Comment=hashtag and 2 records", func(t *testing.T) {
 		t.Run("then a secops error due to record count should be raised", func(t *testing.T) {
 			is := assert.New(t)
 
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("a\n1")),
-				csv.ReaderOpts().MaxNumRecords(1),
+				csv.ReaderOpts().MaxRecords(1),
 				csv.ReaderOpts().NumFields(1),
 				csv.ReaderOpts().Comment('#'),
 			)
@@ -610,13 +610,13 @@ func TestMaxRecordsError(t *testing.T) {
 		})
 	})
 
-	t.Run("when csv reader NumFields=2 MaxNumRecords=2 and 1 record 1 field then record sep", func(t *testing.T) {
+	t.Run("when csv reader NumFields=2 MaxRecords=2 and 1 record 1 field then record sep", func(t *testing.T) {
 		t.Run("then a secops error due to field count should be raised", func(t *testing.T) {
 			is := assert.New(t)
 
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("a\n")),
-				csv.ReaderOpts().MaxNumRecords(2),
+				csv.ReaderOpts().MaxRecords(2),
 				csv.ReaderOpts().NumFields(2),
 			)
 			is.Nil(err)
@@ -639,13 +639,13 @@ func TestMaxRecordsError(t *testing.T) {
 		})
 	})
 
-	t.Run("when csv reader NumFields=2 MaxNumRecords=2 and 1 record 1 field then EOF", func(t *testing.T) {
+	t.Run("when csv reader NumFields=2 MaxRecords=2 and 1 record 1 field then EOF", func(t *testing.T) {
 		t.Run("then a secops error due to field count should be raised", func(t *testing.T) {
 			is := assert.New(t)
 
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("a")),
-				csv.ReaderOpts().MaxNumRecords(2),
+				csv.ReaderOpts().MaxRecords(2),
 				csv.ReaderOpts().NumFields(2),
 			)
 			is.Nil(err)
@@ -668,13 +668,13 @@ func TestMaxRecordsError(t *testing.T) {
 		})
 	})
 
-	t.Run("when csv reader MaxNumRecords=2 NumFields=2 Comment=hashtag and 1 record 1 field then record sep", func(t *testing.T) {
+	t.Run("when csv reader MaxRecords=2 NumFields=2 Comment=hashtag and 1 record 1 field then record sep", func(t *testing.T) {
 		t.Run("then a parsing error due to not enough fields should be raised", func(t *testing.T) {
 			is := assert.New(t)
 
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("a\n")),
-				csv.ReaderOpts().MaxNumRecords(2),
+				csv.ReaderOpts().MaxRecords(2),
 				csv.ReaderOpts().NumFields(2),
 				csv.ReaderOpts().Comment('#'),
 			)

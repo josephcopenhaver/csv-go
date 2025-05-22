@@ -1,6 +1,6 @@
-{{define "recBufAppend0"}}{{if not .HasMaxNumRecordBytes}}{{if .ClearMemoryAfterUse}}r.appendRecBuf({{else}}r.recordBuf = append(r.recordBuf, {{end}}{{else}}if r.appendRecBufMaxCheck({{end}}{{end}}
-{{define "recBufAppend1"}}{{if not .HasMaxNumRecordBytes}}){{else}}) { return false }{{end}}{{end}}
-func (r *Reader) prepareRow_{{if not .HasMaxNumRecordBytes}}memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}{{else}}maxCheck{{end}}() bool {
+{{define "recBufAppend0"}}{{if not .HasMaxRecordBytes}}{{if .ClearMemoryAfterUse}}r.appendRecBuf({{else}}r.recordBuf = append(r.recordBuf, {{end}}{{else}}if r.appendRecBufMaxCheck({{end}}{{end}}
+{{define "recBufAppend1"}}{{if not .HasMaxRecordBytes}}){{else}}) { return false }{{end}}{{end}}
+func (r *Reader) prepareRow_{{if not .HasMaxRecordBytes}}memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}{{else}}maxCheck{{end}}() bool {
 
 	// TODO: reducing the instruction-space on the hot-positive path even after using code generation to filter
 	// blocks out and dynamic controlRunes per state will have a compounding positive effect

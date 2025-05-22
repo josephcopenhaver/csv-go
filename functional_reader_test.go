@@ -208,12 +208,12 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 		t.Run(name, f())
 	})
 
-	t.Run("when MaxNumRecordBytes(MaxInt) and "+tc.when, func(t *testing.T) {
+	t.Run("when MaxRecordBytes(MaxInt) and "+tc.when, func(t *testing.T) {
 		t.Helper()
 
 		t.Run(name, f(func(tc *functionalReaderTestCase) {
 			v := slices.Clone(tc.newOpts)
-			tc.newOpts = append(v, csv.ReaderOpts().MaxNumRecordBytes(math.MaxInt))
+			tc.newOpts = append(v, csv.ReaderOpts().MaxRecordBytes(math.MaxInt))
 		}))
 	})
 
@@ -226,12 +226,12 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 		}))
 	})
 
-	t.Run("when clearmem+ and MaxNumRecordBytes(MaxInt) and "+tc.when, func(t *testing.T) {
+	t.Run("when clearmem+ and MaxRecordBytes(MaxInt) and "+tc.when, func(t *testing.T) {
 		t.Helper()
 
 		t.Run(name, f(func(tc *functionalReaderTestCase) {
 			v := slices.Clone(tc.newOpts)
-			tc.newOpts = append(v, csv.ReaderOpts().ClearFreedDataMemory(true), csv.ReaderOpts().MaxNumRecordBytes(math.MaxInt))
+			tc.newOpts = append(v, csv.ReaderOpts().ClearFreedDataMemory(true), csv.ReaderOpts().MaxRecordBytes(math.MaxInt))
 		}))
 	})
 

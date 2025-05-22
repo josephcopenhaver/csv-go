@@ -1090,11 +1090,11 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			iterErrStr: csv.ErrParsing.Error() + " at byte 3, record 1, field 1: " + csv.ErrInvalidQuotedFieldEnding.Error(),
 		},
 		{
-			when: "MaxNumFields(2) and reader has 3 fields",
+			when: "MaxFields(2) and reader has 3 fields",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{
 					csv.ReaderOpts().Reader(strings.NewReader("a,b,c")),
-					csv.ReaderOpts().MaxNumFields(2),
+					csv.ReaderOpts().MaxFields(2),
 				}
 			},
 			iterErrIs:  []error{csv.ErrSecOp, csv.ErrFieldCount, csv.ErrTooManyFields, csv.ErrSecOpFieldCountAboveMax},

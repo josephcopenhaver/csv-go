@@ -547,30 +547,46 @@ func (ReaderOptions) ReaderBuffer(v []byte) ReaderOption {
 	}
 }
 
-// MaxNumFields is a security option that limits the number of fields allowed to be detected automatically
+// MaxFields is a security option that limits the number of fields allowed to be detected automatically before a SecOp error is thrown
 //
 // using this option at the same time as the NumFields option will lead to an error on reader creation
 // since using both is counter intuitive in general
-func (ReaderOptions) MaxNumFields(v int) ReaderOption {
+func (ReaderOptions) MaxFields(v int) ReaderOption {
 	return func(cfg *rCfg) {
-		cfg.maxNumFields = v
-		cfg.maxNumFieldsSet = true
+		cfg.maxFields = v
+		cfg.maxFieldsSet = true
 	}
 }
 
-// MaxNumRecordBytes is a security option that limits the number of bytes allowed to be detected in a record row
-func (ReaderOptions) MaxNumRecordBytes(n int) ReaderOption {
+// MaxRecordBytes is a security option that limits the number of bytes allowed to be detected in a record before a SecOp error is thrown
+func (ReaderOptions) MaxRecordBytes(n int) ReaderOption {
 	return func(cfg *rCfg) {
-		cfg.maxNumRecordBytes = n
-		cfg.maxNumRecordBytesSet = true
+		cfg.maxRecordBytes = n
+		cfg.maxRecordBytesSet = true
 	}
 }
 
-// MaxNumRecords is a security option that limits the number of records allowed in a stream before an error is thrown
-func (ReaderOptions) MaxNumRecords(n int) ReaderOption {
+// MaxRecords is a security option that limits the number of records allowed in a stream before a SecOp error is thrown
+func (ReaderOptions) MaxRecords(n int) ReaderOption {
 	return func(cfg *rCfg) {
-		cfg.maxNumRecords = n
-		cfg.maxNumRecordsSet = true
+		cfg.maxRecords = n
+		cfg.maxRecordsSet = true
+	}
+}
+
+// MaxComments is a security option that limits the number of comment lines allowed in a stream before a SecOp error is thrown
+func (ReaderOptions) MaxComments(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxComments = n
+		cfg.maxCommentsSet = true
+	}
+}
+
+// MaxComments is a security option that limits the number of bytes allowed in a comment line before a SecOp error is thrown
+func (ReaderOptions) MaxCommentBytes(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxCommentBytes = n
+		cfg.maxCommentBytesSet = true
 	}
 }
 
@@ -590,9 +606,11 @@ type rCfg struct {
 	numFields  int
 
 	// security attributes
-	maxNumFields      int
-	maxNumRecordBytes int
-	maxNumRecords     int
+	maxFields       int
+	maxRecordBytes  int
+	maxRecords      int
+	maxCommentBytes int
+	maxComments     int
 
 	initialRecordBufferSize            int
 	fieldSeparator                     rune
@@ -625,9 +643,11 @@ type rCfg struct {
 
 	//
 
-	maxNumFieldsSet      bool
-	maxNumRecordBytesSet bool
-	maxNumRecordsSet     bool
+	maxFieldsSet       bool
+	maxRecordBytesSet  bool
+	maxRecordsSet      bool
+	maxCommentBytesSet bool // TODO: implement feature
+	maxCommentsSet     bool // TODO: implement feature
 }
 
 type Reader struct {
@@ -832,8 +852,8 @@ func (cfg *rCfg) validate() error {
 		}
 	}
 
-	if cfg.maxNumFieldsSet && cfg.numFieldsSet {
-		return errors.New("MaxNumFields and NumFields options cannot be used at the same time")
+	if cfg.maxFieldsSet && cfg.numFieldsSet {
+		return errors.New("MaxFields and NumFields options cannot be used at the same time")
 	}
 
 	if cfg.numFieldsSet && cfg.numFields <= 0 {
@@ -844,16 +864,16 @@ func (cfg *rCfg) validate() error {
 		return errors.New("field borrowing cannot be enabled without enabling row borrowing")
 	}
 
-	if cfg.maxNumFieldsSet && cfg.maxNumFields <= 1 {
-		return errors.New("max num fields cannot be set to a value less than or equal to one")
+	if cfg.maxFieldsSet && cfg.maxFields <= 1 {
+		return errors.New("max fields cannot be set to a value less than or equal to one")
 	}
 
-	if cfg.maxNumRecordBytesSet && cfg.maxNumRecordBytes <= 0 {
-		return errors.New("max num record bytes cannot be less than or equal to zero")
+	if cfg.maxRecordBytesSet && cfg.maxRecordBytes <= 0 {
+		return errors.New("max record bytes cannot be less than or equal to zero")
 	}
 
-	if cfg.maxNumRecordsSet && cfg.maxNumRecords <= 0 {
-		return errors.New("max num records cannot be less than or equal to zero")
+	if cfg.maxRecordsSet && cfg.maxRecords <= 0 {
+		return errors.New("max records cannot be less than or equal to zero")
 	}
 
 	return nil
@@ -1437,16 +1457,16 @@ func (r *Reader) initPipeline(cfg rCfg) {
 
 	if !cfg.clearMemoryAfterFree {
 		r.close = r.defaultClose
-		if cfg.maxNumRecordBytesSet {
-			r.appendRecBufMaxCheck = r.defaultAppendRecBufMaxCheck(cfg.maxNumRecordBytes)
+		if cfg.maxRecordBytesSet {
+			r.appendRecBufMaxCheck = r.defaultAppendRecBufMaxCheck(cfg.maxRecordBytes)
 			r.prepareRow = r.prepareRow_maxCheck
 		} else {
 			r.prepareRow = r.prepareRow_memclearOff
 		}
 	} else {
 		r.close = r.closeWithMemClear
-		if cfg.maxNumRecordBytesSet {
-			r.appendRecBufMaxCheck = r.appendRecBufMaxCheckMemClear(cfg.maxNumRecordBytes)
+		if cfg.maxRecordBytesSet {
+			r.appendRecBufMaxCheck = r.appendRecBufMaxCheckMemClear(cfg.maxRecordBytes)
 			r.prepareRow = r.prepareRow_maxCheck
 		} else {
 			r.prepareRow = r.prepareRow_memclearOn
@@ -1470,16 +1490,16 @@ func (r *Reader) initPipeline(cfg rCfg) {
 	r.reader = cfg.reader
 
 	if r.numFields == -1 {
-		if !cfg.maxNumRecordsSet {
+		if !cfg.maxRecordsSet {
 			r.checkNumFields = r.checkNumFieldsWithDiscovery
 		} else {
-			r.checkNumFields = r.checkNumFieldsMaxWithDiscovery(cfg.maxNumRecords)
+			r.checkNumFields = r.checkNumFieldsMaxWithDiscovery(cfg.maxRecords)
 		}
 	} else {
 		if r.numFields > 0 {
 			r.fieldLengths = make([]int, 0, r.numFields)
 		}
-		if !cfg.maxNumRecordsSet {
+		if !cfg.maxRecordsSet {
 			if (r.bitFlags & rFlagComment) != 0 {
 				r.checkNumFields = r.checkNumFieldsWithStartOfRecordTracking
 			} else {
@@ -1487,9 +1507,9 @@ func (r *Reader) initPipeline(cfg rCfg) {
 			}
 		} else {
 			if (r.bitFlags & rFlagComment) != 0 {
-				r.checkNumFields = r.checkNumFieldsMaxWithStartOfRecordTracking(cfg.maxNumRecords)
+				r.checkNumFields = r.checkNumFieldsMaxWithStartOfRecordTracking(cfg.maxRecords)
 			} else {
-				r.checkNumFields = r.defaultCheckNumFieldsMax(cfg.maxNumRecords)
+				r.checkNumFields = r.defaultCheckNumFieldsMax(cfg.maxRecords)
 			}
 		}
 	}
@@ -1502,10 +1522,10 @@ func (r *Reader) initPipeline(cfg rCfg) {
 		r.setRowBorrowedAndFieldsCloned()
 	}
 
-	if !cfg.maxNumFieldsSet {
+	if !cfg.maxFieldsSet {
 		r.fieldNumOverflow = r.defaultFieldNumOverflow
 	} else {
-		r.setFieldNumOverflowMax(cfg.maxNumFields)
+		r.setFieldNumOverflowMax(cfg.maxFields)
 	}
 
 	// letting any valid utf8 end of line act as the record separator
