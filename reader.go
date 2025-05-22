@@ -94,6 +94,7 @@ var (
 	ErrSecOpRecordByteCountAboveMax = errors.New("record byte count exceeds limit")
 	// is a sub-instance of ErrTooManyFields
 	ErrSecOpFieldCountAboveMax     = errors.New("field count exceeds max")
+	ErrSecOpRecordCountAboveMax    = errors.New("record count exceeds max")
 	ErrNotEnoughFields             = errors.New("not enough fields")
 	ErrReaderClosed                = errors.New("reader closed")
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
@@ -565,13 +566,13 @@ func (ReaderOptions) MaxNumRecordBytes(n int) ReaderOption {
 	}
 }
 
-// // MaxNumRecords does nothing at the moment except cause a panic
-// func (ReaderOptions) MaxNumRecords(n int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxNumRecords = n
-// 		cfg.maxNumRecordsSet = true
-// 	}
-// }
+// MaxNumRecords is a security option that limits the number of records allowed in a stream before an error is thrown
+func (ReaderOptions) MaxNumRecords(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxNumRecords = n
+		cfg.maxNumRecordsSet = true
+	}
+}
 
 // MaxNumBytes for an overall csv document is not getting implemented because it's trivial to implement that as a io.Reader wrapper.
 
@@ -1306,6 +1307,33 @@ func (r *Reader) defaultCheckNumFields(errTrailer error) bool {
 	return false
 }
 
+func (r *Reader) defaultCheckNumFieldsMax(max int) func(error) bool {
+	return func(errTrailer error) bool {
+		if errTrailer == nil && int(r.recordIndex)+1 == max {
+			r.streamErr(r.secOpErr, ErrSecOpRecordCountAboveMax)
+			return false
+		}
+
+		if len(r.fieldLengths) == r.numFields {
+			return true
+		}
+
+		// note: it's not possible for field lengths size to exceed the number of fields target
+		//
+		// so if we're here, then we're missing some fields in this record
+
+		r.setDone()
+		if r.err == nil {
+			r.parsingErr(notEnoughFieldsErr(r.numFields, len(r.fieldLengths)))
+			if errTrailer != nil {
+				r.err = errors.Join(r.err, errTrailer)
+			}
+		}
+
+		return false
+	}
+}
+
 func (r *Reader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool {
 	if r.defaultCheckNumFields(errTrailer) {
 		r.bitFlags |= stAfterSOR
@@ -1316,12 +1344,48 @@ func (r *Reader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool 
 	return false
 }
 
+func (r *Reader) checkNumFieldsMaxWithStartOfRecordTracking(max int) func(error) bool {
+	next := r.defaultCheckNumFieldsMax(max)
+
+	return func(errTrailer error) bool {
+		if errTrailer == nil && int(r.recordIndex)+1 == max {
+			r.streamErr(r.secOpErr, ErrSecOpRecordCountAboveMax)
+			return false
+		}
+
+		if r.defaultCheckNumFields(errTrailer) {
+			r.bitFlags |= stAfterSOR
+			r.checkNumFields = next
+			return true
+		}
+
+		return false
+	}
+}
+
 // errTrailer is unused since we're discovering the row length
 func (r *Reader) checkNumFieldsWithDiscovery(errTrailer error) bool {
 	r.numFields = len(r.fieldLengths)
 	r.bitFlags |= stAfterSOR
 	r.checkNumFields = r.defaultCheckNumFields
 	return true
+}
+
+// errTrailer is unused since we're discovering the row length
+func (r *Reader) checkNumFieldsMaxWithDiscovery(max int) func(error) bool {
+	next := r.defaultCheckNumFieldsMax(max)
+
+	return func(errTrailer error) bool {
+		if errTrailer == nil && int(r.recordIndex)+1 == max {
+			r.streamErr(r.secOpErr, ErrSecOpRecordCountAboveMax)
+			return false
+		}
+
+		r.numFields = len(r.fieldLengths)
+		r.bitFlags |= stAfterSOR
+		r.checkNumFields = next
+		return true
+	}
 }
 
 func (r *Reader) resetRecordBuffers() {
@@ -1371,8 +1435,6 @@ func (r *Reader) defaultScan() bool {
 
 func (r *Reader) initPipeline(cfg rCfg) {
 
-	// TODO: maxNumRecords -- recordIndex
-
 	if !cfg.clearMemoryAfterFree {
 		r.close = r.defaultClose
 		if cfg.maxNumRecordBytesSet {
@@ -1408,15 +1470,27 @@ func (r *Reader) initPipeline(cfg rCfg) {
 	r.reader = cfg.reader
 
 	if r.numFields == -1 {
-		r.checkNumFields = r.checkNumFieldsWithDiscovery
+		if !cfg.maxNumRecordsSet {
+			r.checkNumFields = r.checkNumFieldsWithDiscovery
+		} else {
+			r.checkNumFields = r.checkNumFieldsMaxWithDiscovery(cfg.maxNumRecords)
+		}
 	} else {
 		if r.numFields > 0 {
 			r.fieldLengths = make([]int, 0, r.numFields)
 		}
-		if (r.bitFlags & rFlagComment) != 0 {
-			r.checkNumFields = r.checkNumFieldsWithStartOfRecordTracking
+		if !cfg.maxNumRecordsSet {
+			if (r.bitFlags & rFlagComment) != 0 {
+				r.checkNumFields = r.checkNumFieldsWithStartOfRecordTracking
+			} else {
+				r.checkNumFields = r.defaultCheckNumFields
+			}
 		} else {
-			r.checkNumFields = r.defaultCheckNumFields
+			if (r.bitFlags & rFlagComment) != 0 {
+				r.checkNumFields = r.checkNumFieldsMaxWithStartOfRecordTracking(cfg.maxNumRecords)
+			} else {
+				r.checkNumFields = r.defaultCheckNumFieldsMax(cfg.maxNumRecords)
+			}
 		}
 	}
 

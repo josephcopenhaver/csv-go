@@ -399,7 +399,7 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 		})
 	})
 
-	t.Run("when creating a CSV reader without options NumFields and MaxNumFields set", func(t *testing.T) {
+	t.Run("when creating a CSV reader with options NumFields and MaxNumFields set", func(t *testing.T) {
 		t.Run("should return an error indicating the two cannot be specified together", func(t *testing.T) {
 			is := assert.New(t)
 
@@ -410,7 +410,7 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			)
 			is.NotNil(err)
 			is.ErrorIs(err, csv.ErrBadConfig)
-			is.Equal(err.Error(), errors.Join(csv.ErrBadConfig, errors.New("MaxNumFields and NumFields options cannot be used at the same time")).Error())
+			is.Equal(errors.Join(csv.ErrBadConfig, errors.New("MaxNumFields and NumFields options cannot be used at the same time")).Error(), err.Error())
 			is.Nil(cr)
 		})
 	})
@@ -425,7 +425,7 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			)
 			is.NotNil(err)
 			is.ErrorIs(err, csv.ErrBadConfig)
-			is.Equal(err.Error(), errors.Join(csv.ErrBadConfig, errors.New("max num fields cannot be set to a value less than or equal to one")).Error())
+			is.Equal(errors.Join(csv.ErrBadConfig, errors.New("max num fields cannot be set to a value less than or equal to one")).Error(), err.Error())
 			is.Nil(cr)
 		})
 	})
@@ -440,7 +440,22 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			)
 			is.NotNil(err)
 			is.ErrorIs(err, csv.ErrBadConfig)
-			is.Equal(err.Error(), errors.Join(csv.ErrBadConfig, errors.New("max num record bytes cannot be less than or equal to zero")).Error())
+			is.Equal(errors.Join(csv.ErrBadConfig, errors.New("max num record bytes cannot be less than or equal to zero")).Error(), err.Error())
+			is.Nil(cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader with MaxNumRecords set to zero", func(t *testing.T) {
+		t.Run("should return an error indicating cannot less than or equal to zero", func(t *testing.T) {
+			is := assert.New(t)
+
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().MaxNumRecords(0),
+			)
+			is.NotNil(err)
+			is.ErrorIs(err, csv.ErrBadConfig)
+			is.Equal(errors.Join(csv.ErrBadConfig, errors.New("max num records cannot be less than or equal to zero")).Error(), err.Error())
 			is.Nil(cr)
 		})
 	})
