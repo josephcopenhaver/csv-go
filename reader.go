@@ -95,6 +95,8 @@ var (
 	// is a sub-instance of ErrTooManyFields
 	ErrSecOpFieldCountAboveMax     = errors.New("field count exceeds max")
 	ErrSecOpRecordCountAboveMax    = errors.New("record count exceeds max")
+	ErrSecOpCommentBytesAboveMax   = errors.New("comment byte count exceeds max")
+	ErrSecOpCommentsAboveMax       = errors.New("comment line count exceeds max")
 	ErrNotEnoughFields             = errors.New("not enough fields")
 	ErrReaderClosed                = errors.New("reader closed")
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
@@ -689,8 +691,11 @@ type Reader struct {
 	//
 	// the recordIndex could also have been used for this purpose but it may have overflow issues for some input types
 	// and keeping its purpose singular and disconnected from parsing management is likely ideal
-	recordSepLen int8
-	bitFlags     rFlag
+	recordSepLen       int8
+	bitFlags           rFlag
+	remainComments     int
+	maxCommentBytes    int
+	remainCommentBytes int
 }
 
 func (cfg *rCfg) validate() error {
@@ -876,6 +881,14 @@ func (cfg *rCfg) validate() error {
 		return errors.New("max records cannot be less than or equal to zero")
 	}
 
+	if cfg.maxCommentsSet && cfg.maxComments < 0 {
+		return errors.New("max comments cannot be less than zero")
+	}
+
+	if cfg.maxCommentBytesSet && cfg.maxCommentBytes < 0 {
+		return errors.New("max comment bytes cannot be less than zero")
+	}
+
 	return nil
 }
 
@@ -889,6 +902,8 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		recordSepLen:                1,
 		errOnQuotesInUnquotedField:  true,
 		errOnNewlineInUnquotedField: true,
+		maxComments:                 -1,
+		maxCommentBytes:             -1,
 	}
 
 	for _, f := range options {
@@ -1031,19 +1046,22 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	}
 
 	cr := Reader{
-		controlRunes:   string(controlRunes),
-		rawBuf:         cfg.rawBuf[0:0:len(cfg.rawBuf)],
-		quote:          cfg.quote,
-		escape:         cfg.escape,
-		numFields:      cfg.numFields,
-		fieldSeparator: cfg.fieldSeparator,
-		comment:        cfg.comment,
-		headers:        headers,
-		recordBuf:      cfg.recordBuf[0:0:len(cfg.recordBuf)],
-		rowBuf:         rowBuf,
-		recordSep:      cfg.recordSep,
-		recordSepLen:   cfg.recordSepLen,
-		bitFlags:       bitFlags,
+		controlRunes:       string(controlRunes),
+		rawBuf:             cfg.rawBuf[0:0:len(cfg.rawBuf)],
+		quote:              cfg.quote,
+		escape:             cfg.escape,
+		numFields:          cfg.numFields,
+		fieldSeparator:     cfg.fieldSeparator,
+		comment:            cfg.comment,
+		headers:            headers,
+		recordBuf:          cfg.recordBuf[0:0:len(cfg.recordBuf)],
+		rowBuf:             rowBuf,
+		recordSep:          cfg.recordSep,
+		recordSepLen:       cfg.recordSepLen,
+		bitFlags:           bitFlags,
+		remainComments:     cfg.maxComments,
+		maxCommentBytes:    cfg.maxCommentBytes,
+		remainCommentBytes: cfg.maxCommentBytes,
 	}
 
 	cr.initPipeline(cfg)
@@ -1678,6 +1696,45 @@ func (r *Reader) setDone() {
 	r.scan = func() bool {
 		return false
 	}
+}
+
+// outOfCommentBytes is called whenever the state machine encounters a sequence
+// of bytes in a comment line. This includes all bytes starting just before the
+// comment rune up to the record/line terminator
+//
+// when it returns true it ensures the reader is done and has an error raised
+func (r *Reader) outOfCommentBytes(d int) bool {
+	if r.remainCommentBytes >= 0 {
+		if r.remainCommentBytes < d {
+			// advance logical position forward until failure point
+			r.byteIndex += uint64(r.remainCommentBytes)
+
+			r.streamErr(r.secOpErr, ErrSecOpCommentBytesAboveMax)
+			return true
+		}
+
+		r.remainCommentBytes -= d
+	}
+
+	return false
+}
+
+// outOfCommentLines is called whenever the state machine encounters a comment rune
+// at the start of a record/line
+//
+// when it returns true it ensures the reader is done and has an error raised
+func (r *Reader) outOfCommentLines() bool {
+	if r.remainComments >= 0 {
+		if r.remainComments == 0 {
+			r.streamErr(r.secOpErr, ErrSecOpCommentsAboveMax)
+			return true
+		}
+
+		r.remainComments--
+	}
+
+	r.remainCommentBytes = r.maxCommentBytes
+	return false
 }
 
 func (r *Reader) defaultAppendRecBufMaxCheck(max int) func(...byte) bool {

@@ -217,6 +217,33 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 		}))
 	})
 
+	t.Run("when MaxCommentBytes(MaxInt) and "+tc.when, func(t *testing.T) {
+		t.Helper()
+
+		t.Run(name, f(func(tc *functionalReaderTestCase) {
+			v := slices.Clone(tc.newOpts)
+			tc.newOpts = append(v, csv.ReaderOpts().MaxCommentBytes(math.MaxInt))
+		}))
+	})
+
+	t.Run("when MaxComments(MaxInt) and "+tc.when, func(t *testing.T) {
+		t.Helper()
+
+		t.Run(name, f(func(tc *functionalReaderTestCase) {
+			v := slices.Clone(tc.newOpts)
+			tc.newOpts = append(v, csv.ReaderOpts().MaxComments(math.MaxInt))
+		}))
+	})
+
+	t.Run("when MaxRecords(MaxInt) and "+tc.when, func(t *testing.T) {
+		t.Helper()
+
+		t.Run(name, f(func(tc *functionalReaderTestCase) {
+			v := slices.Clone(tc.newOpts)
+			tc.newOpts = append(v, csv.ReaderOpts().MaxRecords(math.MaxInt))
+		}))
+	})
+
 	t.Run("when clearmem+ and "+tc.when, func(t *testing.T) {
 		t.Helper()
 

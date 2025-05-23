@@ -459,4 +459,34 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			is.Nil(cr)
 		})
 	})
+
+	t.Run("when creating a CSV reader with MaxComments set to -1", func(t *testing.T) {
+		t.Run("should return an error indicating cannot less than zero", func(t *testing.T) {
+			is := assert.New(t)
+
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().MaxComments(-1),
+			)
+			is.NotNil(err)
+			is.ErrorIs(err, csv.ErrBadConfig)
+			is.Equal(errors.Join(csv.ErrBadConfig, errors.New("max comments cannot be less than zero")).Error(), err.Error())
+			is.Nil(cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader with MaxCommentBytes set to -1", func(t *testing.T) {
+		t.Run("should return an error indicating cannot less than zero", func(t *testing.T) {
+			is := assert.New(t)
+
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().MaxCommentBytes(-1),
+			)
+			is.NotNil(err)
+			is.ErrorIs(err, csv.ErrBadConfig)
+			is.Equal(errors.Join(csv.ErrBadConfig, errors.New("max comment bytes cannot be less than zero")).Error(), err.Error())
+			is.Nil(cr)
+		})
+	})
 }
