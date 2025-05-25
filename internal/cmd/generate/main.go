@@ -100,14 +100,38 @@ func main() {
 		t := parse(tsPrepareRow)
 
 		type cfg struct {
-			ClearMemoryAfterUse bool
+			Struct                 string
+			NameSuffix             string
+			RecBufAppend0          string
+			RecBufAppend1          string
+			DeltaCommentBytesCheck string
+			CommentLinesCheck      string
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{ClearMemoryAfterUse: false},
-			{ClearMemoryAfterUse: true},
+			{
+				Struct:        "fastReader",
+				RecBufAppend0: "r.recordBuf = append(r.recordBuf, ",
+				RecBufAppend1: ")",
+			},
+			{
+				Struct:                 "secOpReader",
+				NameSuffix:             "_memclearOn",
+				RecBufAppend0:          "if r.appendRecBuf(",
+				RecBufAppend1:          ") {return false}",
+				DeltaCommentBytesCheck: "if r.outOfCommentBytes(delta) {return false}",
+				CommentLinesCheck:      "if r.outOfCommentLines() {return false}",
+			},
+			// {
+			// 	Struct:                 "secOpReader",
+			// 	NameSuffix:             "_memclearOff",
+			// 	RecBufAppend0:          "r.recordBuf = append(r.recordBuf, ",
+			// 	RecBufAppend1:          ")",
+			// 	DeltaCommentBytesCheck: "if r.outOfCommentBytes(delta) {return false}",
+			// 	CommentLinesCheck:      "if r.outOfCommentLines() {return false}",
+			// },
 		})
 	}
 

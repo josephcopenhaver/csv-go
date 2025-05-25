@@ -548,6 +548,73 @@ func ReaderOpts() ReaderOptions {
 	return ReaderOptions{}
 }
 
+type Reader struct {
+	scan  func() bool
+	row   func() []string
+	close func() error
+	err   func() error
+}
+
+func (r *Reader) Scan() bool {
+	return r.scan()
+}
+
+// Row returns a slice of strings that represents a row of a dataset.
+//
+// Row only returns valid results after a call to Scan() return true.
+// For efficiency reasons this method should not be called more than once between
+// calls to Scan().
+//
+// If the reader is configured with BorrowRow(true) then the resulting slice and
+// field strings are only valid to use up until the next call to Scan and
+// should not be saved to persistent memory.
+func (r *Reader) Row() []string {
+	return r.row()
+}
+
+// Close should be called after reading all rows
+// successfully from the underlying reader and checking
+// the result of r.Err().
+//
+// Close currently always returns nil, but in the future
+// it may not. It is not a substitute for checking r.Err().
+//
+// Should any configuration options require post-flight
+// checks they will be implemented here.
+//
+// It will never attempt to close the underlying reader.
+func (r *Reader) Close() error {
+	return r.close()
+}
+
+func (r *Reader) Err() error {
+	return r.err()
+}
+
+// IntoIter converts the reader state into an iterator.
+// Calling this method more than once returns the same iterator instance.
+//
+// If the reader is configured with BorrowRow(true) then the resulting
+// slice and field strings are only valid to use up until the next
+// iteration and should not be saved to persistent memory.
+//
+// It is best practice to check if Err() returns a non-nil
+// error after fully traversing this iterator.
+//
+// This is just a syntactic sugar method to work with range statements
+// in go1.23 and later.
+func (r *Reader) IntoIter() iter.Seq[[]string] {
+	return r.iter
+}
+
+func (r *Reader) iter(yield func([]string) bool) {
+	for r.scan() {
+		if !yield(r.row()) {
+			return
+		}
+	}
+}
+
 type rCfg struct {
 	headers    []string
 	rawBuf     []byte
@@ -590,18 +657,14 @@ type rCfg struct {
 	rawBufSizeSet                      bool
 }
 
-type Reader struct {
+type fastReader struct {
 	controlRunes string
 	rawBuf       []byte
 	rawIndex     int
 	//
 	readErr           error
-	prepareRow        func() bool
-	scan              func() bool
-	err               error
-	row               func() []string
+	scanErr           error
 	checkNumFields    func(errTrailer error) bool
-	close             func() error
 	reader            io.Reader
 	recordSep         [2]rune
 	recordBuf         []byte
@@ -617,6 +680,7 @@ type Reader struct {
 	escape            rune
 	fieldSeparator    rune
 	comment           rune
+	pr                *Reader
 	state             rState
 	rawNumHiddenBytes uint8
 	// afterStartOfRecords is a flag set to communicate when the first records have been observed and potentially emitted
@@ -954,76 +1018,17 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		rowBuf = make([]string, cfg.numFields)
 	}
 
-	cr := Reader{
-		controlRunes:   string(controlRunes),
-		rawBuf:         cfg.rawBuf[0:0:len(cfg.rawBuf)],
-		quote:          cfg.quote,
-		escape:         cfg.escape,
-		numFields:      cfg.numFields,
-		fieldSeparator: cfg.fieldSeparator,
-		comment:        cfg.comment,
-		headers:        headers,
-		recordBuf:      cfg.recordBuf[0:0:len(cfg.recordBuf)],
-		rowBuf:         rowBuf,
-		recordSep:      cfg.recordSep,
-		recordSepLen:   cfg.recordSepLen,
-		bitFlags:       bitFlags,
-	}
-
-	cr.initPipeline(cfg)
-
-	return &cr, nil
+	r := newReader(cfg, string(controlRunes), headers, rowBuf, bitFlags)
+	return r, nil
 }
 
-// Close should be called after reading all rows
-// successfully from the underlying reader and checking
-// the result of r.Err().
-//
-// Close currently always returns nil, but in the future
-// it may not. It is not a substitute for checking r.Err().
-//
-// Should any configuration options require post-flight
-// checks they will be implemented here.
-//
-// It will never attempt to close the underlying reader.
-func (r *Reader) Close() error {
-	return r.close()
-}
-
-func (r *Reader) defaultClose() error {
+func (r *fastReader) close() error {
 	r.setDone()
-	r.err = ErrReaderClosed
+	r.scanErr = ErrReaderClosed
 	return nil
 }
 
-func (r *Reader) closeWithMemClear() error {
-	v := r.defaultClose()
-	r.zeroRecordBuffers()
-	return v
-}
-
-func (r *Reader) Err() error {
-	return r.err
-}
-
-// Row returns a slice of strings that represents a row of a dataset.
-//
-// Row only returns valid results after a call to Scan() return true.
-// For efficiency reasons this method should not be called more than once between
-// calls to Scan().
-//
-// If the reader is configured with BorrowRow(true) then the resulting slice and
-// field strings are only valid to use up until the next call to Scan and
-// should not be saved to persistent memory.
-func (r *Reader) Row() []string {
-	return r.row()
-}
-
-func (r *Reader) Scan() bool {
-	return r.scan()
-}
-
-func (r *Reader) humanIndexes() (recordIndex uint64, fieldIndex uint) {
+func (r *fastReader) humanIndexes() (recordIndex uint64, fieldIndex uint) {
 	recordIndex = r.recordIndex
 	fieldIndex = r.fieldIndex
 
@@ -1045,10 +1050,10 @@ func (r *Reader) humanIndexes() (recordIndex uint64, fieldIndex uint) {
 	return recordIndex, fieldIndex
 }
 
-func (r *Reader) parsingErr(err error) {
-	if r.err == nil {
+func (r *fastReader) parsingErr(err error) {
+	if r.scanErr == nil {
 		recordIndex, fieldIndex := r.humanIndexes()
-		r.err = newParsingError(r.byteIndex, recordIndex, fieldIndex, err)
+		r.scanErr = newParsingError(r.byteIndex, recordIndex, fieldIndex, err)
 	}
 }
 
@@ -1057,7 +1062,7 @@ func (r *Reader) parsingErr(err error) {
 // therefore it should never be called more than once in an invocation to Scan
 // and it should always be followed with logic that short circuits the scan
 // and returns false for the scan operation
-func (r *Reader) streamParsingErr(err error) {
+func (r *fastReader) streamParsingErr(err error) {
 	r.setDone()
 
 	// r.byteIndex++ moves from control byte idx
@@ -1069,24 +1074,24 @@ func (r *Reader) streamParsingErr(err error) {
 	r.parsingErr(err)
 }
 
-func (r *Reader) ioErr(err error) {
-	if r.err == nil {
+func (r *fastReader) ioErr(err error) {
+	if r.scanErr == nil {
 		recordIndex, fieldIndex := r.humanIndexes()
-		r.err = newIOError(r.byteIndex, recordIndex, fieldIndex, err)
+		r.scanErr = newIOError(r.byteIndex, recordIndex, fieldIndex, err)
 	}
 }
 
-func (r *Reader) setRowBorrowedAndFieldsCloned() {
+func (r *fastReader) setRowBorrowedAndFieldsCloned() {
 	if r.rowBuf == nil {
-		r.row = func() []string {
-			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
+		r.pr.row = func() []string {
+			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 				return nil
 			}
 
 			r.rowBuf = make([]string, len(r.fieldLengths))
 
-			r.row = func() []string {
-				if len(r.fieldLengths) != r.numFields || r.err != nil {
+			r.pr.row = func() []string {
+				if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 					return nil
 				}
 
@@ -1101,14 +1106,14 @@ func (r *Reader) setRowBorrowedAndFieldsCloned() {
 				return r.rowBuf
 			}
 
-			return r.row()
+			return r.pr.row()
 		}
 
 		return
 	}
 
-	r.row = func() []string {
-		if len(r.fieldLengths) != r.numFields || r.err != nil {
+	r.pr.row = func() []string {
+		if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 			return nil
 		}
 
@@ -1124,17 +1129,17 @@ func (r *Reader) setRowBorrowedAndFieldsCloned() {
 	}
 }
 
-func (r *Reader) setRowBorrowedAndFieldsBorrowed() {
+func (r *fastReader) setRowBorrowedAndFieldsBorrowed() {
 	if r.rowBuf == nil {
-		r.row = func() []string {
-			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
+		r.pr.row = func() []string {
+			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 				return nil
 			}
 
 			r.rowBuf = make([]string, len(r.fieldLengths))
 
-			r.row = func() []string {
-				if len(r.fieldLengths) != r.numFields || r.err != nil {
+			r.pr.row = func() []string {
+				if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 					return nil
 				}
 
@@ -1162,14 +1167,14 @@ func (r *Reader) setRowBorrowedAndFieldsBorrowed() {
 				return r.rowBuf
 			}
 
-			return r.row()
+			return r.pr.row()
 		}
 
 		return
 	}
 
-	r.row = func() []string {
-		if len(r.fieldLengths) != r.numFields || r.err != nil {
+	r.pr.row = func() []string {
+		if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 			return nil
 		}
 
@@ -1198,17 +1203,17 @@ func (r *Reader) setRowBorrowedAndFieldsBorrowed() {
 	}
 }
 
-func (r *Reader) defaultRow() []string {
-	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
+func (r *fastReader) defaultRow() []string {
+	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 		return nil
 	}
 
-	r.row = r.defaultClonedRow
-	return r.row()
+	r.pr.row = r.defaultClonedRow
+	return r.pr.row()
 }
 
-func (r *Reader) defaultClonedRow() []string {
-	if len(r.fieldLengths) != r.numFields || r.err != nil {
+func (r *fastReader) defaultClonedRow() []string {
+	if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 		return nil
 	}
 
@@ -1224,7 +1229,7 @@ func (r *Reader) defaultClonedRow() []string {
 	return row
 }
 
-func (r *Reader) defaultCheckNumFields(errTrailer error) bool {
+func (r *fastReader) defaultCheckNumFields(errTrailer error) bool {
 	if len(r.fieldLengths) == r.numFields {
 		return true
 	}
@@ -1234,17 +1239,17 @@ func (r *Reader) defaultCheckNumFields(errTrailer error) bool {
 	// so if we're here, then we're missing some fields in this record
 
 	r.setDone()
-	if r.err == nil {
+	if r.scanErr == nil {
 		r.parsingErr(notEnoughFieldsErr(r.numFields, len(r.fieldLengths)))
 		if errTrailer != nil {
-			r.err = errors.Join(r.err, errTrailer)
+			r.scanErr = errors.Join(r.scanErr, errTrailer)
 		}
 	}
 
 	return false
 }
 
-func (r *Reader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool {
+func (r *fastReader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool {
 	if r.defaultCheckNumFields(errTrailer) {
 		r.bitFlags |= stAfterSOR
 		r.checkNumFields = r.defaultCheckNumFields
@@ -1255,207 +1260,24 @@ func (r *Reader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool 
 }
 
 // errTrailer is unused since we're discovering the row length
-func (r *Reader) checkNumFieldsWithDiscovery(errTrailer error) bool {
+func (r *fastReader) checkNumFieldsWithDiscovery(errTrailer error) bool {
 	r.numFields = len(r.fieldLengths)
 	r.bitFlags |= stAfterSOR
 	r.checkNumFields = r.defaultCheckNumFields
 	return true
 }
 
-func (r *Reader) resetRecordBuffers() {
+func (r *fastReader) resetRecordBuffers() {
 	r.fieldLengths = r.fieldLengths[:0]
 	r.fieldStart = 0
 	r.recordBuf = r.recordBuf[:0]
 }
 
-func (r *Reader) zeroRecordBuffers() {
-	{
-		v := r.rawBuf[:cap(r.rawBuf)]
-		for i := range v {
-			v[i] = 0
-		}
-	}
-
-	if r.fieldLengths != nil {
-		v := r.fieldLengths[:cap(r.fieldLengths)]
-		for i := range v {
-			v[i] = 0
-		}
-	}
-
-	if r.recordBuf != nil {
-		v := r.recordBuf[:cap(r.recordBuf)]
-		for i := range v {
-			v[i] = 0
-		}
-	}
-
-	if r.rowBuf != nil {
-		v := r.rowBuf[:cap(r.rowBuf)]
-		for i := range v {
-			v[i] = ""
-		}
-	}
-
-	r.resetRecordBuffers()
-}
-
-func (r *Reader) defaultScan() bool {
+func (r *fastReader) scan() bool {
 
 	r.resetRecordBuffers()
 
 	return r.prepareRow()
-}
-
-func (r *Reader) initPipeline(cfg rCfg) {
-
-	if !cfg.clearMemoryAfterFree {
-		r.close = r.defaultClose
-		r.prepareRow = r.prepareRow_memclearOff
-	} else {
-		r.close = r.closeWithMemClear
-		r.prepareRow = r.prepareRow_memclearOn
-	}
-
-	if cfg.rawBufSizeSet {
-		r.rawBuf = make([]byte, 0, cfg.rawBufSize)
-	} else if !cfg.rawBufSet {
-		r.rawBuf = make([]byte, 0, defaultReaderBufferSize)
-	}
-
-	if cfg.initialRecordBufferSize > 0 {
-		r.recordBuf = make([]byte, 0, cfg.initialRecordBufferSize)
-	}
-
-	if (r.bitFlags & (rFlagDropBOM | rFlagErrOnNoBOM)) == 0 {
-		r.state = rStateStartOfRecord
-	}
-
-	r.reader = cfg.reader
-
-	if r.numFields == -1 {
-		r.checkNumFields = r.checkNumFieldsWithDiscovery
-	} else {
-		if r.numFields > 0 {
-			r.fieldLengths = make([]int, 0, r.numFields)
-		}
-		if (r.bitFlags & rFlagComment) != 0 {
-			r.checkNumFields = r.checkNumFieldsWithStartOfRecordTracking
-		} else {
-			r.checkNumFields = r.defaultCheckNumFields
-		}
-	}
-
-	if !cfg.borrowRow {
-		r.row = r.defaultRow
-	} else if cfg.borrowFields {
-		r.setRowBorrowedAndFieldsBorrowed()
-	} else {
-		r.setRowBorrowedAndFieldsCloned()
-	}
-
-	// letting any valid utf8 end of line act as the record separator
-	// also building preflight and post-flight pipeline dynamically
-	r.scan = r.defaultScan
-
-	headersHandled := true
-	checkHeadersMatch := (r.headers != nil)
-	if checkHeadersMatch || cfg.removeHeaderRow || cfg.trimHeaders {
-		headersHandled = false
-		trimHeaders := cfg.trimHeaders
-		removeHeaderRow := cfg.removeHeaderRow
-		next := r.scan
-		r.scan = func() bool {
-			r.scan = next
-
-			if !r.scan() {
-				return false
-			}
-
-			if trimHeaders {
-				headersStr := string(r.recordBuf)
-				r.recordBuf = r.recordBuf[:0]
-
-				var p int
-				matching := checkHeadersMatch
-				for i, s := range r.fieldLengths {
-					field := headersStr[p : p+s]
-					p += s
-
-					field = strings.TrimSpace(field)
-					r.fieldLengths[i] = len(field)
-
-					r.recordBuf = append(r.recordBuf, []byte(field)...)
-
-					if matching && field != r.headers[i] {
-						matching = false
-					}
-				}
-
-				if checkHeadersMatch && !matching {
-					r.setDone()
-					r.parsingErr(ErrUnexpectedHeaderRowContents)
-					return false
-				}
-			} else if checkHeadersMatch {
-
-				var p int
-				for i, s := range r.fieldLengths {
-					var field string
-					if s > 0 {
-						// usage of unsafe here is actually safe because field is
-						// never modified and no parts of its contents exist
-						// without cloning values to other parts of memory
-						// past the lifecycle of this function
-						//
-						// It will also never be called if the len is zero,
-						// just as an extra precaution.
-						field = unsafe.String(&r.recordBuf[p], s)
-					}
-					p += s
-
-					if field != r.headers[i] {
-						r.setDone()
-						r.parsingErr(ErrUnexpectedHeaderRowContents)
-						return false
-					}
-				}
-			}
-
-			headersHandled = true
-
-			if !removeHeaderRow {
-				return true
-			}
-
-			r.resetRecordBuffers()
-
-			return r.scan()
-		}
-	}
-
-	if r.headers == nil && !cfg.errOnNoRows {
-		return
-	}
-
-	// verify that true is returned at least once
-	// using a slip closure
-	{
-		errOnNoRows := cfg.errOnNoRows
-		next := r.scan
-		r.scan = func() bool {
-			r.scan = next
-			v := r.scan()
-			if !v {
-				if !headersHandled {
-					r.parsingErr(ErrNoHeaderRow)
-				} else if errOnNoRows {
-					r.parsingErr(ErrNoRows)
-				}
-			}
-			return v
-		}
-	}
 }
 
 // fieldNumOverflow invokes streamParsingErr if
@@ -1470,7 +1292,7 @@ func (r *Reader) initPipeline(cfg rCfg) {
 // of fields when processing the stream and short circuit
 // that processes - returning the error path - when the result
 // of this function is true
-func (r *Reader) fieldNumOverflow() bool {
+func (r *fastReader) fieldNumOverflow() bool {
 	if len(r.fieldLengths) == r.numFields {
 		r.streamParsingErr(tooManyFieldsErr(r.numFields))
 		return true
@@ -1479,59 +1301,19 @@ func (r *Reader) fieldNumOverflow() bool {
 	return false
 }
 
-func (r *Reader) setDone() {
+func (r *fastReader) setDone() {
 	if (r.bitFlags & stDone) != 0 {
 		return
 	}
 	r.bitFlags |= stDone
 
-	r.scan = func() bool {
+	r.pr.scan = func() bool {
 		return false
 	}
 }
 
-func (r *Reader) appendRecBuf(b ...byte) {
-	oldRef := r.recordBuf
-
-	r.recordBuf = append(r.recordBuf, b...)
-
-	if cap(oldRef) == 0 {
-		return
-	}
-
-	oldRef = oldRef[:cap(oldRef)]
-
-	if &oldRef[0] == &(r.recordBuf[:1])[0] {
-		return
-	}
-
-	for i := range oldRef {
-		oldRef[i] = 0
-	}
-}
-
-// IntoIter converts the reader state into an iterator.
-// Calling this method more than once returns the same iterator instance.
-//
-// If the reader is configured with BorrowRow(true) then the resulting
-// slice and field strings are only valid to use up until the next
-// iteration and should not be saved to persistent memory.
-//
-// It is best practice to check if Err() returns a non-nil
-// error after fully traversing this iterator.
-//
-// This is just a syntactic sugar method to work with range statements
-// in go1.23 and later.
-func (r *Reader) IntoIter() iter.Seq[[]string] {
-	return r.iter
-}
-
-func (r *Reader) iter(yield func([]string) bool) {
-	for r.scan() {
-		if !yield(r.row()) {
-			return
-		}
-	}
+func (r *fastReader) err() error {
+	return r.scanErr
 }
 
 //
@@ -1578,7 +1360,7 @@ func isByteOrderMarker(r uint32, size int) bool {
 	}
 }
 
-func (r *Reader) handleEOF() bool {
+func (r *fastReader) handleEOF() bool {
 	// r.done is always true when this function is called
 
 	// check if we're in a terminal state otherwise error
@@ -1624,4 +1406,286 @@ func (r *Reader) handleEOF() bool {
 func endsInValidUTF8(p []byte) bool {
 	r, s := utf8.DecodeLastRune(p)
 	return (r != utf8.RuneError || s > 1)
+}
+
+type secOpReader struct {
+	*fastReader
+	close             func() error
+	prepareRow        func() bool
+	appendRecBuf      func(...byte) bool
+	outOfCommentBytes func(int) bool
+	outOfCommentLines func() bool
+}
+
+func (r *secOpReader) closeWithMemClear() error {
+	v := r.fastReader.close()
+	r.zeroRecordBuffers()
+	return v
+}
+
+func (r *secOpReader) zeroRecordBuffers() {
+	{
+		v := r.rawBuf[:cap(r.rawBuf)]
+		for i := range v {
+			v[i] = 0
+		}
+	}
+
+	if r.fieldLengths != nil {
+		v := r.fieldLengths[:cap(r.fieldLengths)]
+		for i := range v {
+			v[i] = 0
+		}
+	}
+
+	if r.recordBuf != nil {
+		v := r.recordBuf[:cap(r.recordBuf)]
+		for i := range v {
+			v[i] = 0
+		}
+	}
+
+	if r.rowBuf != nil {
+		v := r.rowBuf[:cap(r.rowBuf)]
+		for i := range v {
+			v[i] = ""
+		}
+	}
+
+	r.resetRecordBuffers()
+}
+
+func (r *secOpReader) appendRecBufWithMemclear(b ...byte) bool {
+	oldRef := r.recordBuf
+
+	r.recordBuf = append(r.recordBuf, b...)
+
+	if cap(oldRef) == 0 {
+		return false
+	}
+
+	oldRef = oldRef[:cap(oldRef)]
+
+	if &oldRef[0] == &(r.recordBuf[:1])[0] {
+		return false
+	}
+
+	for i := range oldRef {
+		oldRef[i] = 0
+	}
+
+	return false
+}
+
+func (r *secOpReader) scan() bool {
+
+	r.resetRecordBuffers()
+
+	return r.prepareRow()
+}
+
+func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string, bitFlags rFlag) *Reader {
+
+	r := &Reader{}
+
+	fr := &fastReader{
+		controlRunes:   controlRunes,
+		rawBuf:         cfg.rawBuf[0:0:len(cfg.rawBuf)],
+		reader:         cfg.reader,
+		quote:          cfg.quote,
+		escape:         cfg.escape,
+		numFields:      cfg.numFields,
+		fieldSeparator: cfg.fieldSeparator,
+		comment:        cfg.comment,
+		headers:        headers,
+		recordBuf:      cfg.recordBuf[0:0:len(cfg.recordBuf)],
+		rowBuf:         rowBuf,
+		recordSep:      cfg.recordSep,
+		recordSepLen:   cfg.recordSepLen,
+		bitFlags:       bitFlags,
+		pr:             r,
+	}
+
+	var sr *secOpReader
+
+	if cfg.clearMemoryAfterFree {
+		sr = &secOpReader{fastReader: fr}
+		sr.close = sr.closeWithMemClear
+		sr.appendRecBuf = sr.appendRecBufWithMemclear
+		sr.outOfCommentBytes = func(_ int) bool { return false }
+		sr.outOfCommentLines = func() bool { return false }
+
+		sr.prepareRow = sr.prepareRow_memclearOn
+		r.scan = sr.scan
+	} else {
+		r.scan = fr.scan
+	}
+
+	if cfg.rawBufSizeSet {
+		fr.rawBuf = make([]byte, 0, cfg.rawBufSize)
+	} else if !cfg.rawBufSet {
+		fr.rawBuf = make([]byte, 0, defaultReaderBufferSize)
+	}
+
+	if cfg.initialRecordBufferSize > 0 {
+		fr.recordBuf = make([]byte, 0, cfg.initialRecordBufferSize)
+	}
+
+	if (fr.bitFlags & (rFlagDropBOM | rFlagErrOnNoBOM)) == 0 {
+		fr.state = rStateStartOfRecord
+	}
+
+	if fr.numFields == -1 {
+		fr.checkNumFields = fr.checkNumFieldsWithDiscovery
+	} else {
+		if fr.numFields > 0 {
+			fr.fieldLengths = make([]int, 0, fr.numFields)
+		}
+		if (fr.bitFlags & rFlagComment) != 0 {
+			fr.checkNumFields = fr.checkNumFieldsWithStartOfRecordTracking
+		} else {
+			fr.checkNumFields = fr.defaultCheckNumFields
+		}
+	}
+
+	if !cfg.borrowRow {
+		r.row = fr.defaultRow
+	} else if cfg.borrowFields {
+		fr.setRowBorrowedAndFieldsBorrowed()
+	} else {
+		fr.setRowBorrowedAndFieldsCloned()
+	}
+
+	headersHandled := true
+	checkHeadersMatch := (fr.headers != nil)
+	if checkHeadersMatch || cfg.removeHeaderRow || cfg.trimHeaders {
+		headersHandled = false
+		trimHeaders := cfg.trimHeaders
+		removeHeaderRow := cfg.removeHeaderRow
+		next := r.scan
+		r.scan = func() bool {
+			r.scan = next
+
+			if !r.scan() {
+				return false
+			}
+
+			if trimHeaders {
+				headersStr := string(fr.recordBuf)
+				fr.recordBuf = fr.recordBuf[:0]
+
+				var p int
+				matching := checkHeadersMatch
+				for i, s := range fr.fieldLengths {
+					field := headersStr[p : p+s]
+					p += s
+
+					field = strings.TrimSpace(field)
+					fr.fieldLengths[i] = len(field)
+
+					fr.recordBuf = append(fr.recordBuf, []byte(field)...)
+
+					if matching && field != fr.headers[i] {
+						matching = false
+					}
+				}
+
+				if checkHeadersMatch && !matching {
+					fr.setDone()
+					fr.parsingErr(ErrUnexpectedHeaderRowContents)
+					return false
+				}
+			} else if checkHeadersMatch {
+
+				var p int
+				for i, s := range fr.fieldLengths {
+					var field string
+					if s > 0 {
+						// usage of unsafe here is actually safe because field is
+						// never modified and no parts of its contents exist
+						// without cloning values to other parts of memory
+						// past the lifecycle of this function
+						//
+						// It will also never be called if the len is zero,
+						// just as an extra precaution.
+						field = unsafe.String(&fr.recordBuf[p], s)
+					}
+					p += s
+
+					if field != fr.headers[i] {
+						fr.setDone()
+						fr.parsingErr(ErrUnexpectedHeaderRowContents)
+						return false
+					}
+				}
+			}
+
+			headersHandled = true
+
+			if !removeHeaderRow {
+				return true
+			}
+
+			fr.resetRecordBuffers()
+
+			return r.scan()
+		}
+	}
+
+	if fr.headers == nil && !cfg.errOnNoRows {
+		if sr != nil {
+			*r = Reader{
+				scan:  r.scan,
+				row:   r.row,
+				close: sr.close,
+				err:   sr.err,
+			}
+			return r
+		}
+
+		*r = Reader{
+			scan:  r.scan,
+			row:   r.row,
+			close: fr.close,
+			err:   fr.err,
+		}
+		return r
+	}
+
+	// verify that true is returned at least once
+	// using a slip closure
+	{
+		errOnNoRows := cfg.errOnNoRows
+		next := r.scan
+		r.scan = func() bool {
+			r.scan = next
+			v := r.scan()
+			if !v {
+				if !headersHandled {
+					fr.parsingErr(ErrNoHeaderRow)
+				} else if errOnNoRows {
+					fr.parsingErr(ErrNoRows)
+				}
+			}
+			return v
+		}
+	}
+
+	if sr != nil {
+		*r = Reader{
+			scan:  r.scan,
+			row:   r.row,
+			close: sr.close,
+			err:   sr.err,
+		}
+		return r
+	}
+
+	*r = Reader{
+		scan:  r.scan,
+		row:   r.row,
+		close: fr.close,
+		err:   fr.err,
+	}
+	return r
 }
