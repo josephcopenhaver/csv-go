@@ -46,32 +46,39 @@ func TestUnitReaderPanicOnValidate(t *testing.T) {
 	is.Equal(r, panicRecordSepLen)
 }
 
-// func TestUnitReaderPanicOnHandleEOF(t *testing.T) {
-// 	//
-// 	// when reader is in a corrupted unknown state
-// 	//
-// 	// a panic should occur if handleEOF is called
-// 	//
+func TestUnitReaderPanicOnHandleEOF(t *testing.T) {
+	//
+	// when reader is in a corrupted unknown state
+	//
+	// a panic should occur if handleEOF is called
+	//
 
-// 	is := assert.New(t)
+	is := assert.New(t)
 
-// 	cr, err := NewReader(
-// 		ReaderOpts().Reader(strings.NewReader("")),
-// 	)
-// 	is.Nil(err)
-// 	is.NotNil(cr)
-// 	cr.state = rState(rStateInLineComment + 1)
+	cr, crv, err := internalNewReader(
+		ReaderOpts().Reader(strings.NewReader("")),
+	)
+	is.Nil(err)
+	is.NotNil(cr)
+	is.NotNil(crv)
 
-// 	handleEOF := func() (_ bool, r any) {
-// 		defer func() {
-// 			r = recover()
-// 		}()
-// 		return cr.handleEOF(), nil
-// 	}
+	cri, ok := crv.(*fastReader)
+	if !ok {
+		is.Fail("expected fastReader type, got %T", cr)
+	}
 
-// 	resp, r := handleEOF()
-// 	is.NotNil(r)
-// 	is.False(resp)
+	cri.state = rState(rStateInLineComment + 1)
 
-// 	is.Equal(r, panicUnknownReaderStateDuringEOF)
-// }
+	handleEOF := func() (_ bool, r any) {
+		defer func() {
+			r = recover()
+		}()
+		return cri.handleEOF(), nil
+	}
+
+	resp, r := handleEOF()
+	is.NotNil(r)
+	is.False(resp)
+
+	is.Equal(r, panicUnknownReaderStateDuringEOF)
+}

@@ -869,6 +869,11 @@ func (cfg *rCfg) validate() error {
 
 // NewReader creates a new instance of a CSV reader which is not safe for concurrent reads.
 func NewReader(options ...ReaderOption) (*Reader, error) {
+	r, _, err := internalNewReader(options...)
+	return r, err
+}
+
+func internalNewReader(options ...ReaderOption) (*Reader, reader, error) {
 
 	cfg := rCfg{
 		numFields:                   -1,
@@ -884,7 +889,7 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, errors.Join(ErrBadConfig, err)
+		return nil, nil, errors.Join(ErrBadConfig, err)
 	}
 
 	var headers []string
@@ -1018,8 +1023,8 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		rowBuf = make([]string, cfg.numFields)
 	}
 
-	r := newReader(cfg, string(controlRunes), headers, rowBuf, bitFlags)
-	return r, nil
+	r, r2 := newReader(cfg, string(controlRunes), headers, rowBuf, bitFlags)
+	return r, r2, nil
 }
 
 func (r *fastReader) close() error {
@@ -1484,7 +1489,9 @@ func (r *secOpReader) scan() bool {
 	return r.prepareRow()
 }
 
-func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string, bitFlags rFlag) *Reader {
+type reader any
+
+func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string, bitFlags rFlag) (*Reader, reader) {
 
 	r := &Reader{}
 
@@ -1640,7 +1647,7 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 				close: sr.close,
 				err:   sr.err,
 			}
-			return r
+			return r, sr
 		}
 
 		*r = Reader{
@@ -1649,7 +1656,7 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 			close: fr.close,
 			err:   fr.err,
 		}
-		return r
+		return r, fr
 	}
 
 	// verify that true is returned at least once
@@ -1678,7 +1685,7 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 			close: sr.close,
 			err:   sr.err,
 		}
-		return r
+		return r, sr
 	}
 
 	*r = Reader{
@@ -1687,5 +1694,5 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 		close: fr.close,
 		err:   fr.err,
 	}
-	return r
+	return r, fr
 }
