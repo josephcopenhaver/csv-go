@@ -88,8 +88,16 @@ var (
 	ErrParsing    = errors.New("parsing error")
 	ErrFieldCount = errors.New("field count error")
 	ErrBadConfig  = errors.New("bad config")
+	ErrSecOp      = errors.New("security error")
+
 	// instances
-	ErrTooManyFields               = errors.New("too many fields")
+	ErrTooManyFields                = errors.New("too many fields")
+	ErrSecOpRecordByteCountAboveMax = errors.New("record byte count exceeds max")
+	// is a sub-instance of ErrTooManyFields
+	ErrSecOpFieldCountAboveMax     = errors.New("field count exceeds max")
+	ErrSecOpRecordCountAboveMax    = errors.New("record count exceeds max")
+	ErrSecOpCommentBytesAboveMax   = errors.New("comment byte count exceeds max")
+	ErrSecOpCommentsAboveMax       = errors.New("comment line count exceeds max")
 	ErrNotEnoughFields             = errors.New("not enough fields")
 	ErrReaderClosed                = errors.New("reader closed")
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
@@ -138,6 +146,17 @@ func newIOError(byteIndex, recordIndex uint64, fieldIndex uint, err error) posTr
 func newParsingError(byteIndex, recordIndex uint64, fieldIndex uint, err error) posTracedErr {
 	return posTracedErr{
 		errType:     ErrParsing,
+		err:         err,
+		byteIndex:   byteIndex,
+		recordIndex: recordIndex,
+		fieldIndex:  fieldIndex,
+	}
+}
+
+func newSecOpError(byteIndex, recordIndex uint64, fieldIndex uint, err error) posTracedErr {
+	// TODO: might be able to remove this function and embed in the only caller
+	return posTracedErr{
+		errType:     ErrSecOp,
 		err:         err,
 		byteIndex:   byteIndex,
 		recordIndex: recordIndex,
@@ -544,6 +563,51 @@ func (ReaderOptions) ReaderBuffer(v []byte) ReaderOption {
 	}
 }
 
+// MaxFields is a security option that limits the number of fields allowed to be detected automatically before a SecOp error is thrown
+//
+// using this option at the same time as the NumFields option will lead to an error on reader creation
+// since using both is counter intuitive in general
+func (ReaderOptions) MaxFields(v int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxFields = v
+		cfg.maxFieldsSet = true
+	}
+}
+
+// MaxRecordBytes is a security option that limits the number of bytes allowed to be detected in a record before a SecOp error is thrown
+func (ReaderOptions) MaxRecordBytes(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxRecordBytes = n
+		cfg.maxRecordBytesSet = true
+	}
+}
+
+// MaxRecords is a security option that limits the number of records allowed in a stream before a SecOp error is thrown
+func (ReaderOptions) MaxRecords(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxRecords = n
+		cfg.maxRecordsSet = true
+	}
+}
+
+// MaxComments is a security option that limits the number of comment lines allowed in a stream before a SecOp error is thrown
+func (ReaderOptions) MaxComments(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxComments = n
+		cfg.maxCommentsSet = true
+	}
+}
+
+// MaxComments is a security option that limits the number of bytes allowed in a comment line before a SecOp error is thrown
+func (ReaderOptions) MaxCommentBytes(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxCommentBytes = n
+		cfg.maxCommentBytesSet = true
+	}
+}
+
+// MaxNumBytes for an overall csv document is not getting implemented because it's trivial to implement that as a io.Reader wrapper.
+
 func ReaderOpts() ReaderOptions {
 	return ReaderOptions{}
 }
@@ -623,10 +687,14 @@ type rCfg struct {
 	recordSep  [2]rune
 	rawBufSize int
 	numFields  int
-	// maxNumFields                       int
-	// maxNumRecords                      int
-	// maxNumRecordBytes                  int
-	// maxNumBytes                        int
+
+	// security attributes
+	maxFields       int
+	maxRecordBytes  int
+	maxRecords      int
+	maxCommentBytes int
+	maxComments     int
+
 	initialRecordBufferSize            int
 	fieldSeparator                     rune
 	quote                              rune
@@ -655,6 +723,14 @@ type rCfg struct {
 	recordBufSet                       bool
 	rawBufSet                          bool
 	rawBufSizeSet                      bool
+
+	//
+
+	maxFieldsSet       bool
+	maxRecordBytesSet  bool
+	maxRecordsSet      bool
+	maxCommentBytesSet bool
+	maxCommentsSet     bool
 }
 
 type fastReader struct {
@@ -852,6 +928,10 @@ func (cfg *rCfg) validate() error {
 		}
 	}
 
+	if cfg.maxFieldsSet && cfg.numFieldsSet {
+		return errors.New("MaxFields and NumFields options cannot be used at the same time")
+	}
+
 	if cfg.numFieldsSet && cfg.numFields <= 0 {
 		return errors.New("num fields must be greater than zero or not specified")
 	}
@@ -860,9 +940,25 @@ func (cfg *rCfg) validate() error {
 		return errors.New("field borrowing cannot be enabled without enabling row borrowing")
 	}
 
-	// if cfg.maxNumFields != 0 || cfg.maxNumRecordBytes != 0 || cfg.maxNumRecords != 0 || cfg.maxNumBytes != 0 {
-	// 	panic("unimplemented config selections")
-	// }
+	if cfg.maxFieldsSet && cfg.maxFields <= 1 {
+		return errors.New("max fields cannot be set to a value less than or equal to one")
+	}
+
+	if cfg.maxRecordBytesSet && cfg.maxRecordBytes <= 0 {
+		return errors.New("max record bytes cannot be less than or equal to zero")
+	}
+
+	if cfg.maxRecordsSet && cfg.maxRecords <= 0 {
+		return errors.New("max records cannot be less than or equal to zero")
+	}
+
+	if cfg.maxCommentsSet && cfg.maxComments < 0 {
+		return errors.New("max comments cannot be less than zero")
+	}
+
+	if cfg.maxCommentBytesSet && cfg.maxCommentBytes < 0 {
+		return errors.New("max comment bytes cannot be less than zero")
+	}
 
 	return nil
 }
@@ -1062,11 +1158,22 @@ func (r *fastReader) parsingErr(err error) {
 	}
 }
 
+func (r *secOpReader) secOpErr(err error) {
+	// TODO: might be able to remove this function and embed in the only caller
+	if r.scanErr == nil {
+		recordIndex, fieldIndex := r.humanIndexes()
+		r.scanErr = newSecOpError(r.byteIndex, recordIndex, fieldIndex, err)
+	}
+}
+
 // streamParsingErr performs a side effect of increasing the byteIndex of state
 //
 // therefore it should never be called more than once in an invocation to Scan
 // and it should always be followed with logic that short circuits the scan
 // and returns false for the scan operation
+//
+// for a given scan operation only one of streamParsingErr or secOpStreamParsingErr
+// should be called when appropriate, never both.
 func (r *fastReader) streamParsingErr(err error) {
 	r.setDone()
 
@@ -1077,6 +1184,26 @@ func (r *fastReader) streamParsingErr(err error) {
 	r.byteIndex++
 
 	r.parsingErr(err)
+}
+
+// secOpStreamParsingErr performs a side effect of increasing the byteIndex of state
+//
+// therefore it should never be called more than once in an invocation to Scan
+// and it should always be followed with logic that short circuits the scan
+// and returns false for the scan operation
+//
+// for a given scan operation only one of streamParsingErr or secOpStreamParsingErr
+// should be called when appropriate, never both.
+func (r *secOpReader) secOpStreamParsingErr(err error) {
+	r.setDone()
+
+	// r.byteIndex++ moves from control byte idx
+	// to next byte idx
+	//
+	// this matches v1 flow
+	r.byteIndex++
+
+	r.secOpErr(err)
 }
 
 func (r *fastReader) ioErr(err error) {
@@ -1460,6 +1587,12 @@ func (r *secOpReader) zeroRecordBuffers() {
 	r.resetRecordBuffers()
 }
 
+func (r *secOpReader) defaultAppendRecBuf(b ...byte) bool {
+	r.recordBuf = append(r.recordBuf, b...)
+
+	return false
+}
+
 func (r *secOpReader) appendRecBufWithMemclear(b ...byte) bool {
 	oldRef := r.recordBuf
 
@@ -1482,11 +1615,102 @@ func (r *secOpReader) appendRecBufWithMemclear(b ...byte) bool {
 	return false
 }
 
+func (r *secOpReader) appendRecBufMaxCheck(max int) func(...byte) bool {
+	return func(b ...byte) bool {
+		// check if addition exceeds max or overflows
+		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
+			// simulate adding bytes up to the max
+			// note that r.streamErr will make the index a "human" value and add 1
+			r.byteIndex += uint64(max - len(r.recordBuf))
+			r.secOpStreamParsingErr(ErrSecOpRecordByteCountAboveMax)
+			return true
+		}
+
+		r.recordBuf = append(r.recordBuf, b...)
+
+		return false
+	}
+}
+
+func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func(...byte) bool {
+	return func(b ...byte) bool {
+		// check if addition exceeds max or overflows
+		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
+			// simulate adding bytes up to the max
+			// note that r.streamErr will make the index a "human" value and add 1
+			r.byteIndex += uint64(max - len(r.recordBuf))
+			r.secOpStreamParsingErr(ErrSecOpRecordByteCountAboveMax)
+			return true
+		}
+
+		oldRef := r.recordBuf
+
+		r.recordBuf = append(r.recordBuf, b...)
+
+		if cap(oldRef) == 0 {
+			return false
+		}
+
+		oldRef = oldRef[:cap(oldRef)]
+
+		if &oldRef[0] == &(r.recordBuf[:1])[0] {
+			return false
+		}
+
+		for i := range oldRef {
+			oldRef[i] = 0
+		}
+
+		return false
+	}
+}
+
 func (r *secOpReader) scan() bool {
 
 	r.resetRecordBuffers()
 
 	return r.prepareRow()
+}
+
+func (sr *secOpReader) nopOutOfCommentBytes(_ int) bool {
+	return false
+}
+
+func (sr *secOpReader) newOutOfCommentBytes(remainingBytes int) func(int) bool {
+	return func(n int) bool {
+		if remainingBytes <= 0 {
+			sr.secOpStreamParsingErr(ErrSecOpCommentBytesAboveMax)
+			return true
+		}
+
+		if remainingBytes < n {
+			sr.byteIndex += uint64(remainingBytes)
+			// remainingBytes = 0 // no need to set it to zero, we'll never use it again
+			sr.secOpStreamParsingErr(ErrSecOpCommentBytesAboveMax)
+			return true
+		}
+
+		remainingBytes -= n
+
+		return false
+	}
+}
+
+func (sr *secOpReader) nopOutOfCommentLines() bool {
+	return false
+}
+
+func (sr *secOpReader) newOutOfCommentLines(remainingComments int) func() bool {
+	return func() bool {
+		if remainingComments <= 0 {
+			sr.secOpStreamParsingErr(ErrSecOpCommentsAboveMax)
+			return true
+		}
+
+		remainingComments--
+
+		return false
+	}
 }
 
 type reader any
@@ -1515,14 +1739,41 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 
 	var sr *secOpReader
 
-	if cfg.clearMemoryAfterFree {
+	if cfg.clearMemoryAfterFree || cfg.maxRecordBytesSet || cfg.maxCommentBytesSet || cfg.maxCommentsSet {
 		sr = &secOpReader{fastReader: fr}
-		sr.close = sr.closeWithMemClear
-		sr.appendRecBuf = sr.appendRecBufWithMemclear
-		sr.outOfCommentBytes = func(_ int) bool { return false }
-		sr.outOfCommentLines = func() bool { return false }
 
-		sr.prepareRow = sr.prepareRow_memclearOn
+		if cfg.clearMemoryAfterFree {
+			sr.close = sr.closeWithMemClear
+			if cfg.maxRecordBytesSet {
+				sr.appendRecBuf = sr.appendRecBufMaxCheckMemClear(cfg.maxRecordBytes)
+			} else {
+				sr.appendRecBuf = sr.appendRecBufWithMemclear
+			}
+
+			sr.prepareRow = sr.prepareRow_memclearOn
+		} else {
+			sr.close = fr.close
+			if cfg.maxRecordBytesSet {
+				sr.appendRecBuf = sr.appendRecBufMaxCheck(cfg.maxRecordBytes)
+			} else {
+				sr.appendRecBuf = sr.defaultAppendRecBuf
+			}
+
+			sr.prepareRow = fr.prepareRow
+		}
+
+		if !cfg.maxCommentBytesSet {
+			sr.outOfCommentBytes = sr.nopOutOfCommentBytes
+		} else {
+			sr.outOfCommentBytes = sr.newOutOfCommentBytes(cfg.maxCommentBytes)
+		}
+
+		if !cfg.maxCommentsSet {
+			sr.outOfCommentLines = sr.nopOutOfCommentLines
+		} else {
+			sr.outOfCommentLines = sr.newOutOfCommentLines(cfg.maxComments)
+		}
+
 		r.scan = sr.scan
 	} else {
 		r.scan = fr.scan
