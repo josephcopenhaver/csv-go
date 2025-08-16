@@ -132,6 +132,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 				switch r.state {
 				case rStateStartOfDoc:
+					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
+
 					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
 						if (r.bitFlags & rFlagDropBOM) != 0 {
 							if len(r.rawBuf) == r.rawIndex+bomSize {
@@ -152,20 +154,30 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
+					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
+
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:]...{{.RecBufAppend1}}
 
 					r.state = rStateInField
 				case rStateInQuotedField, rStateInField:
+					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
+
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:]...{{.RecBufAppend1}}
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
+					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
+
 					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
+					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
+
 					r.streamParsingErr(ErrInvalidQuotedFieldEnding)
 					return false
 				case rStateInLineComment:
+					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
+
 					// could zero out bytes immediately
 
 					delta := len(r.rawBuf) - r.rawIndex
@@ -198,6 +210,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 			case r.fieldSeparator:
 				switch r.state {
 				case rStateStartOfDoc:
+					// HANDLING: r.fieldSeparator
+
 					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
 						if (r.bitFlags & rFlagDropBOM) != 0 {
 							r.byteIndex += uint64(bomSize)
@@ -214,6 +228,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.state = rStateStartOfRecord // might be removable, but leaving because could leave this context with the state set here
 					fallthrough
 				case rStateStartOfRecord:
+					// HANDLING: r.fieldSeparator
+
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx]...{{.RecBufAppend1}}
 					r.byteIndex += uint64(di)
 
@@ -229,6 +245,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.fieldIndex++
 					r.state = rStateStartOfField
 				case rStateInQuotedField:
+					// HANDLING: r.fieldSeparator
+
 					// TODO: technically "skippable"
 
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx+int(size)]...{{.RecBufAppend1}}
@@ -237,9 +255,13 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
+					// HANDLING: r.fieldSeparator
+
 					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
+					// HANDLING: r.fieldSeparator
+
 					if di != 0 {
 						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
 						return false
@@ -257,6 +279,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.fieldIndex++
 					r.state = rStateStartOfField
 				case rStateStartOfField:
+					// HANDLING: r.fieldSeparator
+
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx]...{{.RecBufAppend1}}
 					r.byteIndex += uint64(di)
 					r.rawIndex = idx + int(size)
@@ -271,6 +295,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.fieldIndex++
 					// r.state = ... (unchanged)
 				case rStateInField:
+					// HANDLING: r.fieldSeparator
+
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx]...{{.RecBufAppend1}}
 					r.byteIndex += uint64(di)
 					r.rawIndex = idx + int(size)
@@ -285,6 +311,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.fieldIndex++
 					r.state = rStateStartOfField
 				case rStateInLineComment:
+					// HANDLING: r.fieldSeparator
+
 					// could zero out bytes immediately
 					delta := di + int(size)
 					{{.DeltaCommentBytesCheck}}
@@ -297,6 +325,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 			case r.escape:
 				switch r.state {
 				case rStateStartOfDoc:
+					// HANDLING: r.escape
+
 					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
 						if (r.bitFlags & rFlagDropBOM) != 0 {
 							r.byteIndex += uint64(bomSize)
@@ -313,18 +343,27 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
+					// HANDLING: r.escape
+
+					// an escape at the start of a record or field indicates that it is a literal
+					// and not an escape character after all - it would be an escape indicator
+					// if the state was one that indicated we're in a quoted field
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx+int(size)]...{{.RecBufAppend1}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
 					r.state = rStateInField
 				case rStateInQuotedField:
+					// HANDLING: r.escape
+
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx]...{{.RecBufAppend1}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
 					r.state = rStateInQuotedFieldAfterEscape
 				case rStateInQuotedFieldAfterEscape:
+					// HANDLING: r.escape
+
 					if di != 0 {
 						r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
 						return false
@@ -336,9 +375,13 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					r.state = rStateInQuotedField
 				case rStateEndOfQuotedField:
+					// HANDLING: r.escape
+
 					r.streamParsingErr(ErrInvalidQuotedFieldEnding)
 					return false
 				case rStateInField:
+					// HANDLING: r.escape
+
 					// TODO: technically "skippable"
 
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx+int(size)]...{{.RecBufAppend1}}
@@ -347,6 +390,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInLineComment:
+					// HANDLING: r.escape
+
 					// could zero out bytes immediately
 					delta := di + int(size)
 					{{.DeltaCommentBytesCheck}}
@@ -359,6 +404,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 			case r.quote:
 				switch r.state {
 				case rStateStartOfDoc:
+					// HANDLING: r.quote
+
 					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
 						if (r.bitFlags & rFlagDropBOM) != 0 {
 							r.byteIndex += uint64(bomSize)
@@ -375,6 +422,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.state = rStateStartOfRecord // might be removable, but leaving because could leave this context with the state set here
 					fallthrough
 				case rStateStartOfRecord:
+					// HANDLING: r.quote
+
 					if di != 0 {
 						if (r.bitFlags & rFlagErrOnQInUF) != 0 {
 							// quote in unquoted field should cause an error
@@ -406,12 +455,16 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					r.state = rStateInQuotedField
 				case rStateInQuotedField:
+					// HANDLING: r.quote
+
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx]...{{.RecBufAppend1}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
 					r.state = rStateEndOfQuotedField
 				case rStateInQuotedFieldAfterEscape:
+					// HANDLING: r.quote
+
 					if di != 0 {
 						r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
 						return false
@@ -423,6 +476,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					r.state = rStateInQuotedField
 				case rStateEndOfQuotedField:
+					// HANDLING: r.quote
+
 					if di != 0 {
 						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
 						return false
@@ -439,6 +494,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					r.state = rStateInQuotedField
 				case rStateStartOfField:
+					// HANDLING: r.quote
+
 					if di != 0 {
 						if (r.bitFlags & rFlagErrOnQInUF) != 0 {
 							// quote in unquoted field should cause an error
@@ -466,6 +523,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					r.state = rStateInQuotedField
 				case rStateInField:
+					// HANDLING: r.quote
+
 					if (r.bitFlags & rFlagErrOnQInUF) != 0 {
 						// quote in unquoted field should cause an error
 
@@ -482,6 +541,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInLineComment:
+					// HANDLING: r.quote
+
 					// could zero out bytes immediately
 					delta := di + int(size)
 					{{.DeltaCommentBytesCheck}}
@@ -505,6 +566,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 						switch r.state {
 						case rStateStartOfDoc:
+							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
+
 							if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
 								if (r.bitFlags & rFlagDropBOM) != 0 {
 									r.byteIndex += uint64(bomSize)
@@ -519,29 +582,49 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 							// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
 							fallthrough
 						case rStateStartOfRecord, rStateStartOfField:
+							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
+
 							{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx+1]...{{.RecBufAppend1}}
+
+							r.byteIndex += uint64(di) + uint64(size)
+							r.rawIndex = idx + int(size)
 
 							r.state = rStateInField
 						case rStateInQuotedField, rStateInField:
+							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
+
 							{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx+1]...{{.RecBufAppend1}}
+
+							r.byteIndex += uint64(di) + uint64(size)
+							r.rawIndex = idx + int(size)
 
 							// r.state = ... (unchanged)
 						case rStateInQuotedFieldAfterEscape:
+							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
+
 							r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
 							return false
 						case rStateEndOfQuotedField:
+							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
+
 							r.streamParsingErr(ErrInvalidQuotedFieldEnding)
 							return false
 						case rStateInLineComment:
+							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
+							//
+							// except in this comment context it's technically a line character
+							// that starts a new conceptual line which could be rendered
+							// in some virtualized or normalized fashion later
+
 							// could zero out bytes immediately
+
+							r.byteIndex += uint64(di) + uint64(size)
+							r.rawIndex = idx + int(size)
 
 							{{.CommentLinesCheck}}
 
 							// r.state = ... (unchanged)
 						}
-
-						r.byteIndex += uint64(di) + uint64(size)
-						r.rawIndex = idx + int(size)
 
 						if r.rawIndex >= len(r.rawBuf) {
 							break CHUNK_PROCESSOR
@@ -554,8 +637,11 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					// and continue with record separator processing
 					size++
 				}
+
 				switch r.state {
 				case rStateStartOfDoc:
+					// HANDLING: CRLF
+
 					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
 						if (r.bitFlags & rFlagDropBOM) != 0 {
 							r.byteIndex += uint64(bomSize)
@@ -572,6 +658,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.state = rStateStartOfRecord // might be removable, but leaving because could leave this context with the state set here
 					fallthrough
 				case rStateStartOfRecord:
+					// HANDLING: CRLF
+
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx]...{{.RecBufAppend1}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
@@ -585,6 +673,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					}
 					return false
 				case rStateInQuotedField:
+					// HANDLING: CRLF
+
 					// TODO: technically "skippable"
 
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx+int(size)]...{{.RecBufAppend1}}
@@ -593,9 +683,13 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
+					// HANDLING: CRLF
+
 					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
+					// HANDLING: CRLF
+
 					if di != 0 {
 						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
 						return false
@@ -613,6 +707,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					}
 					return false
 				case rStateStartOfField, rStateInField:
+					// HANDLING: CRLF
+
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx]...{{.RecBufAppend1}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
@@ -626,6 +722,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					}
 					return false
 				case rStateInLineComment:
+					// HANDLING: CRLF
+
 					// could zero out bytes immediately
 					delta := di + int(size)
 					{{.DeltaCommentBytesCheck}}
@@ -638,6 +736,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 			case r.comment:
 				switch r.state {
 				case rStateStartOfDoc:
+					// HANDLING: r.comment
+
 					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
 						if (r.bitFlags & rFlagDropBOM) != 0 {
 							r.byteIndex += uint64(bomSize)
@@ -654,6 +754,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.state = rStateStartOfRecord // might be removable, but leaving because could leave this context with the state set here
 					fallthrough
 				case rStateStartOfRecord:
+					// HANDLING: r.comment
+
 					if di == 0 && ((r.bitFlags&stAfterSOR) == 0 || (r.bitFlags&rFlagCommentAfterSOR) != 0) {
 						// definitely a line comment
 						//
@@ -675,6 +777,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					// a comment rune
 					fallthrough
 				case rStateStartOfField:
+					// HANDLING: r.comment
 
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx+int(size)]...{{.RecBufAppend1}}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -682,18 +785,26 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					r.state = rStateInField
 				case rStateInQuotedField, rStateInField:
+					// HANDLING: r.comment
+
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx+int(size)]...{{.RecBufAppend1}}
 					r.byteIndex += uint64(di) + uint64(size)
 					r.rawIndex = idx + int(size)
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
+					// HANDLING: r.comment
+
 					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
+					// HANDLING: r.comment
+
 					r.streamParsingErr(ErrInvalidQuotedFieldEnding)
 					return false
 				case rStateInLineComment:
+					// HANDLING: r.comment
+
 					// could zero out bytes immediately
 					delta := di + int(size)
 					{{.DeltaCommentBytesCheck}}
@@ -711,6 +822,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					// if discovered outside of a quoted state
 					switch r.state {
 					case rStateStartOfDoc:
+						// HANDLING: CR or LF as data given it does not match record-sep
+
 						if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
 							if (r.bitFlags & rFlagDropBOM) != 0 {
 								r.byteIndex += uint64(bomSize)
@@ -727,6 +840,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 						r.state = rStateStartOfRecord // might be removable, but leaving because could leave this context with the state set here
 						fallthrough
 					case rStateStartOfRecord, rStateStartOfField:
+						// HANDLING: CR or LF as data given it does not match record-sep
+
 						if di > 0 {
 							r.state = rStateInField // might be removable, but leaving because could leave this context with the state set here
 							r.byteIndex += uint64(di)
@@ -740,6 +855,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 						r.streamParsingErr(errNewlineInUnquotedFieldCarriageReturn)
 						return false
 					case rStateInField:
+						// HANDLING: CR or LF as data given it does not match record-sep
+
 						r.byteIndex += uint64(di)
 
 						if c == asciiLineFeed {
@@ -750,18 +867,26 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 						r.streamParsingErr(errNewlineInUnquotedFieldCarriageReturn)
 						return false
 					case rStateInQuotedField:
+						// HANDLING: CR or LF as data given it does not match record-sep
+
 						{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx+int(size)]...{{.RecBufAppend1}}
 						r.byteIndex += uint64(di) + uint64(size)
 						r.rawIndex = idx + int(size)
 
 						// r.state = ... (unchanged)
 					case rStateInQuotedFieldAfterEscape:
+						// HANDLING: CR or LF as data given it does not match record-sep
+
 						r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
 						return false
 					case rStateEndOfQuotedField:
+						// HANDLING: CR or LF as data given it does not match record-sep
+
 						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
 						return false
 					case rStateInLineComment:
+						// HANDLING: CR or LF as data given it does not match record-sep
+
 						// could zero out bytes immediately
 						delta := di + int(size)
 						{{.DeltaCommentBytesCheck}}
@@ -787,6 +912,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 				switch r.state {
 				case rStateStartOfDoc:
+					// HANDLING: CR or LF as data given record-sep discovery=on
+
 					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
 						if (r.bitFlags & rFlagDropBOM) != 0 {
 							r.byteIndex += uint64(bomSize)
@@ -802,6 +929,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.state = rStateStartOfRecord // might be removable, but leaving because could leave this context with the state set here
 					fallthrough
 				case rStateStartOfRecord, rStateEndOfQuotedField, rStateInLineComment, rStateStartOfField, rStateInField:
+					// HANDLING: CR or LF as data given record-sep discovery=on
+
 					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
 						r.recordSepLen = 2
 						r.recordSep[0] = asciiCarriageReturn
@@ -844,6 +973,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedField:
+					// HANDLING: CR or LF as data given record-sep discovery=on
+
 					// TODO: technically "skippable"
 
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx+int(size)]...{{.RecBufAppend1}}
@@ -852,6 +983,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
+					// HANDLING: CR or LF as data given record-sep discovery=on
+
 					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
 					return false
 				}

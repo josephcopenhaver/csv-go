@@ -1759,7 +1759,7 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 				sr.appendRecBuf = sr.defaultAppendRecBuf
 			}
 
-			sr.prepareRow = fr.prepareRow
+			sr.prepareRow = sr.prepareRow_memclearOn // TODO: move to after block scope
 		}
 
 		if !cfg.maxCommentBytesSet {
