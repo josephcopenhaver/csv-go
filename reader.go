@@ -942,8 +942,20 @@ func (cfg *rCfg) validate() error {
 		return errors.New("field borrowing cannot be enabled without enabling row borrowing")
 	}
 
-	if cfg.maxFieldsSet && cfg.maxFields <= 1 {
-		return errors.New("max fields cannot be set to a value less than or equal to one")
+	if cfg.maxFieldsSet {
+		if cfg.maxFields <= 1 {
+			return errors.New("max fields cannot be set to a value less than or equal to one")
+		}
+
+		if cfg.numFieldsSet || cfg.numFields > 0 {
+			if cfg.numFields > cfg.maxFields {
+				return errors.New("max fields should not be specified or should be larger: max fields was specified with a value less than the specified number of fields per record")
+			}
+
+			// config not useful due to other specified options, ignoring it
+			cfg.maxFieldsSet = false
+			cfg.maxFields = 0
+		}
 	}
 
 	if cfg.maxRecordBytesSet && cfg.maxRecordBytes <= 0 {
