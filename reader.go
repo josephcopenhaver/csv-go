@@ -563,16 +563,18 @@ func (ReaderOptions) ReaderBuffer(v []byte) ReaderOption {
 	}
 }
 
-// MaxFields is a security option that limits the number of fields allowed to be detected automatically before a SecOp error is thrown
-//
-// using this option at the same time as the NumFields option will lead to an error on reader creation
-// since using both is counter intuitive in general
-func (ReaderOptions) MaxFields(v int) ReaderOption {
-	return func(cfg *rCfg) {
-		cfg.maxFields = v
-		cfg.maxFieldsSet = true
-	}
-}
+// TODO: implement MaxFields+MaxRecords usage and tests
+
+// // MaxFields is a security option that limits the number of fields allowed to be detected automatically before a SecOp error is thrown
+// //
+// // using this option at the same time as the NumFields option will lead to an error on reader creation
+// // since using both is counter intuitive in general
+// func (ReaderOptions) MaxFields(v int) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.maxFields = v
+// 		cfg.maxFieldsSet = true
+// 	}
+// }
 
 // MaxRecordBytes is a security option that limits the number of bytes allowed to be detected in a record before a SecOp error is thrown
 func (ReaderOptions) MaxRecordBytes(n int) ReaderOption {
@@ -582,13 +584,13 @@ func (ReaderOptions) MaxRecordBytes(n int) ReaderOption {
 	}
 }
 
-// MaxRecords is a security option that limits the number of records allowed in a stream before a SecOp error is thrown
-func (ReaderOptions) MaxRecords(n int) ReaderOption {
-	return func(cfg *rCfg) {
-		cfg.maxRecords = n
-		cfg.maxRecordsSet = true
-	}
-}
+// // MaxRecords is a security option that limits the number of records allowed in a stream before a SecOp error is thrown
+// func (ReaderOptions) MaxRecords(n int) ReaderOption {
+// 	return func(cfg *rCfg) {
+// 		cfg.maxRecords = n
+// 		cfg.maxRecordsSet = true
+// 	}
+// }
 
 // MaxComments is a security option that limits the number of comment lines allowed in a stream before a SecOp error is thrown
 func (ReaderOptions) MaxComments(n int) ReaderOption {
