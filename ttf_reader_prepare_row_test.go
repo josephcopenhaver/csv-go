@@ -9,6 +9,8 @@ import (
 )
 
 func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalReaderTestCase{
 		{
 			when: "in quoted field encounter CRLF with RecSepDiscovery=true",

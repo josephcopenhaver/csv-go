@@ -7,6 +7,8 @@ import (
 )
 
 func TestFunctionalReaderPrepareRowOutOfCommentLinesRespTruePaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalReaderTestCase{
 		{
 			when: "MaxComments=1 RecordSep=CRLF first line starts with comment followed by 4 chars with CR and a data byte and read-partition",

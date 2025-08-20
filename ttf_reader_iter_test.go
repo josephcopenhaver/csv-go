@@ -9,6 +9,7 @@ import (
 )
 
 func TestFunctionalReaderIteratorPaths(t *testing.T) {
+	t.Parallel()
 
 	t.Run("given a CSV reader with two records", func(t *testing.T) {
 		newReader := func() (*csv.Reader, error) {

@@ -11,6 +11,7 @@ import (
 )
 
 func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
+	t.Parallel()
 
 	tcs := []functionalReaderTestCase{
 		{

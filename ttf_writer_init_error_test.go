@@ -8,6 +8,8 @@ import (
 )
 
 func TestFunctionalWriterInitializationErrorPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalWriterTestCase{
 		{
 			when: "record separator is not a newline character",

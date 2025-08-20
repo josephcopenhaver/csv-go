@@ -15,6 +15,7 @@ const (
 )
 
 func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
+	t.Parallel()
 
 	tcs := []functionalReaderTestCase{
 		{

@@ -8,6 +8,8 @@ import (
 )
 
 func TestFunctionalWriterHeaderOKPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalWriterTestCase{
 		{
 			when: "header comment contains invalid utf8 sequence and non-utf8 errors are disabled",

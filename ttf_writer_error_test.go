@@ -30,6 +30,8 @@ func (ew *errWriter) Write(p []byte) (int, error) {
 }
 
 func TestFunctionalWriterErrorPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalWriterTestCase{
 		{
 			when: "a row with no fields - nil",

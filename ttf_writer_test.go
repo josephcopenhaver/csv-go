@@ -337,6 +337,8 @@ func bomBytes() []byte {
 }
 
 func TestFunctionalWriterOKPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalWriterTestCase{
 		{
 			when: "rendering a comment header",

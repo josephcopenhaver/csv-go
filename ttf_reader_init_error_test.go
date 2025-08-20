@@ -12,6 +12,7 @@ import (
 )
 
 func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
+	t.Parallel()
 
 	t.Run("when creating a CSV reader without a reader", func(t *testing.T) {
 		t.Run("should return an error indicating the reader option is nil and a nil csv reader instance", func(t *testing.T) {
@@ -395,6 +396,99 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			assert.NotNil(t, err)
 			assert.ErrorIs(t, err, csv.ErrBadConfig)
 			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`field borrowing cannot be enabled without enabling row borrowing`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader with maxFields=2 and headersLength=3", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().MaxFields(2),
+				csv.ReaderOpts().ExpectHeaders([]string{"1", "2", "3"}),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`max fields should not be specified or should be larger: max fields was specified with a value less than the specified number of fields per record`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader with maxFields=2 and NumFields=3", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().MaxFields(2),
+				csv.ReaderOpts().NumFields(3),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`max fields should not be specified or should be larger: max fields was specified with a value less than the specified number of fields per record`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader with maxFields=1", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().MaxFields(1),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`max fields cannot be set to a value less than or equal to one`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader with MaxRecordBytes=0", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().MaxRecordBytes(0),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`max record bytes cannot be less than or equal to zero`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader with MaxRecords=0", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().MaxRecords(0),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`max records cannot be equal to zero`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader with MaxComments=-1", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().MaxComments(-1),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`max comments cannot be less than zero`)).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader with MaxCommentBytes=-1", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().MaxCommentBytes(-1),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New(`max comment bytes cannot be less than zero`)).Error(), err.Error())
 			assert.Nil(t, cr)
 		})
 	})

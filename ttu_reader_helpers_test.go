@@ -8,6 +8,7 @@ import (
 )
 
 func TestUnitReaderHelperPaths_isByteOrderMarker(t *testing.T) {
+	t.Parallel()
 
 	type TC struct {
 		n    string
@@ -34,6 +35,7 @@ func TestUnitReaderHelperPaths_isByteOrderMarker(t *testing.T) {
 }
 
 func TestUnitReaderHelperPaths_isNewlineRune(t *testing.T) {
+	t.Parallel()
 
 	type Resp struct {
 		isCR bool

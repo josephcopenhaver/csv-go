@@ -640,7 +640,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 				switch r.state {
 				case rStateStartOfDoc:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
 						if (r.bitFlags & rFlagDropBOM) != 0 {
@@ -658,7 +658,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.state = rStateStartOfRecord // might be removable, but leaving because could leave this context with the state set here
 					fallthrough
 				case rStateStartOfRecord:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx]...{{.RecBufAppend1}}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -667,13 +667,13 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 					if r.checkNumFields(nil) {
+						{{.IncRecordIndex}}
 						r.fieldIndex = 0
-						r.recordIndex++
 						return true
 					}
 					return false
 				case rStateInQuotedField:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					// TODO: technically "skippable"
 
@@ -683,12 +683,12 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					if di != 0 {
 						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
@@ -701,13 +701,13 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
+						{{.IncRecordIndex}}
 						r.fieldIndex = 0
-						r.recordIndex++
 						return true
 					}
 					return false
 				case rStateStartOfField, rStateInField:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					{{.RecBufAppend0}}r.rawBuf[r.rawIndex:idx]...{{.RecBufAppend1}}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -716,13 +716,13 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
+						{{.IncRecordIndex}}
 						r.fieldIndex = 0
-						r.recordIndex++
 						return true
 					}
 					return false
 				case rStateInLineComment:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					// could zero out bytes immediately
 					delta := di + int(size)

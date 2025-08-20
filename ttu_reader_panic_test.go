@@ -8,6 +8,8 @@ import (
 )
 
 func TestUnitReaderPanicOnValidate(t *testing.T) {
+	t.Parallel()
+
 	//
 	// when the config's record separator is in a corrupted / non possible value
 	//
@@ -47,6 +49,8 @@ func TestUnitReaderPanicOnValidate(t *testing.T) {
 }
 
 func TestUnitReaderPanicOnHandleEOF(t *testing.T) {
+	t.Parallel()
+
 	//
 	// when reader is in a corrupted unknown state
 	//

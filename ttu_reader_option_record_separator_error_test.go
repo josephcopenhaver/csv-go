@@ -8,6 +8,7 @@ import (
 )
 
 func TestUnitReaderRecordSeparatorErrorPaths(t *testing.T) {
+	t.Parallel()
 
 	type TC struct {
 		n   string

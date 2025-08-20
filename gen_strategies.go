@@ -646,7 +646,7 @@ func (r *fastReader) prepareRow() bool {
 
 				switch r.state {
 				case rStateStartOfDoc:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
 						if (r.bitFlags & rFlagDropBOM) != 0 {
@@ -664,7 +664,7 @@ func (r *fastReader) prepareRow() bool {
 					r.state = rStateStartOfRecord // might be removable, but leaving because could leave this context with the state set here
 					fallthrough
 				case rStateStartOfRecord:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx]...)
 					r.byteIndex += uint64(di) + uint64(size)
@@ -673,13 +673,13 @@ func (r *fastReader) prepareRow() bool {
 
 					// r.state = ... (unchanged)
 					if r.checkNumFields(nil) {
-						r.fieldIndex = 0
 						r.recordIndex++
+						r.fieldIndex = 0
 						return true
 					}
 					return false
 				case rStateInQuotedField:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					// TODO: technically "skippable"
 
@@ -689,12 +689,12 @@ func (r *fastReader) prepareRow() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					if di != 0 {
 						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
@@ -707,13 +707,13 @@ func (r *fastReader) prepareRow() bool {
 
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
-						r.fieldIndex = 0
 						r.recordIndex++
+						r.fieldIndex = 0
 						return true
 					}
 					return false
 				case rStateStartOfField, rStateInField:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					r.recordBuf = append(r.recordBuf, r.rawBuf[r.rawIndex:idx]...)
 					r.byteIndex += uint64(di) + uint64(size)
@@ -722,13 +722,13 @@ func (r *fastReader) prepareRow() bool {
 
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
-						r.fieldIndex = 0
 						r.recordIndex++
+						r.fieldIndex = 0
 						return true
 					}
 					return false
 				case rStateInLineComment:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					// could zero out bytes immediately
 					delta := di + int(size)
@@ -1686,7 +1686,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 				switch r.state {
 				case rStateStartOfDoc:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					if bc, bomSize := utf8.DecodeRune(r.rawBuf[r.rawIndex:]); bc != utf8.RuneError && isByteOrderMarker(uint32(bc), bomSize) {
 						if (r.bitFlags & rFlagDropBOM) != 0 {
@@ -1704,7 +1704,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					r.state = rStateStartOfRecord // might be removable, but leaving because could leave this context with the state set here
 					fallthrough
 				case rStateStartOfRecord:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]...) {
 						return false
@@ -1715,13 +1715,17 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 					// r.state = ... (unchanged)
 					if r.checkNumFields(nil) {
+						if r.incRecordIndex() {
+							r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
+							return false
+						}
+
 						r.fieldIndex = 0
-						r.recordIndex++
 						return true
 					}
 					return false
 				case rStateInQuotedField:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					// TODO: technically "skippable"
 
@@ -1733,12 +1737,12 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedFieldAfterEscape:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					r.streamParsingErr(ErrInvalidEscSeqInQuotedField)
 					return false
 				case rStateEndOfQuotedField:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					if di != 0 {
 						r.streamParsingErr(ErrInvalidQuotedFieldEnding)
@@ -1751,13 +1755,17 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
+						if r.incRecordIndex() {
+							r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
+							return false
+						}
+
 						r.fieldIndex = 0
-						r.recordIndex++
 						return true
 					}
 					return false
 				case rStateStartOfField, rStateInField:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]...) {
 						return false
@@ -1768,13 +1776,17 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
+						if r.incRecordIndex() {
+							r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
+							return false
+						}
+
 						r.fieldIndex = 0
-						r.recordIndex++
 						return true
 					}
 					return false
 				case rStateInLineComment:
-					// HANDLING: CRLF
+					// HANDLING: record separator
 
 					// could zero out bytes immediately
 					delta := di + int(size)

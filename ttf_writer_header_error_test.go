@@ -8,6 +8,8 @@ import (
 )
 
 func TestFunctionalWriterHeaderErrorPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalWriterTestCase{
 		{
 			when: "zero header length",

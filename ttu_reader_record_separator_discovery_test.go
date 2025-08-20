@@ -11,6 +11,8 @@ import (
 )
 
 func TestUnitReaderDiscoverRecordSeparator(t *testing.T) {
+	t.Parallel()
+
 	tcs := [][]string{
 		{
 			"start of record",

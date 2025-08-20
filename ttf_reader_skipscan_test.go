@@ -8,6 +8,7 @@ import (
 )
 
 func TestFunctionalReaderSkipscanPaths(t *testing.T) {
+	t.Parallel()
 
 	tcs := []functionalReaderTestCase{
 		{

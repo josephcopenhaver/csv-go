@@ -9,6 +9,7 @@ import (
 )
 
 func TestFunctionalReaderInitializationPaths(t *testing.T) {
+	t.Parallel()
 
 	t.Run("when creating a csv reader and using the same value for quote and escape", func(t *testing.T) {
 		t.Run("should not error", func(t *testing.T) {
@@ -368,6 +369,19 @@ func TestFunctionalReaderInitializationPaths(t *testing.T) {
 
 			assert.Equal(t, "\x00", f1)
 			assert.Equal(t, "\x00", f2)
+		})
+	})
+
+	t.Run("when creating a csv reader with MaxField=2 NumField=1", func(t *testing.T) {
+		t.Run("should not error on init", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().MaxFields(2),
+				csv.ReaderOpts().NumFields(1),
+			)
+			assert.Nil(t, err)
+			assert.NotNil(t, cr)
+			assert.Nil(t, cr.Row())
 		})
 	})
 }

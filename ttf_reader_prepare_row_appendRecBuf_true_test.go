@@ -8,6 +8,8 @@ import (
 )
 
 func TestFunctionalReaderPrepareRowAppendRecBufRespTruePaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalReaderTestCase{
 		{
 			when: "MaxRecordBytes=1 first record column exceeds max record bytes",

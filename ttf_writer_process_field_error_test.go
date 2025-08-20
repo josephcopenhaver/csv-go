@@ -7,6 +7,8 @@ import (
 )
 
 func TestFunctionalWriterProcessFieldErrorPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalWriterTestCase{
 		{
 			when: "field contains quote followed by non-UTF8 sequence",

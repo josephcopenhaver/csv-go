@@ -11,6 +11,7 @@ import (
 )
 
 func TestFunctionalReaderEOFPaths(t *testing.T) {
+	t.Parallel()
 
 	type TC struct {
 		Name        string

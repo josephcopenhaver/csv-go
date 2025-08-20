@@ -106,21 +106,24 @@ func main() {
 			RecBufAppend1          string
 			DeltaCommentBytesCheck string
 			CommentLinesCheck      string
+			IncRecordIndex         string
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
 			{
-				Struct:        "fastReader",
-				RecBufAppend0: "r.recordBuf = append(r.recordBuf, ",
-				RecBufAppend1: ")",
+				Struct:         "fastReader",
+				RecBufAppend0:  "r.recordBuf = append(r.recordBuf, ",
+				RecBufAppend1:  ")",
+				IncRecordIndex: "r.recordIndex++",
 			},
 			{
 				Struct:                 "secOpReader",
 				NameSuffix:             "_memclearOn",
 				RecBufAppend0:          "if r.appendRecBuf(",
 				RecBufAppend1:          ") {return false}",
+				IncRecordIndex:         "if r.incRecordIndex() {\nr.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)\nreturn false}\n",
 				DeltaCommentBytesCheck: "if r.outOfCommentBytes(delta) {return false}",
 				CommentLinesCheck:      "if r.outOfCommentLines() {return false}",
 			},

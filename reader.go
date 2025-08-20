@@ -563,18 +563,16 @@ func (ReaderOptions) ReaderBuffer(v []byte) ReaderOption {
 	}
 }
 
-// TODO: implement MaxFields+MaxRecords usage and tests
-
-// // MaxFields is a security option that limits the number of fields allowed to be detected automatically before a SecOp error is thrown
-// //
-// // using this option at the same time as the NumFields option will lead to an error on reader creation
-// // since using both is counter intuitive in general
-// func (ReaderOptions) MaxFields(v int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxFields = v
-// 		cfg.maxFieldsSet = true
-// 	}
-// }
+// MaxFields is a security option that limits the number of fields allowed to be detected automatically before a SecOp error is thrown
+//
+// using this option at the same time as the NumFields option will lead to an error on reader creation
+// since using both is counter intuitive in general
+func (ReaderOptions) MaxFields(v int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxFields = v
+		cfg.maxFieldsSet = true
+	}
+}
 
 // MaxRecordBytes is a security option that limits the number of bytes allowed to be detected in a record before a SecOp error is thrown
 func (ReaderOptions) MaxRecordBytes(n int) ReaderOption {
@@ -584,13 +582,13 @@ func (ReaderOptions) MaxRecordBytes(n int) ReaderOption {
 	}
 }
 
-// // MaxRecords is a security option that limits the number of records allowed in a stream before a SecOp error is thrown
-// func (ReaderOptions) MaxRecords(n int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxRecords = n
-// 		cfg.maxRecordsSet = true
-// 	}
-// }
+// MaxRecords is a security option that limits the number of records allowed in a stream before a SecOp error is thrown
+func (ReaderOptions) MaxRecords(n uint64) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxRecords = n
+		cfg.maxRecordsSet = true
+	}
+}
 
 // MaxComments is a security option that limits the number of comment lines allowed in a stream before a SecOp error is thrown
 func (ReaderOptions) MaxComments(n int) ReaderOption {
@@ -693,7 +691,7 @@ type rCfg struct {
 	// security attributes
 	maxFields       int
 	maxRecordBytes  int
-	maxRecords      int
+	maxRecords      uint64
 	maxCommentBytes int
 	maxComments     int
 
@@ -930,10 +928,6 @@ func (cfg *rCfg) validate() error {
 		}
 	}
 
-	if cfg.maxFieldsSet && cfg.numFieldsSet {
-		return errors.New("MaxFields and NumFields options cannot be used at the same time")
-	}
-
 	if cfg.numFieldsSet && cfg.numFields <= 0 {
 		return errors.New("num fields must be greater than zero or not specified")
 	}
@@ -962,8 +956,8 @@ func (cfg *rCfg) validate() error {
 		return errors.New("max record bytes cannot be less than or equal to zero")
 	}
 
-	if cfg.maxRecordsSet && cfg.maxRecords <= 0 {
-		return errors.New("max records cannot be less than or equal to zero")
+	if cfg.maxRecordsSet && cfg.maxRecords == 0 {
+		return errors.New("max records cannot be equal to zero")
 	}
 
 	if cfg.maxCommentsSet && cfg.maxComments < 0 {
@@ -1507,7 +1501,9 @@ func isByteOrderMarker(r uint32, size int) bool {
 }
 
 func (r *fastReader) handleEOF() bool {
+	//
 	// r.done is always true when this function is called
+	//
 
 	// check if we're in a terminal state otherwise error
 	// there is no new character to process
@@ -1559,6 +1555,7 @@ type secOpReader struct {
 	close             func() error
 	prepareRow        func() bool
 	appendRecBuf      func(...byte) bool
+	incRecordIndex    func() bool
 	outOfCommentBytes func(int) bool
 	outOfCommentLines func() bool
 }
@@ -1599,6 +1596,50 @@ func (r *secOpReader) zeroRecordBuffers() {
 	}
 
 	r.resetRecordBuffers()
+}
+
+func (r *secOpReader) defaultIncRecordIndex() bool {
+	r.recordIndex++
+
+	return false
+}
+
+func (r *secOpReader) incRecordIndexWithMax(max uint64) func() bool {
+	return func() bool {
+		//
+		// detects when a record separator would exceed the allowed record count
+		//
+
+		// if it equals the limit then we could or could not be about to reach an error
+		//
+		// all depends on if another character would be added to the record buf after
+		// this statement is reached
+
+		if n := r.recordIndex + 1; n != 0 && n <= max {
+			r.recordIndex = n
+
+			if n == max {
+				// note that any new call to append record bytes would start building a record violating this limit
+				//
+				// so these handler are utilized to throw an error accordingly
+
+				// intercept trying to push records to the record buffer
+				r.appendRecBuf = r.appendRecBufNotAllowed
+
+				// intercept trying to push a record to the caller which may not have data bytes
+				//
+				// should be called even on 1 field files and files that end without a terminal record separator
+				// TODO: test this
+				r.checkNumFields = r.checkNumFieldsNotAllowed
+			}
+
+			return false
+		}
+
+		r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
+
+		return true
+	}
 }
 
 func (r *secOpReader) defaultAppendRecBuf(b ...byte) bool {
@@ -1679,6 +1720,11 @@ func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func(...byte) bool {
 	}
 }
 
+func (r *secOpReader) appendRecBufNotAllowed(p ...byte) bool {
+	r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
+	return true
+}
+
 func (r *secOpReader) scan() bool {
 
 	r.resetRecordBuffers()
@@ -1727,6 +1773,11 @@ func (sr *secOpReader) newOutOfCommentLines(remainingComments int) func() bool {
 	}
 }
 
+func (r *secOpReader) checkNumFieldsNotAllowed(_ error) bool {
+	r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
+	return false
+}
+
 type reader any
 
 func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string, bitFlags rFlag) (*Reader, reader) {
@@ -1753,7 +1804,7 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 
 	var sr *secOpReader
 
-	if cfg.clearMemoryAfterFree || cfg.maxRecordBytesSet || cfg.maxCommentBytesSet || cfg.maxCommentsSet {
+	if cfg.clearMemoryAfterFree || cfg.maxRecordBytesSet || cfg.maxRecordsSet || cfg.maxCommentBytesSet || cfg.maxCommentsSet || cfg.maxFieldsSet {
 		sr = &secOpReader{fastReader: fr}
 
 		if cfg.clearMemoryAfterFree {
@@ -1787,6 +1838,20 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 		} else {
 			sr.outOfCommentLines = sr.newOutOfCommentLines(cfg.maxComments)
 		}
+
+		if !cfg.maxRecordsSet {
+			sr.incRecordIndex = sr.defaultIncRecordIndex
+		} else {
+			sr.incRecordIndex = sr.incRecordIndexWithMax(cfg.maxRecords)
+		}
+
+		// TODO: implement
+
+		// if !cfg.maxFieldsSet {
+
+		// } else {
+
+		// }
 
 		r.scan = sr.scan
 	} else {
