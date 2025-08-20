@@ -1720,7 +1720,7 @@ func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func(...byte) bool {
 	}
 }
 
-func (r *secOpReader) appendRecBufNotAllowed(p ...byte) bool {
+func (r *secOpReader) appendRecBufNotAllowed(_ ...byte) bool {
 	r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
 	return true
 }

@@ -30,38 +30,7 @@ func (r *fastReader) prepareRow() bool {
 			r.rawIndex = 0
 			r.rawNumHiddenBytes = 0
 
-			if (r.bitFlags & stEOF) != 0 {
-				if len(r.rawBuf) == 0 {
-					r.setDone()
-
-					if r.readErr != nil {
-						r.ioErr(r.readErr)
-						return false
-					}
-
-					// if CRLF is the record sep, no error has been thrown before now
-					// and we've reached EOF with the last byte being a CR
-					//
-					// It's unsafe to assume that the field has ended correctly and that
-					// the file has been generated reliably.
-					//
-					// In such cases where strict RFC compliance is enabled and CRLF is supported
-					// this character along with LF should be encased in quotes and an error should
-					// be raised.
-					//
-					// An argument could be made that this should be allowed when rFlagErrOnNLInUF
-					// is off that this should also be off, but I will not be making that decision
-					// without a stronger opinion. A pull request with strong justification or a new
-					// option would be welcome here should you have a strong opinion.
-					if lastProcessedByte == asciiCarriageReturn && r.recordSepLen == 2 {
-						r.parsingErr(ErrUnsafeCRFileEnd)
-						return false
-					}
-
-					return r.handleEOF()
-				}
-			} else {
-
+			if (r.bitFlags & stEOF) == 0 {
 				for {
 					n, err := r.reader.Read(r.rawBuf[len(r.rawBuf):cap(r.rawBuf)])
 					n += len(r.rawBuf)
@@ -133,6 +102,35 @@ func (r *fastReader) prepareRow() bool {
 						break
 					}
 				}
+			} else if len(r.rawBuf) == 0 {
+
+				r.setDone()
+
+				if r.readErr != nil {
+					r.ioErr(r.readErr)
+					return false
+				}
+
+				// if CRLF is the record sep, no error has been thrown before now
+				// and we've reached EOF with the last byte being a CR
+				//
+				// It's unsafe to assume that the field has ended correctly and that
+				// the file has been generated reliably.
+				//
+				// In such cases where strict RFC compliance is enabled and CRLF is supported
+				// this character along with LF should be encased in quotes and an error should
+				// be raised.
+				//
+				// An argument could be made that this should be allowed when rFlagErrOnNLInUF
+				// is off that this should also be off, but I will not be making that decision
+				// without a stronger opinion. A pull request with strong justification or a new
+				// option would be welcome here should you have a strong opinion.
+				if lastProcessedByte == asciiCarriageReturn && r.recordSepLen == 2 {
+					r.parsingErr(ErrUnsafeCRFileEnd)
+					return false
+				}
+
+				return r.handleEOF()
 			}
 		}
 
@@ -1018,38 +1016,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 			r.rawIndex = 0
 			r.rawNumHiddenBytes = 0
 
-			if (r.bitFlags & stEOF) != 0 {
-				if len(r.rawBuf) == 0 {
-					r.setDone()
-
-					if r.readErr != nil {
-						r.ioErr(r.readErr)
-						return false
-					}
-
-					// if CRLF is the record sep, no error has been thrown before now
-					// and we've reached EOF with the last byte being a CR
-					//
-					// It's unsafe to assume that the field has ended correctly and that
-					// the file has been generated reliably.
-					//
-					// In such cases where strict RFC compliance is enabled and CRLF is supported
-					// this character along with LF should be encased in quotes and an error should
-					// be raised.
-					//
-					// An argument could be made that this should be allowed when rFlagErrOnNLInUF
-					// is off that this should also be off, but I will not be making that decision
-					// without a stronger opinion. A pull request with strong justification or a new
-					// option would be welcome here should you have a strong opinion.
-					if lastProcessedByte == asciiCarriageReturn && r.recordSepLen == 2 {
-						r.parsingErr(ErrUnsafeCRFileEnd)
-						return false
-					}
-
-					return r.handleEOF()
-				}
-			} else {
-
+			if (r.bitFlags & stEOF) == 0 {
 				for {
 					n, err := r.reader.Read(r.rawBuf[len(r.rawBuf):cap(r.rawBuf)])
 					n += len(r.rawBuf)
@@ -1121,6 +1088,35 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 						break
 					}
 				}
+			} else if len(r.rawBuf) == 0 {
+
+				r.setDone()
+
+				if r.readErr != nil {
+					r.ioErr(r.readErr)
+					return false
+				}
+
+				// if CRLF is the record sep, no error has been thrown before now
+				// and we've reached EOF with the last byte being a CR
+				//
+				// It's unsafe to assume that the field has ended correctly and that
+				// the file has been generated reliably.
+				//
+				// In such cases where strict RFC compliance is enabled and CRLF is supported
+				// this character along with LF should be encased in quotes and an error should
+				// be raised.
+				//
+				// An argument could be made that this should be allowed when rFlagErrOnNLInUF
+				// is off that this should also be off, but I will not be making that decision
+				// without a stronger opinion. A pull request with strong justification or a new
+				// option would be welcome here should you have a strong opinion.
+				if lastProcessedByte == asciiCarriageReturn && r.recordSepLen == 2 {
+					r.parsingErr(ErrUnsafeCRFileEnd)
+					return false
+				}
+
+				return r.handleEOF()
 			}
 		}
 
