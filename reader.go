@@ -121,7 +121,7 @@ var (
 type posTracedErr struct {
 	errType                error
 	err                    error
-	byteIndex, recordIndex uint64
+	byteIndex, recordIndex uint64 // TODO: refactor into uint instead of uint64
 	fieldIndex             uint
 }
 
@@ -567,7 +567,7 @@ func (ReaderOptions) ReaderBuffer(v []byte) ReaderOption {
 //
 // using this option at the same time as the NumFields option will lead to an error on reader creation
 // since using both is counter intuitive in general
-func (ReaderOptions) MaxFields(v int) ReaderOption {
+func (ReaderOptions) MaxFields(v uint) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.maxFields = v
 		cfg.maxFieldsSet = true
@@ -612,14 +612,19 @@ func ReaderOpts() ReaderOptions {
 	return ReaderOptions{}
 }
 
-type Reader struct {
+// readerStrat will never contain exported fields of any kind
+//
+// since closures and hook updates are common using a struct
+// with exports that satisfy a returned interface is the most
+// sane and supportable option
+type readerStrat struct {
 	scan  func() bool
 	row   func() []string
 	close func() error
 	err   func() error
 }
 
-func (r *Reader) Scan() bool {
+func (r *readerStrat) Scan() bool {
 	return r.scan()
 }
 
@@ -632,7 +637,7 @@ func (r *Reader) Scan() bool {
 // If the reader is configured with BorrowRow(true) then the resulting slice and
 // field strings are only valid to use up until the next call to Scan and
 // should not be saved to persistent memory.
-func (r *Reader) Row() []string {
+func (r *readerStrat) Row() []string {
 	return r.row()
 }
 
@@ -647,11 +652,11 @@ func (r *Reader) Row() []string {
 // checks they will be implemented here.
 //
 // It will never attempt to close the underlying reader.
-func (r *Reader) Close() error {
+func (r *readerStrat) Close() error {
 	return r.close()
 }
 
-func (r *Reader) Err() error {
+func (r *readerStrat) Err() error {
 	return r.err()
 }
 
@@ -667,11 +672,11 @@ func (r *Reader) Err() error {
 //
 // This is just a syntactic sugar method to work with range statements
 // in go1.23 and later.
-func (r *Reader) IntoIter() iter.Seq[[]string] {
+func (r *readerStrat) IntoIter() iter.Seq[[]string] {
 	return r.iter
 }
 
-func (r *Reader) iter(yield func([]string) bool) {
+func (r *readerStrat) iter(yield func([]string) bool) {
 	for r.scan() {
 		if !yield(r.row()) {
 			return
@@ -689,7 +694,7 @@ type rCfg struct {
 	numFields  int
 
 	// security attributes
-	maxFields       int
+	maxFields       uint
 	maxRecordBytes  int
 	maxRecords      uint64
 	maxCommentBytes int
@@ -734,9 +739,10 @@ type rCfg struct {
 }
 
 type fastReader struct {
-	controlRunes string
-	rawBuf       []byte
-	rawIndex     int
+	checkNumFieldsMiddlewares [](func(func(error) bool) func(error) bool)
+	controlRunes              string
+	rawBuf                    []byte
+	rawIndex                  int
 	//
 	readErr           error
 	scanErr           error
@@ -756,7 +762,7 @@ type fastReader struct {
 	escape            rune
 	fieldSeparator    rune
 	comment           rune
-	pr                *Reader
+	pr                *readerStrat
 	state             rState
 	rawNumHiddenBytes uint8
 	// afterStartOfRecords is a flag set to communicate when the first records have been observed and potentially emitted
@@ -942,7 +948,7 @@ func (cfg *rCfg) validate() error {
 		}
 
 		if cfg.numFieldsSet || cfg.numFields > 0 {
-			if cfg.numFields > cfg.maxFields {
+			if uint(cfg.numFields) > cfg.maxFields {
 				return errors.New("max fields should not be specified or should be larger: max fields was specified with a value less than the specified number of fields per record")
 			}
 
@@ -972,12 +978,12 @@ func (cfg *rCfg) validate() error {
 }
 
 // NewReader creates a new instance of a CSV reader which is not safe for concurrent reads.
-func NewReader(options ...ReaderOption) (*Reader, error) {
+func NewReader(options ...ReaderOption) (Reader, error) {
 	r, _, err := internalNewReader(options...)
 	return r, err
 }
 
-func internalNewReader(options ...ReaderOption) (*Reader, reader, error) {
+func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) {
 
 	cfg := rCfg{
 		numFields:                   -1,
@@ -1194,6 +1200,37 @@ func (r *fastReader) streamParsingErr(err error) {
 	r.parsingErr(err)
 }
 
+func (r *secOpReader) checkNumFieldsMaxMiddleware(max uint) func(next func(error) bool) func(error) bool {
+	return func(next func(error) bool) func(error) bool {
+		return func(errTrailer error) bool {
+			if n := r.fieldIndex + 1; n == 0 || n <= max {
+				return next(errTrailer)
+			}
+
+			r.setDone()
+			if r.scanErr == nil {
+				r.secOpStreamParsingErr(ErrSecOpFieldCountAboveMax)
+				if errTrailer != nil {
+					r.scanErr = errors.Join(r.scanErr, errTrailer)
+				}
+			}
+
+			return false
+		}
+	}
+}
+
+func (r *fastReader) setCheckNumFields(f func(error) bool) {
+	h := f
+	mws := r.checkNumFieldsMiddlewares
+
+	for i := len(mws) - 1; i >= 0; i-- {
+		h = mws[i](h)
+	}
+
+	r.checkNumFields = h
+}
+
 // secOpStreamParsingErr performs a side effect of increasing the byteIndex of state
 //
 // therefore it should never be called more than once in an invocation to Scan
@@ -1392,7 +1429,7 @@ func (r *fastReader) defaultCheckNumFields(errTrailer error) bool {
 func (r *fastReader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool {
 	if r.defaultCheckNumFields(errTrailer) {
 		r.bitFlags |= stAfterSOR
-		r.checkNumFields = r.defaultCheckNumFields
+		r.setCheckNumFields(r.defaultCheckNumFields)
 		return true
 	}
 
@@ -1403,7 +1440,7 @@ func (r *fastReader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) b
 func (r *fastReader) checkNumFieldsWithDiscovery(errTrailer error) bool {
 	r.numFields = len(r.fieldLengths)
 	r.bitFlags |= stAfterSOR
-	r.checkNumFields = r.defaultCheckNumFields
+	r.setCheckNumFields(r.defaultCheckNumFields)
 	return true
 }
 
@@ -1630,6 +1667,10 @@ func (r *secOpReader) incRecordIndexWithMax(max uint64) func() bool {
 				//
 				// should be called even on 1 field files and files that end without a terminal record separator
 				// TODO: test this
+
+				// note that this intentionally skips the middlewares as we want any call to it to error
+				// middlewares can and should be short circuited in this case
+				// otherwise setCheckNumFields would be used to alter the function pointer value
 				r.checkNumFields = r.checkNumFieldsNotAllowed
 			}
 
@@ -1778,11 +1819,19 @@ func (r *secOpReader) checkNumFieldsNotAllowed(_ error) bool {
 	return false
 }
 
-type reader any
+type Reader interface {
+	Close() error
+	Err() error
+	IntoIter() iter.Seq[[]string]
+	Row() []string
+	Scan() bool
+}
 
-func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string, bitFlags rFlag) (*Reader, reader) {
+type internalReader any
 
-	r := &Reader{}
+func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string, bitFlags rFlag) (Reader, internalReader) {
+
+	r := &readerStrat{}
 
 	fr := &fastReader{
 		controlRunes:   controlRunes,
@@ -1845,14 +1894,6 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 			sr.incRecordIndex = sr.incRecordIndexWithMax(cfg.maxRecords)
 		}
 
-		// TODO: implement
-
-		// if !cfg.maxFieldsSet {
-
-		// } else {
-
-		// }
-
 		r.scan = sr.scan
 	} else {
 		r.scan = fr.scan
@@ -1872,16 +1913,22 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 		fr.state = rStateStartOfRecord
 	}
 
+	if cfg.maxFieldsSet {
+		fr.checkNumFieldsMiddlewares = [](func(func(error) bool) func(error) bool){
+			sr.checkNumFieldsMaxMiddleware(cfg.maxFields),
+		}
+	}
+
 	if fr.numFields == -1 {
-		fr.checkNumFields = fr.checkNumFieldsWithDiscovery
+		fr.setCheckNumFields(fr.checkNumFieldsWithDiscovery)
 	} else {
 		if fr.numFields > 0 {
 			fr.fieldLengths = make([]int, 0, fr.numFields)
 		}
 		if (fr.bitFlags & rFlagComment) != 0 {
-			fr.checkNumFields = fr.checkNumFieldsWithStartOfRecordTracking
+			fr.setCheckNumFields(fr.checkNumFieldsWithStartOfRecordTracking)
 		} else {
-			fr.checkNumFields = fr.defaultCheckNumFields
+			fr.setCheckNumFields(fr.defaultCheckNumFields)
 		}
 	}
 
@@ -1971,21 +2018,15 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 
 	if fr.headers == nil && !cfg.errOnNoRows {
 		if sr != nil {
-			*r = Reader{
-				scan:  r.scan,
-				row:   r.row,
-				close: sr.close,
-				err:   sr.err,
-			}
+			r.close = sr.close
+			r.err = sr.err
+
 			return r, sr
 		}
 
-		*r = Reader{
-			scan:  r.scan,
-			row:   r.row,
-			close: fr.close,
-			err:   fr.err,
-		}
+		r.close = fr.close
+		r.err = fr.err
+
 		return r, fr
 	}
 
@@ -2009,20 +2050,14 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 	}
 
 	if sr != nil {
-		*r = Reader{
-			scan:  r.scan,
-			row:   r.row,
-			close: sr.close,
-			err:   sr.err,
-		}
+		r.close = sr.close
+		r.err = sr.err
+
 		return r, sr
 	}
 
-	*r = Reader{
-		scan:  r.scan,
-		row:   r.row,
-		close: fr.close,
-		err:   fr.err,
-	}
+	r.close = fr.close
+	r.err = fr.err
+
 	return r, fr
 }
