@@ -123,18 +123,10 @@ func main() {
 				NameSuffix:             "_memclearOn",
 				RecBufAppend0:          "if r.appendRecBuf(",
 				RecBufAppend1:          ") {return false}",
-				IncRecordIndex:         "if r.incRecordIndex() {\nr.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)\nreturn false}\n",
+				IncRecordIndex:         "r.incRecordIndex()",
 				DeltaCommentBytesCheck: "if r.outOfCommentBytes(delta) {return false}",
 				CommentLinesCheck:      "if r.outOfCommentLines() {return false}",
 			},
-			// {
-			// 	Struct:                 "secOpReader",
-			// 	NameSuffix:             "_memclearOff",
-			// 	RecBufAppend0:          "r.recordBuf = append(r.recordBuf, ",
-			// 	RecBufAppend1:          ")",
-			// 	DeltaCommentBytesCheck: "if r.outOfCommentBytes(delta) {return false}",
-			// 	CommentLinesCheck:      "if r.outOfCommentLines() {return false}",
-			// },
 		})
 	}
 

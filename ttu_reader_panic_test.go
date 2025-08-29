@@ -86,3 +86,43 @@ func TestUnitReaderPanicOnHandleEOF(t *testing.T) {
 
 	is.Equal(r, panicUnknownReaderStateDuringEOF)
 }
+
+func TestUnitSecOpReaderPanicOnHandleEOF(t *testing.T) {
+	t.Parallel()
+
+	//
+	// when secOpReader's recordIndex is in a corrupted state
+	//
+	// a panic should occur if incRecordIndexWithMax is called
+	//
+
+	is := assert.New(t)
+
+	cr, crv, err := internalNewReader(
+		ReaderOpts().Reader(strings.NewReader("")),
+		ReaderOpts().MaxRecords(1),
+	)
+	is.Nil(err)
+	is.NotNil(cr)
+	is.NotNil(crv)
+
+	cri, ok := crv.(*secOpReader)
+	if !ok {
+		is.Fail("expected fastReader type, got %T", cr)
+	}
+
+	cri.recordIndex = 1
+
+	handlePanic := func() (r any) {
+		defer func() {
+			r = recover()
+		}()
+		cri.incRecordIndex()
+		return nil
+	}
+
+	r := handlePanic()
+	is.NotNil(r)
+
+	is.Equal(r, panicNextRecordIndexExceedsMax)
+}

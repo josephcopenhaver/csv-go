@@ -80,6 +80,7 @@ const (
 const (
 	panicRecordSepLen                = "invalid record separator length"
 	panicUnknownReaderStateDuringEOF = "reader in unknown state when EOF encountered"
+	panicNextRecordIndexExceedsMax   = "next record index exceeded max"
 )
 
 var (
@@ -1592,7 +1593,7 @@ type secOpReader struct {
 	close             func() error
 	prepareRow        func() bool
 	appendRecBuf      func(...byte) bool
-	incRecordIndex    func() bool
+	incRecordIndex    func()
 	outOfCommentBytes func(int) bool
 	outOfCommentLines func() bool
 }
@@ -1635,14 +1636,12 @@ func (r *secOpReader) zeroRecordBuffers() {
 	r.resetRecordBuffers()
 }
 
-func (r *secOpReader) defaultIncRecordIndex() bool {
+func (r *secOpReader) defaultIncRecordIndex() {
 	r.recordIndex++
-
-	return false
 }
 
-func (r *secOpReader) incRecordIndexWithMax(max uint64) func() bool {
-	return func() bool {
+func (r *secOpReader) incRecordIndexWithMax(max uint64) func() {
+	return func() {
 		//
 		// detects when a record separator would exceed the allowed record count
 		//
@@ -1655,31 +1654,31 @@ func (r *secOpReader) incRecordIndexWithMax(max uint64) func() bool {
 		if n := r.recordIndex + 1; n != 0 && n <= max {
 			r.recordIndex = n
 
-			if n == max {
-				// note that any new call to append record bytes would start building a record violating this limit
-				//
-				// so these handler are utilized to throw an error accordingly
-
-				// intercept trying to push records to the record buffer
-				r.appendRecBuf = r.appendRecBufNotAllowed
-
-				// intercept trying to push a record to the caller which may not have data bytes
-				//
-				// should be called even on 1 field files and files that end without a terminal record separator
-				// TODO: test this
-
-				// note that this intentionally skips the middlewares as we want any call to it to error
-				// middlewares can and should be short circuited in this case
-				// otherwise setCheckNumFields would be used to alter the function pointer value
-				r.checkNumFields = r.checkNumFieldsNotAllowed
+			if n != max {
+				return
 			}
 
-			return false
+			// note that any new call to append record bytes would start building a record violating this limit
+			//
+			// so these handler are utilized to throw an error accordingly
+
+			// intercept trying to push record data to the record buffer
+			r.appendRecBuf = r.appendRecBufNotAllowed
+
+			// intercept trying to push a record to the caller which may not have data bytes
+			//
+			// should be called even on 1 field files and files that end without a terminal record separator
+			// TODO: test this
+
+			// note that this intentionally skips the middlewares as we want any call to it to error
+			// middlewares can and should be short circuited in this case
+			// otherwise setCheckNumFields would be used to alter the function pointer value
+			r.checkNumFields = r.checkNumFieldsNotAllowed
+
+			return
 		}
 
-		r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
-
-		return true
+		panic(panicNextRecordIndexExceedsMax)
 	}
 }
 

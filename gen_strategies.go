@@ -1711,11 +1711,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 					// r.state = ... (unchanged)
 					if r.checkNumFields(nil) {
-						if r.incRecordIndex() {
-							r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
-							return false
-						}
-
+						r.incRecordIndex()
 						r.fieldIndex = 0
 						return true
 					}
@@ -1751,11 +1747,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
-						if r.incRecordIndex() {
-							r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
-							return false
-						}
-
+						r.incRecordIndex()
 						r.fieldIndex = 0
 						return true
 					}
@@ -1772,11 +1764,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
-						if r.incRecordIndex() {
-							r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
-							return false
-						}
-
+						r.incRecordIndex()
 						r.fieldIndex = 0
 						return true
 					}
