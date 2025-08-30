@@ -309,12 +309,12 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 
 		n = utf8.EncodeRune(escapedEscape[:], cfg.escape)
 		copy(escapedEscape[n:], escapedEscape[:n])
-		n <<= 1
+		n *= 2
 		escapedEscapeByteLen = int8(n)
 	} else {
 		n := utf8.EncodeRune(escapedQuote[:], cfg.quote)
 		copy(escapedQuote[n:], escapedQuote[:n])
-		n <<= 1
+		n *= 2
 		escapedQuoteByteLen = int8(n)
 	}
 
@@ -329,7 +329,7 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	{
 		n := utf8.EncodeRune(twoQuotes[:], cfg.quote)
 		copy(twoQuotes[n:], twoQuotes[:n])
-		n <<= 1
+		n *= 2
 		twoQuotesByteLen = int8(n)
 	}
 

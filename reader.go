@@ -77,11 +77,35 @@ const (
 	rStateInLineComment
 )
 
+// panicErr ensures the source of a panic comes from this module and not some other one
+// when values are checked in white-box unit tests
+//
+// there is now no chance of confusion
+type panicErr uint8
+
 const (
-	panicRecordSepLen                = "invalid record separator length"
-	panicUnknownReaderStateDuringEOF = "reader in unknown state when EOF encountered"
-	panicNextRecordIndexExceedsMax   = "next record index exceeded max"
+	_ panicErr = iota
+
+	panicRecordSepLen                        // "invalid record separator length"
+	panicUnknownReaderStateDuringEOF         // "reader in unknown state when EOF encountered"
+	panicMissedHandlingMaxRecordIndex        // "missed handling record index at max value"
+	panicMissedHandlingMaxSecOpFieldIndex    // "missed handling field index at max SecOp value"
+	panicMissedHandlingMaxExpectedFieldIndex // "missed handling field index at expected max configured value"
 )
+
+func (p panicErr) String() string {
+	return []string{
+		"invalid record separator length",                   // panicRecordSepLen
+		"reader in unknown state when EOF encountered",      // panicUnknownReaderStateDuringEOF
+		"missed handling record index at max value",         // panicMissedHandlingMaxRecordIndex
+		"missed handling field index at SecOp max value",    // panicMissedHandlingMaxSecOpFieldIndex
+		"missed handling field index at expected max value", // panicMissedHandlingMaxExpectedFieldIndex
+	}[p-1]
+}
+
+func (p panicErr) Error() string {
+	return p.String()
+}
 
 var (
 	// classifications
@@ -1204,9 +1228,23 @@ func (r *fastReader) streamParsingErr(err error) {
 func (r *secOpReader) checkNumFieldsMaxMiddleware(max uint) func(next func(error) bool) func(error) bool {
 	return func(next func(error) bool) func(error) bool {
 		return func(errTrailer error) bool {
-			if n := r.fieldIndex + 1; n == 0 || n <= max {
+			n := r.fieldIndex + 1
+			if n == 0 || n > max {
+				// impossible
+
+				// this flat out should never happen and may be removed in the future
+				// or turned into an at-test-runtime-only check
+				//
+				// reaching this state is equivalent to there being a low-level bug
+				// or severe data corruption
+				panic(panicMissedHandlingMaxSecOpFieldIndex)
+			}
+
+			if n < max {
 				return next(errTrailer)
 			}
+
+			// otherwise we're done because the max has been exceeded
 
 			r.setDone()
 			if r.scanErr == nil {
@@ -1410,6 +1448,17 @@ func (r *fastReader) defaultClonedRow() []string {
 func (r *fastReader) defaultCheckNumFields(errTrailer error) bool {
 	if len(r.fieldLengths) == r.numFields {
 		return true
+	}
+
+	if len(r.fieldLengths) > r.numFields {
+		// impossible
+
+		// this flat out should never happen and may be removed in the future
+		// or turned into an at-test-runtime-only check
+		//
+		// reaching this state is equivalent to there being a low-level bug
+		// or severe data corruption
+		panic(panicMissedHandlingMaxExpectedFieldIndex)
 	}
 
 	// note: it's not possible for field lengths size to exceed the number of fields target
@@ -1651,34 +1700,40 @@ func (r *secOpReader) incRecordIndexWithMax(max uint64) func() {
 		// all depends on if another character would be added to the record buf after
 		// this statement is reached
 
-		if n := r.recordIndex + 1; n != 0 && n <= max {
-			r.recordIndex = n
+		n := r.recordIndex + 1
+		if n == 0 || n > max {
+			// impossible
 
-			if n != max {
-				return
-			}
-
-			// note that any new call to append record bytes would start building a record violating this limit
+			// this flat out should never happen and may be removed in the future
+			// or turned into an at-test-runtime-only check
 			//
-			// so these handler are utilized to throw an error accordingly
+			// reaching this state is equivalent to there being a low-level bug
+			// or severe data corruption
+			panic(panicMissedHandlingMaxRecordIndex)
+		}
 
-			// intercept trying to push record data to the record buffer
-			r.appendRecBuf = r.appendRecBufNotAllowed
+		r.recordIndex = n
 
-			// intercept trying to push a record to the caller which may not have data bytes
-			//
-			// should be called even on 1 field files and files that end without a terminal record separator
-			// TODO: test this
-
-			// note that this intentionally skips the middlewares as we want any call to it to error
-			// middlewares can and should be short circuited in this case
-			// otherwise setCheckNumFields would be used to alter the function pointer value
-			r.checkNumFields = r.checkNumFieldsNotAllowed
-
+		if n != max {
 			return
 		}
 
-		panic(panicNextRecordIndexExceedsMax)
+		// note that any new call to append record bytes would start building a record violating this limit
+		//
+		// so these handler are utilized to throw an error accordingly
+
+		// intercept trying to push record data to the record buffer
+		r.appendRecBuf = r.appendRecBufNotAllowed
+
+		// intercept trying to push a record to the caller which may not have data bytes
+		//
+		// should be called even on 1 field files and files that end without a terminal record separator
+		// TODO: test this
+
+		// note that this intentionally skips the middlewares as we want any call to it to error
+		// middlewares can and should be short circuited in this case
+		// otherwise setCheckNumFields would be used to alter the function pointer value
+		r.checkNumFields = r.checkNumFieldsNotAllowed
 	}
 }
 
@@ -1778,6 +1833,8 @@ func (sr *secOpReader) nopOutOfCommentBytes(_ int) bool {
 
 func (sr *secOpReader) newOutOfCommentBytes(remainingBytes int) func(int) bool {
 	return func(n int) bool {
+		// TODO: combine these two clauses
+
 		if remainingBytes <= 0 {
 			sr.secOpStreamParsingErr(ErrSecOpCommentBytesAboveMax)
 			return true

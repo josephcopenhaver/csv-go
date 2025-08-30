@@ -1,17 +1,26 @@
 package csv
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
+var (
+	// verify panicErr implements error interface
+	_ error = panicErr(0)
+
+	// verify panicErr implements Stringer interface
+	_ fmt.Stringer = panicErr(0)
+)
+
 func TestUnitReaderPanicOnValidate(t *testing.T) {
 	t.Parallel()
 
 	//
-	// when the config's record separator is in a corrupted / non possible value
+	// when the config's record separator is in a corrupted / impossible value
 	//
 	// then a panic should occur when config is validated
 	//
@@ -46,6 +55,8 @@ func TestUnitReaderPanicOnValidate(t *testing.T) {
 	is.Nil(err)
 
 	is.Equal(r, panicRecordSepLen)
+	is.Equal(panicRecordSepLen.String(), panicRecordSepLen.Error())
+	is.Equal(panicRecordSepLen.String(), "invalid record separator length")
 }
 
 func TestUnitReaderPanicOnHandleEOF(t *testing.T) {
@@ -85,6 +96,8 @@ func TestUnitReaderPanicOnHandleEOF(t *testing.T) {
 	is.False(resp)
 
 	is.Equal(r, panicUnknownReaderStateDuringEOF)
+	is.Equal(panicUnknownReaderStateDuringEOF.String(), panicUnknownReaderStateDuringEOF.Error())
+	is.Equal(panicUnknownReaderStateDuringEOF.String(), "reader in unknown state when EOF encountered")
 }
 
 func TestUnitSecOpReaderPanicOnHandleEOF(t *testing.T) {
@@ -124,5 +137,7 @@ func TestUnitSecOpReaderPanicOnHandleEOF(t *testing.T) {
 	r := handlePanic()
 	is.NotNil(r)
 
-	is.Equal(r, panicNextRecordIndexExceedsMax)
+	is.Equal(r, panicMissedHandlingMaxRecordIndex)
+	is.Equal(panicMissedHandlingMaxRecordIndex.String(), panicMissedHandlingMaxRecordIndex.Error())
+	is.Equal(panicMissedHandlingMaxRecordIndex.String(), "missed handling record index at max value")
 }

@@ -672,7 +672,6 @@ func (r *fastReader) prepareRow() bool {
 					// r.state = ... (unchanged)
 					if r.checkNumFields(nil) {
 						r.recordIndex++
-						r.fieldIndex = 0
 						return true
 					}
 					return false
@@ -1712,7 +1711,6 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					// r.state = ... (unchanged)
 					if r.checkNumFields(nil) {
 						r.incRecordIndex()
-						r.fieldIndex = 0
 						return true
 					}
 					return false

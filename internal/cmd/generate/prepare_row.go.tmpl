@@ -666,7 +666,6 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					// r.state = ... (unchanged)
 					if r.checkNumFields(nil) {
 						{{.IncRecordIndex}}
-						r.fieldIndex = 0
 						return true
 					}
 					return false
