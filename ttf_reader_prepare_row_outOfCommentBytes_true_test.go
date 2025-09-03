@@ -84,7 +84,7 @@ func TestFunctionalReaderPrepareRowOutOfCommentBytesRespTruePaths(t *testing.T) 
 			iterErrIs:  []error{csv.ErrSecOp, csv.ErrSecOpCommentBytesAboveMax},
 			iterErrStr: csv.ErrSecOp.Error() + " at byte 5, record 0, field 0: " + csv.ErrSecOpCommentBytesAboveMax.Error(),
 		},
-		{ // rawr
+		{
 			when: "MaxCommentBytes=5 first line has a comment followed by 5 chars and comment and read-partition",
 			newOptsF: func() []csv.ReaderOption {
 				return []csv.ReaderOption{

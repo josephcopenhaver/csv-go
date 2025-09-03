@@ -23,8 +23,9 @@
 - ErrSecOpCommentBytesAboveMax
 - ErrSecOpCommentsAboveMax
 
-### Significantly altered functions
-- NewReader() (Reader, error)
+### Breaking API changes
+- NewReader now returns the Reader interface: `Reader (interface)` (previously `*Reader (struct pointer)`).
+- Minimum supported Go version: 1.25.
 
 ---
 

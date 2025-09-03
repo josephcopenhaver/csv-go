@@ -398,8 +398,7 @@ func TestFunctionalReaderInitializationPaths(t *testing.T) {
 					assert.Equal(t, "", f1p2)
 				} else {
 					if !secondRow {
-						t.Log("entered into final block more than once when it should not be possible")
-						t.Fail()
+						t.Fatal("entered into final block more than once when it should not be possible")
 					}
 					secondRow = false
 
@@ -411,6 +410,9 @@ func TestFunctionalReaderInitializationPaths(t *testing.T) {
 					assert.Equal(t, "", f1p2)
 				}
 			}
+
+			assert.Equal(t, false, firstRow)
+			assert.Equal(t, false, secondRow)
 
 			assert.Nil(t, cr.Err())
 			assert.Nil(t, cr.Close())
@@ -424,7 +426,7 @@ func TestFunctionalReaderInitializationPaths(t *testing.T) {
 		})
 	})
 
-	t.Run("when creating a csv reader with MaxField=2 NumField=1", func(t *testing.T) {
+	t.Run("when creating a csv reader with MaxFields=2 NumFields=1", func(t *testing.T) {
 		t.Run("should not error on init", func(t *testing.T) {
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("")),

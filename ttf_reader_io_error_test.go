@@ -52,7 +52,7 @@ func (er *errReader) Read(b []byte) (int, error) {
 }
 
 func TestFunctionalReaderIOErrorPaths(t *testing.T) {
-	t.Parallel()
+	// t.Parallel() // &errReader captures t, so cannot be parallel
 
 	readErr := errors.New("some test read error")
 

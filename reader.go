@@ -650,7 +650,7 @@ func (ReaderOptions) MaxComments(n int) ReaderOption {
 	}
 }
 
-// MaxComments is a security option that limits the number of bytes allowed in a comment line before a SecOp error is thrown
+// MaxCommentBytes is a security option that limits the number of bytes allowed in a comment line before a SecOp error is thrown
 func (ReaderOptions) MaxCommentBytes(n int) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.maxCommentBytes = n

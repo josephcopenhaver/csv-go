@@ -81,7 +81,7 @@ func TestUnitReaderPanicOnHandleEOF(t *testing.T) {
 
 	cri, ok := crv.(*fastReader)
 	if !ok {
-		is.Fail("expected fastReader type, got %T", cr)
+		t.Fatalf("expected fastReader type, got %T", cr)
 	}
 
 	cri.state = rState(rStateInLineComment + 1)
@@ -165,7 +165,7 @@ func TestUnitReaderPanicOnCorruptedFieldLengthsEOF(t *testing.T) {
 
 	cri, ok := crv.(*fastReader)
 	if !ok {
-		is.Fail("expected fastReader type, got %T", cr)
+		t.Fatalf("expected fastReader type, got %T", cr)
 	}
 
 	cri.fieldLengths = append(cri.fieldLengths, 0)

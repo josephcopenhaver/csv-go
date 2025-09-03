@@ -26,7 +26,7 @@ var tsEscapeChars string
 var tsWrite string
 
 func parse(s string) *template.Template {
-	t, err := template.New("").Parse(s)
+	t, err := template.New("").Option("missingkey=error").Parse(s)
 	if err != nil {
 		panic(err)
 	}

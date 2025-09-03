@@ -53,7 +53,7 @@ func TestUnitReaderHelperPaths_isNewlineRune(t *testing.T) {
 		{"ascii vertical tab", asciiVerticalTab, Resp{false, true}},
 		{"ascii form feed", asciiFormFeed, Resp{false, true}},
 		{"utf8 next line", utf8NextLine, Resp{false, true}},
-		{"ut8 line separator", utf8LineSeparator, Resp{false, true}},
+		{"utf8 line separator", utf8LineSeparator, Resp{false, true}},
 		{"comma", ',', Resp{false, false}},
 	}
 

@@ -179,7 +179,7 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 
 			is.Nil(cr.Close())
 
-			// once closed, Err should always return false
+			// once closed, Err should always return ErrReaderClosed
 			is.Equal(csv.ErrReaderClosed, cr.Err())
 
 			// once closed, Scan should always return false
