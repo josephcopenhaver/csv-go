@@ -66,8 +66,8 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 
 				v, err := csv.NewReader(opts...)
 				if tc.hasNewReaderErr || len(tc.newReaderErrIs) > 0 || len(tc.newReaderErrAs) > 0 || len(tc.newReaderErrIsNot) > 0 || len(tc.newReaderErrAsNot) > 0 || tc.newReaderErrStr != "" {
-					is.NotNil(t, err)
-					is.Nil(t, v)
+					is.NotNil(err)
+					is.Nil(v)
 
 					for _, terr := range tc.newReaderErrIs {
 						is.ErrorIs(err, terr)
