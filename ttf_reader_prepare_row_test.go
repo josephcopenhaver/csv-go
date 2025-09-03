@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 )
 
 func TestFunctionalReaderPrepareRowOKPaths(t *testing.T) {

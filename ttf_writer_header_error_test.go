@@ -4,7 +4,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 )
 
 func TestFunctionalWriterHeaderErrorPaths(t *testing.T) {

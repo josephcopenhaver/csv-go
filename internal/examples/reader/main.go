@@ -4,7 +4,7 @@ import (
 	"bytes"
 	_ "embed"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 )
 
 //go:embed pizza.csv
@@ -21,11 +21,11 @@ func main() {
 
 	op := csv.ReaderOpts()
 	cr, err := csv.NewReader(
-		op.Reader(r),                 // Reader must always be specified
-		op.ExpectHeaders(expHeaders), // ExpectHeaders is an optional validation check
-		op.RemoveHeaderRow(true),     // stops header record from emitting with the data records
-		op.Quote('"'),                // by default quotes have no meaning, so must be specified to match RFC 4180
-		op.ErrorOnNoRows(true),       //
+		op.Reader(r),                    // Reader must always be specified
+		op.ExpectHeaders(expHeaders...), // ExpectHeaders is an optional validation check
+		op.RemoveHeaderRow(true),        // stops header record from emitting with the data records
+		op.Quote('"'),                   // by default quotes have no meaning, so must be specified to match RFC 4180
+		op.ErrorOnNoRows(true),          //
 		// op.NumFields(3),           // not required: will be auto-discovered
 		// op.FieldSeparator(','),    // not required: matches default value
 		// op.RecordSeparator("\n"),  // not required: matches default value

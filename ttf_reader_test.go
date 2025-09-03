@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -384,7 +384,7 @@ func TestFunctionalReaderOKPaths(t *testing.T) {
 			},
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().ErrorOnNoRows(true),
-				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b,c", ",")),
+				csv.ReaderOpts().ExpectHeaders("a", "b", "c"),
 			},
 			rows: [][]string{strings.Split("a,b,c", ","), strings.Split("1,2,3", ",")},
 		},
@@ -425,7 +425,7 @@ func TestFunctionalReaderOKPaths(t *testing.T) {
 				}
 			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().ExpectHeaders(strings.Split(" a ,  , c ", ",")),
+				csv.ReaderOpts().ExpectHeaders(" a ", "  ", " c "),
 				csv.ReaderOpts().TrimHeaders(true),
 			},
 			rows: [][]string{strings.Split("a,,c", ","), strings.Split("1,2,3", ",")},
@@ -439,7 +439,7 @@ func TestFunctionalReaderOKPaths(t *testing.T) {
 				}
 			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().ExpectHeaders(strings.Split("a,,c", ",")),
+				csv.ReaderOpts().ExpectHeaders("a", "", "c"),
 			},
 			rows: [][]string{strings.Split("a,,c", ","), strings.Split("1,2,3", ",")},
 		},

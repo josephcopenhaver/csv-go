@@ -143,6 +143,8 @@ var (
 	errNewlineInUnquotedFieldLineFeed       = fmt.Errorf("%w: line feed", ErrNewlineInUnquotedField)
 )
 
+var emptyExpectedHeaders = []string{}
+
 type posTracedErr struct {
 	errType                error
 	err                    error
@@ -293,13 +295,14 @@ func (ReaderOptions) TrimHeaders(b bool) ReaderOption {
 	}
 }
 
-// TODO: in V3 alter ExpectHeaders to be vararg rather than a single slice
-
 // ExpectHeaders causes the first row to be recognized as a header row.
 //
 // If the slice of header values does not match then the reader will error.
-func (ReaderOptions) ExpectHeaders(h []string) ReaderOption {
+func (ReaderOptions) ExpectHeaders(h ...string) ReaderOption {
 	return func(cfg *rCfg) {
+		if h == nil {
+			h = emptyExpectedHeaders
+		}
 		cfg.headers = h
 	}
 }
@@ -1192,7 +1195,7 @@ func (r *fastReader) close() error {
 	return nil
 }
 
-func (r *fastReader) humanIndexes() (recordIndex uint64, fieldIndex uint) {
+func (r *fastReader) humanIndexes(err error) (recordIndex uint64, fieldIndex uint) {
 	recordIndex = r.recordIndex
 	fieldIndex = r.fieldIndex
 
@@ -1200,7 +1203,7 @@ func (r *fastReader) humanIndexes() (recordIndex uint64, fieldIndex uint) {
 	case rStateStartOfDoc, rStateInLineComment:
 		// do nothing
 	case rStateStartOfRecord:
-		if r.byteIndex != 0 {
+		if r.byteIndex != 0 && err != ErrSecOpCommentsAboveMax {
 			// convert from zero index to 1 index
 			recordIndex += 1
 			fieldIndex += 1
@@ -1216,7 +1219,7 @@ func (r *fastReader) humanIndexes() (recordIndex uint64, fieldIndex uint) {
 
 func (r *fastReader) parsingErr(err error) {
 	if r.scanErr == nil {
-		recordIndex, fieldIndex := r.humanIndexes()
+		recordIndex, fieldIndex := r.humanIndexes(err)
 		r.scanErr = newParsingError(r.byteIndex, recordIndex, fieldIndex, err)
 	}
 }
@@ -1224,11 +1227,7 @@ func (r *fastReader) parsingErr(err error) {
 func (r *secOpReader) secOpErr(err error) {
 	// TODO: might be able to remove this function and embed in the only caller
 	if r.scanErr == nil {
-		recordIndex, fieldIndex := r.humanIndexes()
-		if err == ErrSecOpCommentsAboveMax && recordIndex == 1 {
-			recordIndex -= 1
-			fieldIndex -= 1
-		}
+		recordIndex, fieldIndex := r.humanIndexes(err)
 		r.scanErr = newSecOpError(r.byteIndex, recordIndex, fieldIndex, err)
 	}
 }
@@ -1297,7 +1296,7 @@ func (r *secOpReader) secOpStreamParsingErr(err error) {
 
 func (r *fastReader) ioErr(err error) {
 	if r.scanErr == nil {
-		recordIndex, fieldIndex := r.humanIndexes()
+		recordIndex, fieldIndex := r.humanIndexes(err)
 		r.scanErr = newIOError(r.byteIndex, recordIndex, fieldIndex, err)
 	}
 }

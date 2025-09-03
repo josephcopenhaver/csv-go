@@ -1,4 +1,4 @@
-module github.com/josephcopenhaver/csv-go/v2
+module github.com/josephcopenhaver/csv-go/v3
 
 go 1.25
 

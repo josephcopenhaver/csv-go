@@ -3,7 +3,7 @@ package csv_test
 import (
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 )
 
 func TestFunctionalReaderPrepareRowMaxFieldsErrorPaths(t *testing.T) {

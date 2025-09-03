@@ -7,7 +7,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -28,7 +28,20 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("")),
-				csv.ReaderOpts().ExpectHeaders([]string{}),
+				csv.ReaderOpts().ExpectHeaders([]string{}...),
+			)
+			assert.NotNil(t, err)
+			assert.ErrorIs(t, err, csv.ErrBadConfig)
+			assert.Equal(t, errors.Join(csv.ErrBadConfig, errors.New("empty set of headers expected")).Error(), err.Error())
+			assert.Nil(t, cr)
+		})
+	})
+
+	t.Run("when creating a CSV reader and expecting a nil set of headers", func(t *testing.T) {
+		t.Run("should return an error indicating option value is invalid", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("")),
+				csv.ReaderOpts().ExpectHeaders([]string(nil)...),
 			)
 			assert.NotNil(t, err)
 			assert.ErrorIs(t, err, csv.ErrBadConfig)
@@ -42,7 +55,7 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			{
 				cr, err := csv.NewReader(
 					csv.ReaderOpts().Reader(strings.NewReader("")),
-					csv.ReaderOpts().ExpectHeaders([]string{"a"}),
+					csv.ReaderOpts().ExpectHeaders("a"),
 					csv.ReaderOpts().NumFields(2),
 				)
 				assert.NotNil(t, err)
@@ -53,7 +66,7 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			{
 				cr, err := csv.NewReader(
 					csv.ReaderOpts().Reader(strings.NewReader("")),
-					csv.ReaderOpts().ExpectHeaders([]string{"a", "b"}),
+					csv.ReaderOpts().ExpectHeaders("a", "b"),
 					csv.ReaderOpts().NumFields(1),
 				)
 				assert.NotNil(t, err)
@@ -405,7 +418,7 @@ func TestFunctionalReaderInitializationErrorPaths(t *testing.T) {
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("")),
 				csv.ReaderOpts().MaxFields(2),
-				csv.ReaderOpts().ExpectHeaders([]string{"1", "2", "3"}),
+				csv.ReaderOpts().ExpectHeaders("1", "2", "3"),
 			)
 			assert.NotNil(t, err)
 			assert.ErrorIs(t, err, csv.ErrBadConfig)

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,7 +37,7 @@ func TestFunctionalReaderInitializationPaths(t *testing.T) {
 			header := "a,b,c"
 			cr, err := csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader(header)),
-				csv.ReaderOpts().ExpectHeaders(strings.Split(header, ",")),
+				csv.ReaderOpts().ExpectHeaders(strings.Split(header, ",")...),
 			)
 			assert.Nil(t, err)
 			assert.NotNil(t, cr)
