@@ -4,14 +4,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestFunctionalReaderIteratorPaths(t *testing.T) {
+	t.Parallel()
 
 	t.Run("given a CSV reader with two records", func(t *testing.T) {
-		newReader := func() (*csv.Reader, error) {
+		newReader := func() (csv.Reader, error) {
 			return csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("a,b,c\n1,2,3")),
 			)

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 )
 
 const (
@@ -15,6 +15,7 @@ const (
 )
 
 func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
+	t.Parallel()
 
 	tcs := []functionalReaderTestCase{
 		{
@@ -620,7 +621,7 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().NumFields(2),
 			},
-			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrFieldCount, csv.ErrTooManyFields},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 18, record 1, field 2: " + csv.ErrTooManyFields.Error() + ": field count exceeds 2",
 		},
 		{
@@ -754,7 +755,7 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 				csv.ReaderOpts().Quote('"'),
 				csv.ReaderOpts().NumFields(1),
 			},
-			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrFieldCount, csv.ErrTooManyFields},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 3, record 1, field 1: " + csv.ErrTooManyFields.Error() + ": field count exceeds 1",
 		},
 		{
@@ -809,7 +810,7 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().NumFields(2),
 			},
-			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrFieldCount, csv.ErrTooManyFields},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 2: " + csv.ErrTooManyFields.Error() + ": field count exceeds 2",
 		},
 		{
@@ -822,7 +823,7 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().NumFields(3),
 			},
-			iterErrIs:  []error{csv.ErrParsing, csv.ErrNotEnoughFields},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrFieldCount, csv.ErrNotEnoughFields},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 2, record 1, field 2: " + csv.ErrNotEnoughFields.Error() + ": expected 3 fields but found 2",
 		},
 		{
@@ -1023,7 +1024,7 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().NumFields(1),
 			},
-			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrFieldCount, csv.ErrTooManyFields},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 1, record 1, field 1: " + csv.ErrTooManyFields.Error() + ": field count exceeds 1",
 		},
 		{
@@ -1055,7 +1056,7 @@ func TestFunctionalReaderPrepareRowErrorPaths(t *testing.T) {
 				csv.ReaderOpts().Escape('\\'),
 				csv.ReaderOpts().NumFields(1),
 			},
-			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrFieldCount, csv.ErrTooManyFields},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 3, record 1, field 1: " + csv.ErrTooManyFields.Error() + ": field count exceeds 1",
 		},
 		{

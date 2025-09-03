@@ -26,7 +26,7 @@ var tsEscapeChars string
 var tsWrite string
 
 func parse(s string) *template.Template {
-	t, err := template.New("").Parse(s)
+	t, err := template.New("").Option("missingkey=error").Parse(s)
 	if err != nil {
 		panic(err)
 	}
@@ -100,14 +100,33 @@ func main() {
 		t := parse(tsPrepareRow)
 
 		type cfg struct {
-			ClearMemoryAfterUse bool
+			Struct                 string
+			NameSuffix             string
+			RecBufAppend0          string
+			RecBufAppend1          string
+			DeltaCommentBytesCheck string
+			CommentLinesCheck      string
+			IncRecordIndex         string
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{ClearMemoryAfterUse: false},
-			{ClearMemoryAfterUse: true},
+			{
+				Struct:         "fastReader",
+				RecBufAppend0:  "r.recordBuf = append(r.recordBuf, ",
+				RecBufAppend1:  ")",
+				IncRecordIndex: "r.recordIndex++",
+			},
+			{
+				Struct:                 "secOpReader",
+				NameSuffix:             "_memclearOn",
+				RecBufAppend0:          "if r.appendRecBuf(",
+				RecBufAppend1:          ") {return false}",
+				IncRecordIndex:         "r.incRecordIndex()",
+				DeltaCommentBytesCheck: "if r.outOfCommentBytes(delta) {return false}",
+				CommentLinesCheck:      "if r.outOfCommentLines() {return false}",
+			},
 		})
 	}
 

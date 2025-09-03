@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -52,6 +52,7 @@ func (er *errReader) Read(b []byte) (int, error) {
 }
 
 func TestFunctionalReaderIOErrorPaths(t *testing.T) {
+	// t.Parallel() // &errReader captures t, so cannot be parallel
 
 	readErr := errors.New("some test read error")
 

@@ -3,10 +3,12 @@ package csv_test
 import (
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 )
 
 func TestFunctionalWriterProcessFieldErrorPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalWriterTestCase{
 		{
 			when: "field contains quote followed by non-UTF8 sequence",

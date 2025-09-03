@@ -10,6 +10,7 @@ import (
 )
 
 func TestUnitReaderHelperPaths_decodeMBControlRune(t *testing.T) {
+	t.Parallel()
 
 	type Resp struct {
 		r rune

@@ -4,10 +4,12 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 )
 
 func TestFunctionalWriterInitializationErrorPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalWriterTestCase{
 		{
 			when: "record separator is not a newline character",

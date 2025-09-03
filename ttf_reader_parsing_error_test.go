@@ -6,11 +6,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
+	t.Parallel()
 
 	tcs := []functionalReaderTestCase{
 		{
@@ -209,7 +210,7 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 			},
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().ErrorOnNoRows(true),
-				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b", ",")),
+				csv.ReaderOpts().ExpectHeaders("a", "b"),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNoHeaderRow, io.ErrUnexpectedEOF},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 0, record 0, field 0: " + csv.ErrNoHeaderRow.Error(),
@@ -253,7 +254,7 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 				}
 			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b,c", ",")),
+				csv.ReaderOpts().ExpectHeaders("a", "b", "c"),
 				csv.ReaderOpts().TrimHeaders(true),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrNotEnoughFields},
@@ -268,10 +269,10 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 				}
 			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b", ",")),
+				csv.ReaderOpts().ExpectHeaders("a", "b"),
 				csv.ReaderOpts().TrimHeaders(true),
 			},
-			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrFieldCount, csv.ErrTooManyFields},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 7, record 1, field 2: " + csv.ErrTooManyFields.Error() + ": field count exceeds 2",
 		},
 		{
@@ -283,7 +284,7 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 				}
 			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().ExpectHeaders(strings.Split("a,c", ",")),
+				csv.ReaderOpts().ExpectHeaders("a", "c"),
 				csv.ReaderOpts().TrimHeaders(true),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrUnexpectedHeaderRowContents},
@@ -298,7 +299,7 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 				}
 			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b", ",")),
+				csv.ReaderOpts().ExpectHeaders("a", "b"),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrUnexpectedHeaderRowContents},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 8, record 2, field 1: " + csv.ErrUnexpectedHeaderRowContents.Error(),
@@ -312,7 +313,7 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 				}
 			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b", ",")),
+				csv.ReaderOpts().ExpectHeaders("a", "b"),
 				csv.ReaderOpts().TrimHeaders(false),
 			},
 			iterErrIs:  []error{csv.ErrParsing, csv.ErrUnexpectedHeaderRowContents},

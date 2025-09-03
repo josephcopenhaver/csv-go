@@ -1,4 +1,7 @@
 name: tests
+permissions:
+  contents: read
+  pull-requests: read
 on:
   push:
   schedule:
@@ -10,10 +13,10 @@ jobs:
     strategy:
       matrix:
         go:
-          - ver: "1.24"
-            name: "1.24"
-          - ver: ">=1.24"
-            name: "gte-1.24"
+          - ver: "1.25"
+            name: "1.25"
+          - ver: ">=1.25"
+            name: "gte-1.25"
     name: Go ${{ matrix.go.ver }}
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +36,7 @@ jobs:
       - name: test with race
         run: |
           go test -tags "check_bounds" -race ./...
-          go test -coverprofile=coverage.out -race $(go list ./... | grep -vE '^(github\.com/josephcopenhaver/csv-go/v2/internal/examples/|github\.com/josephcopenhaver/csv-go/v2/decode_mb_control_rune_with_check_bounds.go)')
+          go test -coverprofile=coverage.out -race $(go list ./... | grep -vE '^(github\.com/josephcopenhaver/csv-go/v3/internal/examples/|github\.com/josephcopenhaver/csv-go/v3/decode_mb_control_rune_with_check_bounds.go)')
           go tool cover -html=coverage.out -o coverage.html
       - name: Upload code coverage report
         uses: actions/upload-artifact@v4

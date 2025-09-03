@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -57,7 +57,7 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 			tc := &tc_copy
 			is := assert.New(t)
 
-			var cr *csv.Reader
+			var cr csv.Reader
 			{
 				opts := tc.newOpts
 				if f := tc.newOptsF; f != nil {
@@ -66,8 +66,8 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 
 				v, err := csv.NewReader(opts...)
 				if tc.hasNewReaderErr || len(tc.newReaderErrIs) > 0 || len(tc.newReaderErrAs) > 0 || len(tc.newReaderErrIsNot) > 0 || len(tc.newReaderErrAsNot) > 0 || tc.newReaderErrStr != "" {
-					is.NotNil(t, err)
-					is.Nil(t, v)
+					is.NotNil(err)
+					is.Nil(v)
 
 					for _, terr := range tc.newReaderErrIs {
 						is.ErrorIs(err, terr)
@@ -179,7 +179,7 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 
 			is.Nil(cr.Close())
 
-			// once closed, Err should always return false
+			// once closed, Err should always return ErrReaderClosed
 			is.Equal(csv.ErrReaderClosed, cr.Err())
 
 			// once closed, Scan should always return false
@@ -237,6 +237,8 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 }
 
 func TestFunctionalReaderOKPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalReaderTestCase{
 		func() functionalReaderTestCase {
 			selfInit := func(tc *functionalReaderTestCase) {
@@ -382,7 +384,7 @@ func TestFunctionalReaderOKPaths(t *testing.T) {
 			},
 			newOpts: []csv.ReaderOption{
 				csv.ReaderOpts().ErrorOnNoRows(true),
-				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b,c", ",")),
+				csv.ReaderOpts().ExpectHeaders("a", "b", "c"),
 			},
 			rows: [][]string{strings.Split("a,b,c", ","), strings.Split("1,2,3", ",")},
 		},
@@ -423,7 +425,7 @@ func TestFunctionalReaderOKPaths(t *testing.T) {
 				}
 			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().ExpectHeaders(strings.Split(" a ,  , c ", ",")),
+				csv.ReaderOpts().ExpectHeaders(" a ", "  ", " c "),
 				csv.ReaderOpts().TrimHeaders(true),
 			},
 			rows: [][]string{strings.Split("a,,c", ","), strings.Split("1,2,3", ",")},
@@ -437,7 +439,7 @@ func TestFunctionalReaderOKPaths(t *testing.T) {
 				}
 			},
 			newOpts: []csv.ReaderOption{
-				csv.ReaderOpts().ExpectHeaders(strings.Split("a,,c", ",")),
+				csv.ReaderOpts().ExpectHeaders("a", "", "c"),
 			},
 			rows: [][]string{strings.Split("a,,c", ","), strings.Split("1,2,3", ",")},
 		},

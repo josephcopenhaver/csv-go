@@ -9,6 +9,7 @@ import (
 )
 
 func TestUnitReaderHelperPaths_decodeMBControlRuneWithCheckBounds(t *testing.T) {
+	t.Parallel()
 
 	type Resp struct {
 		r rune

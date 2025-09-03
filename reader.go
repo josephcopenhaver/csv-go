@@ -77,10 +77,35 @@ const (
 	rStateInLineComment
 )
 
+// panicErr ensures the source of a panic comes from this module and not some other one
+// when values are checked in white-box unit tests
+//
+// there is now no chance of confusion
+type panicErr uint8
+
 const (
-	panicRecordSepLen                = "invalid record separator length"
-	panicUnknownReaderStateDuringEOF = "reader in unknown state when EOF encountered"
+	_ panicErr = iota
+
+	panicRecordSepLen                        // "invalid record separator length"
+	panicUnknownReaderStateDuringEOF         // "reader in unknown state when EOF encountered"
+	panicMissedHandlingMaxRecordIndex        // "missed handling record index at max value"
+	panicMissedHandlingMaxSecOpFieldIndex    // "missed handling field index at max SecOp value"
+	panicMissedHandlingMaxExpectedFieldIndex // "missed handling field index at expected max configured value"
 )
+
+func (p panicErr) String() string {
+	return []string{
+		"invalid record separator length",                   // panicRecordSepLen
+		"reader in unknown state when EOF encountered",      // panicUnknownReaderStateDuringEOF
+		"missed handling record index at max value",         // panicMissedHandlingMaxRecordIndex
+		"missed handling field index at SecOp max value",    // panicMissedHandlingMaxSecOpFieldIndex
+		"missed handling field index at expected max value", // panicMissedHandlingMaxExpectedFieldIndex
+	}[p-1]
+}
+
+func (p panicErr) Error() string {
+	return p.String()
+}
 
 var (
 	// classifications
@@ -88,8 +113,16 @@ var (
 	ErrParsing    = errors.New("parsing error")
 	ErrFieldCount = errors.New("field count error")
 	ErrBadConfig  = errors.New("bad config")
+	ErrSecOp      = errors.New("security error")
+
 	// instances
-	ErrTooManyFields               = errors.New("too many fields")
+	ErrTooManyFields                = errors.New("too many fields")
+	ErrSecOpRecordByteCountAboveMax = errors.New("record byte count exceeds max")
+	// is a sub-instance of ErrTooManyFields
+	ErrSecOpFieldCountAboveMax     = errors.New("field count exceeds max")
+	ErrSecOpRecordCountAboveMax    = errors.New("record count exceeds max")
+	ErrSecOpCommentBytesAboveMax   = errors.New("comment byte count exceeds max")
+	ErrSecOpCommentsAboveMax       = errors.New("comment line count exceeds max")
 	ErrNotEnoughFields             = errors.New("not enough fields")
 	ErrReaderClosed                = errors.New("reader closed")
 	ErrUnexpectedHeaderRowContents = errors.New("header row values do not match expectations")
@@ -110,19 +143,35 @@ var (
 	errNewlineInUnquotedFieldLineFeed       = fmt.Errorf("%w: line feed", ErrNewlineInUnquotedField)
 )
 
+var emptyExpectedHeaders = []string{}
+
 type posTracedErr struct {
 	errType                error
 	err                    error
-	byteIndex, recordIndex uint64
+	byteIndex, recordIndex uint64 // TODO: refactor into uint instead of uint64 // SECONDARY - NOT URGENT
 	fieldIndex             uint
 }
 
 func (e posTracedErr) Error() string {
-	return fmt.Sprintf("%s at byte %d, record %d, field %d: %s", e.errType.Error(), e.byteIndex, e.recordIndex, e.fieldIndex, e.err.Error())
+	const maxCharsInUint64Str = 20
+	var sb strings.Builder
+	var uint64Buf [maxCharsInUint64Str]byte
+
+	sb.WriteString(e.errType.Error())
+	sb.WriteString(" at byte ")
+	sb.Write(strconv.AppendUint(uint64Buf[:0], e.byteIndex, 10))
+	sb.WriteString(", record ")
+	sb.Write(strconv.AppendUint(uint64Buf[:0], e.recordIndex, 10))
+	sb.WriteString(", field ")
+	sb.Write(strconv.AppendUint(uint64Buf[:0], uint64(e.fieldIndex), 10))
+	sb.WriteString(": ")
+	sb.WriteString(e.err.Error())
+
+	return sb.String()
 }
 
-func (e posTracedErr) Unwrap() []error {
-	return []error{e.errType, e.err}
+func (e posTracedErr) Is(err error) bool {
+	return errors.Is(e.errType, err) || errors.Is(e.err, err)
 }
 
 func newIOError(byteIndex, recordIndex uint64, fieldIndex uint, err error) posTracedErr {
@@ -145,12 +194,23 @@ func newParsingError(byteIndex, recordIndex uint64, fieldIndex uint, err error) 
 	}
 }
 
+func newSecOpError(byteIndex, recordIndex uint64, fieldIndex uint, err error) posTracedErr {
+	// TODO: might be able to remove this function and embed in the only caller
+	return posTracedErr{
+		errType:     ErrSecOp,
+		err:         err,
+		byteIndex:   byteIndex,
+		recordIndex: recordIndex,
+		fieldIndex:  fieldIndex,
+	}
+}
+
 type errNotEnoughFields struct {
 	Expected, Actual int
 }
 
-func (e errNotEnoughFields) Unwrap() []error {
-	return []error{ErrFieldCount, ErrNotEnoughFields}
+func (e errNotEnoughFields) Is(err error) bool {
+	return errors.Is(err, ErrFieldCount) || errors.Is(err, ErrNotEnoughFields)
 }
 
 func (e errNotEnoughFields) Error() string {
@@ -165,8 +225,8 @@ type errTooManyFields struct {
 	expected int
 }
 
-func (e errTooManyFields) Unwrap() []error {
-	return []error{ErrFieldCount, ErrTooManyFields}
+func (e errTooManyFields) Is(err error) bool {
+	return errors.Is(err, ErrFieldCount) || errors.Is(err, ErrTooManyFields)
 }
 
 func (e errTooManyFields) Error() string {
@@ -175,6 +235,16 @@ func (e errTooManyFields) Error() string {
 
 func tooManyFieldsErr(exp int) errTooManyFields {
 	return errTooManyFields{exp}
+}
+
+type errTooManyFieldsAboveMax struct{}
+
+func (e errTooManyFieldsAboveMax) Is(err error) bool {
+	return errors.Is(err, ErrFieldCount) || errors.Is(err, ErrTooManyFields) || errors.Is(err, ErrSecOpFieldCountAboveMax)
+}
+
+func (e errTooManyFieldsAboveMax) Error() string {
+	return ErrSecOpFieldCountAboveMax.Error()
 }
 
 type ReaderOption func(*rCfg)
@@ -225,13 +295,14 @@ func (ReaderOptions) TrimHeaders(b bool) ReaderOption {
 	}
 }
 
-// TODO: in V3 alter ExpectHeaders to be vararg rather than a single slice
-
 // ExpectHeaders causes the first row to be recognized as a header row.
 //
 // If the slice of header values does not match then the reader will error.
-func (ReaderOptions) ExpectHeaders(h []string) ReaderOption {
+func (ReaderOptions) ExpectHeaders(h ...string) ReaderOption {
 	return func(cfg *rCfg) {
+		if h == nil {
+			h = emptyExpectedHeaders
+		}
 		cfg.headers = h
 	}
 }
@@ -544,8 +615,125 @@ func (ReaderOptions) ReaderBuffer(v []byte) ReaderOption {
 	}
 }
 
+// MaxFields is a security option that limits the number of fields allowed to be detected automatically before a SecOp error is thrown
+//
+// using this option at the same time as the NumFields option will lead to an error on reader creation
+// since using both is counter intuitive in general
+func (ReaderOptions) MaxFields(v uint) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxFields = v
+		cfg.maxFieldsSet = true
+	}
+}
+
+// MaxRecordBytes is a security option that limits the number of bytes allowed to be detected in a record before a SecOp error is thrown
+func (ReaderOptions) MaxRecordBytes(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxRecordBytes = n
+		cfg.maxRecordBytesSet = true
+	}
+}
+
+// MaxRecords is a security option that limits the number of records allowed in a stream before a SecOp error is thrown
+func (ReaderOptions) MaxRecords(n uint64) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxRecords = n
+		cfg.maxRecordsSet = true
+	}
+}
+
+// MaxComments is a security option that limits the number of comment lines allowed in a stream before a SecOp error is thrown
+func (ReaderOptions) MaxComments(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxComments = n
+		cfg.maxCommentsSet = true
+	}
+}
+
+// MaxCommentBytes is a security option that limits the number of bytes allowed in a comment line before a SecOp error is thrown
+func (ReaderOptions) MaxCommentBytes(n int) ReaderOption {
+	return func(cfg *rCfg) {
+		cfg.maxCommentBytes = n
+		cfg.maxCommentBytesSet = true
+	}
+}
+
+// MaxNumBytes for an overall csv document is not getting implemented because it's trivial to implement that as a io.Reader wrapper.
+
 func ReaderOpts() ReaderOptions {
 	return ReaderOptions{}
+}
+
+// readerStrat will never contain exported fields of any kind
+//
+// since closures and hook updates are common using a struct
+// with exports that satisfy a returned interface is the most
+// sane and supportable option
+type readerStrat struct {
+	scan  func() bool
+	row   func() []string
+	close func() error
+	err   func() error
+}
+
+func (r *readerStrat) Scan() bool {
+	return r.scan()
+}
+
+// Row returns a slice of strings that represents a row of a dataset.
+//
+// Row only returns valid results after a call to Scan() return true.
+// For efficiency reasons this method should not be called more than once between
+// calls to Scan().
+//
+// If the reader is configured with BorrowRow(true) then the resulting slice and
+// field strings are only valid to use up until the next call to Scan and
+// should not be saved to persistent memory.
+func (r *readerStrat) Row() []string {
+	return r.row()
+}
+
+// Close should be called after reading all rows
+// successfully from the underlying reader and checking
+// the result of r.Err().
+//
+// Close currently always returns nil, but in the future
+// it may not. It is not a substitute for checking r.Err().
+//
+// Should any configuration options require post-flight
+// checks they will be implemented here.
+//
+// It will never attempt to close the underlying reader.
+func (r *readerStrat) Close() error {
+	return r.close()
+}
+
+func (r *readerStrat) Err() error {
+	return r.err()
+}
+
+// IntoIter converts the reader state into an iterator.
+// Calling this method more than once returns the same iterator instance.
+//
+// If the reader is configured with BorrowRow(true) then the resulting
+// slice and field strings are only valid to use up until the next
+// iteration and should not be saved to persistent memory.
+//
+// It is best practice to check if Err() returns a non-nil
+// error after fully traversing this iterator.
+//
+// This is just a syntactic sugar method to work with range statements
+// in go1.23 and later.
+func (r *readerStrat) IntoIter() iter.Seq[[]string] {
+	return r.iter
+}
+
+func (r *readerStrat) iter(yield func([]string) bool) {
+	for r.scan() {
+		if !yield(r.row()) {
+			return
+		}
+	}
 }
 
 type rCfg struct {
@@ -556,10 +744,14 @@ type rCfg struct {
 	recordSep  [2]rune
 	rawBufSize int
 	numFields  int
-	// maxNumFields                       int
-	// maxNumRecords                      int
-	// maxNumRecordBytes                  int
-	// maxNumBytes                        int
+
+	// security attributes
+	maxFields       uint
+	maxRecordBytes  int
+	maxRecords      uint64
+	maxCommentBytes int
+	maxComments     int
+
 	initialRecordBufferSize            int
 	fieldSeparator                     rune
 	quote                              rune
@@ -588,20 +780,25 @@ type rCfg struct {
 	recordBufSet                       bool
 	rawBufSet                          bool
 	rawBufSizeSet                      bool
+
+	//
+
+	maxFieldsSet       bool
+	maxRecordBytesSet  bool
+	maxRecordsSet      bool
+	maxCommentBytesSet bool
+	maxCommentsSet     bool
 }
 
-type Reader struct {
+type fastReader struct {
 	controlRunes string
 	rawBuf       []byte
 	rawIndex     int
 	//
-	readErr           error
-	prepareRow        func() bool
-	scan              func() bool
-	err               error
-	row               func() []string
+	readErr error
+	scanErr error
+	// checkNumFields is called at the end of parsing a record to ensure field counts match expectations and that none are missing
 	checkNumFields    func(errTrailer error) bool
-	close             func() error
 	reader            io.Reader
 	recordSep         [2]rune
 	recordBuf         []byte
@@ -617,6 +814,7 @@ type Reader struct {
 	escape            rune
 	fieldSeparator    rune
 	comment           rune
+	pr                *readerStrat
 	state             rState
 	rawNumHiddenBytes uint8
 	// afterStartOfRecords is a flag set to communicate when the first records have been observed and potentially emitted
@@ -796,15 +994,48 @@ func (cfg *rCfg) validate() error {
 		return errors.New("field borrowing cannot be enabled without enabling row borrowing")
 	}
 
-	// if cfg.maxNumFields != 0 || cfg.maxNumRecordBytes != 0 || cfg.maxNumRecords != 0 || cfg.maxNumBytes != 0 {
-	// 	panic("unimplemented config selections")
-	// }
+	if cfg.maxFieldsSet {
+		if cfg.maxFields <= 1 {
+			return errors.New("max fields cannot be set to a value less than or equal to one")
+		}
+
+		if cfg.numFieldsSet || cfg.numFields > 0 {
+			if uint(cfg.numFields) > cfg.maxFields {
+				return errors.New("max fields should not be specified or should be larger: max fields was specified with a value less than the specified number of fields per record")
+			}
+
+			// config not useful due to other specified options, ignoring it
+			cfg.maxFieldsSet = false
+			cfg.maxFields = 0
+		}
+	}
+
+	if cfg.maxRecordBytesSet && cfg.maxRecordBytes <= 0 {
+		return errors.New("max record bytes cannot be less than or equal to zero")
+	}
+
+	if cfg.maxRecordsSet && cfg.maxRecords == 0 {
+		return errors.New("max records cannot be equal to zero")
+	}
+
+	if cfg.maxCommentsSet && cfg.maxComments < 0 {
+		return errors.New("max comments cannot be less than zero")
+	}
+
+	if cfg.maxCommentBytesSet && cfg.maxCommentBytes < 0 {
+		return errors.New("max comment bytes cannot be less than zero")
+	}
 
 	return nil
 }
 
 // NewReader creates a new instance of a CSV reader which is not safe for concurrent reads.
-func NewReader(options ...ReaderOption) (*Reader, error) {
+func NewReader(options ...ReaderOption) (Reader, error) {
+	r, _, err := internalNewReader(options...)
+	return r, err
+}
+
+func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) {
 
 	cfg := rCfg{
 		numFields:                   -1,
@@ -820,7 +1051,7 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 	}
 
 	if err := cfg.validate(); err != nil {
-		return nil, errors.Join(ErrBadConfig, err)
+		return nil, nil, errors.Join(ErrBadConfig, err)
 	}
 
 	var headers []string
@@ -954,76 +1185,17 @@ func NewReader(options ...ReaderOption) (*Reader, error) {
 		rowBuf = make([]string, cfg.numFields)
 	}
 
-	cr := Reader{
-		controlRunes:   string(controlRunes),
-		rawBuf:         cfg.rawBuf[0:0:len(cfg.rawBuf)],
-		quote:          cfg.quote,
-		escape:         cfg.escape,
-		numFields:      cfg.numFields,
-		fieldSeparator: cfg.fieldSeparator,
-		comment:        cfg.comment,
-		headers:        headers,
-		recordBuf:      cfg.recordBuf[0:0:len(cfg.recordBuf)],
-		rowBuf:         rowBuf,
-		recordSep:      cfg.recordSep,
-		recordSepLen:   cfg.recordSepLen,
-		bitFlags:       bitFlags,
-	}
-
-	cr.initPipeline(cfg)
-
-	return &cr, nil
+	r, r2 := newReader(cfg, string(controlRunes), headers, rowBuf, bitFlags)
+	return r, r2, nil
 }
 
-// Close should be called after reading all rows
-// successfully from the underlying reader and checking
-// the result of r.Err().
-//
-// Close currently always returns nil, but in the future
-// it may not. It is not a substitute for checking r.Err().
-//
-// Should any configuration options require post-flight
-// checks they will be implemented here.
-//
-// It will never attempt to close the underlying reader.
-func (r *Reader) Close() error {
-	return r.close()
-}
-
-func (r *Reader) defaultClose() error {
+func (r *fastReader) close() error {
 	r.setDone()
-	r.err = ErrReaderClosed
+	r.scanErr = ErrReaderClosed
 	return nil
 }
 
-func (r *Reader) closeWithMemClear() error {
-	v := r.defaultClose()
-	r.zeroRecordBuffers()
-	return v
-}
-
-func (r *Reader) Err() error {
-	return r.err
-}
-
-// Row returns a slice of strings that represents a row of a dataset.
-//
-// Row only returns valid results after a call to Scan() return true.
-// For efficiency reasons this method should not be called more than once between
-// calls to Scan().
-//
-// If the reader is configured with BorrowRow(true) then the resulting slice and
-// field strings are only valid to use up until the next call to Scan and
-// should not be saved to persistent memory.
-func (r *Reader) Row() []string {
-	return r.row()
-}
-
-func (r *Reader) Scan() bool {
-	return r.scan()
-}
-
-func (r *Reader) humanIndexes() (recordIndex uint64, fieldIndex uint) {
+func (r *fastReader) humanIndexes(err error) (recordIndex uint64, fieldIndex uint) {
 	recordIndex = r.recordIndex
 	fieldIndex = r.fieldIndex
 
@@ -1031,7 +1203,7 @@ func (r *Reader) humanIndexes() (recordIndex uint64, fieldIndex uint) {
 	case rStateStartOfDoc, rStateInLineComment:
 		// do nothing
 	case rStateStartOfRecord:
-		if r.byteIndex != 0 {
+		if r.byteIndex != 0 && err != ErrSecOpCommentsAboveMax {
 			// convert from zero index to 1 index
 			recordIndex += 1
 			fieldIndex += 1
@@ -1045,10 +1217,18 @@ func (r *Reader) humanIndexes() (recordIndex uint64, fieldIndex uint) {
 	return recordIndex, fieldIndex
 }
 
-func (r *Reader) parsingErr(err error) {
-	if r.err == nil {
-		recordIndex, fieldIndex := r.humanIndexes()
-		r.err = newParsingError(r.byteIndex, recordIndex, fieldIndex, err)
+func (r *fastReader) parsingErr(err error) {
+	if r.scanErr == nil {
+		recordIndex, fieldIndex := r.humanIndexes(err)
+		r.scanErr = newParsingError(r.byteIndex, recordIndex, fieldIndex, err)
+	}
+}
+
+func (r *secOpReader) secOpErr(err error) {
+	// TODO: might be able to remove this function and embed in the only caller
+	if r.scanErr == nil {
+		recordIndex, fieldIndex := r.humanIndexes(err)
+		r.scanErr = newSecOpError(r.byteIndex, recordIndex, fieldIndex, err)
 	}
 }
 
@@ -1057,7 +1237,10 @@ func (r *Reader) parsingErr(err error) {
 // therefore it should never be called more than once in an invocation to Scan
 // and it should always be followed with logic that short circuits the scan
 // and returns false for the scan operation
-func (r *Reader) streamParsingErr(err error) {
+//
+// for a given scan operation only one of streamParsingErr or secOpStreamParsingErr
+// should be called when appropriate, never both.
+func (r *fastReader) streamParsingErr(err error) {
 	r.setDone()
 
 	// r.byteIndex++ moves from control byte idx
@@ -1069,24 +1252,66 @@ func (r *Reader) streamParsingErr(err error) {
 	r.parsingErr(err)
 }
 
-func (r *Reader) ioErr(err error) {
-	if r.err == nil {
-		recordIndex, fieldIndex := r.humanIndexes()
-		r.err = newIOError(r.byteIndex, recordIndex, fieldIndex, err)
+func (r *secOpReader) fieldNumOverflowWithMaxCheck(max uint) func() bool {
+	return func() bool {
+		// this block was just copied from fast-reader's fieldNumOverflow implementation
+		if len(r.fieldLengths) == r.numFields {
+			r.streamParsingErr(tooManyFieldsErr(r.numFields))
+			return true
+		}
+
+		// new addition for supporting max:
+		if uint(len(r.fieldLengths)) == max {
+			r.secOpStreamParsingErr(errTooManyFieldsAboveMax{})
+			return true
+		}
+
+		return false
 	}
 }
 
-func (r *Reader) setRowBorrowedAndFieldsCloned() {
+func (r *fastReader) setCheckNumFields(f func(error) bool) {
+	r.checkNumFields = f
+}
+
+// secOpStreamParsingErr performs a side effect of increasing the byteIndex of state
+//
+// therefore it should never be called more than once in an invocation to Scan
+// and it should always be followed with logic that short circuits the scan
+// and returns false for the scan operation
+//
+// for a given scan operation only one of streamParsingErr or secOpStreamParsingErr
+// should be called when appropriate, never both.
+func (r *secOpReader) secOpStreamParsingErr(err error) {
+	r.setDone()
+
+	// r.byteIndex++ moves from control byte idx
+	// to next byte idx
+	//
+	// this matches v1 flow
+	r.byteIndex++
+
+	r.secOpErr(err)
+}
+
+func (r *fastReader) ioErr(err error) {
+	if r.scanErr == nil {
+		recordIndex, fieldIndex := r.humanIndexes(err)
+		r.scanErr = newIOError(r.byteIndex, recordIndex, fieldIndex, err)
+	}
+}
+
+func (r *fastReader) setRowBorrowedAndFieldsCloned() {
 	if r.rowBuf == nil {
-		r.row = func() []string {
-			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
+		r.pr.row = func() []string {
+			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 				return nil
 			}
 
 			r.rowBuf = make([]string, len(r.fieldLengths))
 
-			r.row = func() []string {
-				if len(r.fieldLengths) != r.numFields || r.err != nil {
+			r.pr.row = func() []string {
+				if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 					return nil
 				}
 
@@ -1101,14 +1326,14 @@ func (r *Reader) setRowBorrowedAndFieldsCloned() {
 				return r.rowBuf
 			}
 
-			return r.row()
+			return r.pr.row()
 		}
 
 		return
 	}
 
-	r.row = func() []string {
-		if len(r.fieldLengths) != r.numFields || r.err != nil {
+	r.pr.row = func() []string {
+		if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 			return nil
 		}
 
@@ -1124,17 +1349,17 @@ func (r *Reader) setRowBorrowedAndFieldsCloned() {
 	}
 }
 
-func (r *Reader) setRowBorrowedAndFieldsBorrowed() {
+func (r *fastReader) setRowBorrowedAndFieldsBorrowed() {
 	if r.rowBuf == nil {
-		r.row = func() []string {
-			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
+		r.pr.row = func() []string {
+			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 				return nil
 			}
 
 			r.rowBuf = make([]string, len(r.fieldLengths))
 
-			r.row = func() []string {
-				if len(r.fieldLengths) != r.numFields || r.err != nil {
+			r.pr.row = func() []string {
+				if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 					return nil
 				}
 
@@ -1162,14 +1387,14 @@ func (r *Reader) setRowBorrowedAndFieldsBorrowed() {
 				return r.rowBuf
 			}
 
-			return r.row()
+			return r.pr.row()
 		}
 
 		return
 	}
 
-	r.row = func() []string {
-		if len(r.fieldLengths) != r.numFields || r.err != nil {
+	r.pr.row = func() []string {
+		if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 			return nil
 		}
 
@@ -1198,17 +1423,17 @@ func (r *Reader) setRowBorrowedAndFieldsBorrowed() {
 	}
 }
 
-func (r *Reader) defaultRow() []string {
-	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.err != nil {
+func (r *fastReader) defaultRow() []string {
+	if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 		return nil
 	}
 
-	r.row = r.defaultClonedRow
-	return r.row()
+	r.pr.row = r.defaultClonedRow
+	return r.pr.row()
 }
 
-func (r *Reader) defaultClonedRow() []string {
-	if len(r.fieldLengths) != r.numFields || r.err != nil {
+func (r *fastReader) defaultClonedRow() []string {
+	if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 		return nil
 	}
 
@@ -1224,9 +1449,20 @@ func (r *Reader) defaultClonedRow() []string {
 	return row
 }
 
-func (r *Reader) defaultCheckNumFields(errTrailer error) bool {
+func (r *fastReader) defaultCheckNumFields(errTrailer error) bool {
 	if len(r.fieldLengths) == r.numFields {
 		return true
+	}
+
+	if len(r.fieldLengths) > r.numFields {
+		// impossible
+
+		// this flat out should never happen and may be removed in the future
+		// or turned into an at-test-runtime-only check
+		//
+		// reaching this state is equivalent to there being a low-level bug
+		// or severe data corruption
+		panic(panicMissedHandlingMaxExpectedFieldIndex)
 	}
 
 	// note: it's not possible for field lengths size to exceed the number of fields target
@@ -1234,20 +1470,20 @@ func (r *Reader) defaultCheckNumFields(errTrailer error) bool {
 	// so if we're here, then we're missing some fields in this record
 
 	r.setDone()
-	if r.err == nil {
+	if r.scanErr == nil {
 		r.parsingErr(notEnoughFieldsErr(r.numFields, len(r.fieldLengths)))
 		if errTrailer != nil {
-			r.err = errors.Join(r.err, errTrailer)
+			r.scanErr = errors.Join(r.scanErr, errTrailer)
 		}
 	}
 
 	return false
 }
 
-func (r *Reader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool {
+func (r *fastReader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool {
 	if r.defaultCheckNumFields(errTrailer) {
 		r.bitFlags |= stAfterSOR
-		r.checkNumFields = r.defaultCheckNumFields
+		r.setCheckNumFields(r.defaultCheckNumFields)
 		return true
 	}
 
@@ -1255,207 +1491,24 @@ func (r *Reader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool 
 }
 
 // errTrailer is unused since we're discovering the row length
-func (r *Reader) checkNumFieldsWithDiscovery(errTrailer error) bool {
+func (r *fastReader) checkNumFieldsWithDiscovery(errTrailer error) bool {
 	r.numFields = len(r.fieldLengths)
 	r.bitFlags |= stAfterSOR
-	r.checkNumFields = r.defaultCheckNumFields
+	r.setCheckNumFields(r.defaultCheckNumFields)
 	return true
 }
 
-func (r *Reader) resetRecordBuffers() {
+func (r *fastReader) resetRecordBuffers() {
 	r.fieldLengths = r.fieldLengths[:0]
 	r.fieldStart = 0
 	r.recordBuf = r.recordBuf[:0]
 }
 
-func (r *Reader) zeroRecordBuffers() {
-	{
-		v := r.rawBuf[:cap(r.rawBuf)]
-		for i := range v {
-			v[i] = 0
-		}
-	}
-
-	if r.fieldLengths != nil {
-		v := r.fieldLengths[:cap(r.fieldLengths)]
-		for i := range v {
-			v[i] = 0
-		}
-	}
-
-	if r.recordBuf != nil {
-		v := r.recordBuf[:cap(r.recordBuf)]
-		for i := range v {
-			v[i] = 0
-		}
-	}
-
-	if r.rowBuf != nil {
-		v := r.rowBuf[:cap(r.rowBuf)]
-		for i := range v {
-			v[i] = ""
-		}
-	}
-
-	r.resetRecordBuffers()
-}
-
-func (r *Reader) defaultScan() bool {
+func (r *fastReader) scan() bool {
 
 	r.resetRecordBuffers()
 
 	return r.prepareRow()
-}
-
-func (r *Reader) initPipeline(cfg rCfg) {
-
-	if !cfg.clearMemoryAfterFree {
-		r.close = r.defaultClose
-		r.prepareRow = r.prepareRow_memclearOff
-	} else {
-		r.close = r.closeWithMemClear
-		r.prepareRow = r.prepareRow_memclearOn
-	}
-
-	if cfg.rawBufSizeSet {
-		r.rawBuf = make([]byte, 0, cfg.rawBufSize)
-	} else if !cfg.rawBufSet {
-		r.rawBuf = make([]byte, 0, defaultReaderBufferSize)
-	}
-
-	if cfg.initialRecordBufferSize > 0 {
-		r.recordBuf = make([]byte, 0, cfg.initialRecordBufferSize)
-	}
-
-	if (r.bitFlags & (rFlagDropBOM | rFlagErrOnNoBOM)) == 0 {
-		r.state = rStateStartOfRecord
-	}
-
-	r.reader = cfg.reader
-
-	if r.numFields == -1 {
-		r.checkNumFields = r.checkNumFieldsWithDiscovery
-	} else {
-		if r.numFields > 0 {
-			r.fieldLengths = make([]int, 0, r.numFields)
-		}
-		if (r.bitFlags & rFlagComment) != 0 {
-			r.checkNumFields = r.checkNumFieldsWithStartOfRecordTracking
-		} else {
-			r.checkNumFields = r.defaultCheckNumFields
-		}
-	}
-
-	if !cfg.borrowRow {
-		r.row = r.defaultRow
-	} else if cfg.borrowFields {
-		r.setRowBorrowedAndFieldsBorrowed()
-	} else {
-		r.setRowBorrowedAndFieldsCloned()
-	}
-
-	// letting any valid utf8 end of line act as the record separator
-	// also building preflight and post-flight pipeline dynamically
-	r.scan = r.defaultScan
-
-	headersHandled := true
-	checkHeadersMatch := (r.headers != nil)
-	if checkHeadersMatch || cfg.removeHeaderRow || cfg.trimHeaders {
-		headersHandled = false
-		trimHeaders := cfg.trimHeaders
-		removeHeaderRow := cfg.removeHeaderRow
-		next := r.scan
-		r.scan = func() bool {
-			r.scan = next
-
-			if !r.scan() {
-				return false
-			}
-
-			if trimHeaders {
-				headersStr := string(r.recordBuf)
-				r.recordBuf = r.recordBuf[:0]
-
-				var p int
-				matching := checkHeadersMatch
-				for i, s := range r.fieldLengths {
-					field := headersStr[p : p+s]
-					p += s
-
-					field = strings.TrimSpace(field)
-					r.fieldLengths[i] = len(field)
-
-					r.recordBuf = append(r.recordBuf, []byte(field)...)
-
-					if matching && field != r.headers[i] {
-						matching = false
-					}
-				}
-
-				if checkHeadersMatch && !matching {
-					r.setDone()
-					r.parsingErr(ErrUnexpectedHeaderRowContents)
-					return false
-				}
-			} else if checkHeadersMatch {
-
-				var p int
-				for i, s := range r.fieldLengths {
-					var field string
-					if s > 0 {
-						// usage of unsafe here is actually safe because field is
-						// never modified and no parts of its contents exist
-						// without cloning values to other parts of memory
-						// past the lifecycle of this function
-						//
-						// It will also never be called if the len is zero,
-						// just as an extra precaution.
-						field = unsafe.String(&r.recordBuf[p], s)
-					}
-					p += s
-
-					if field != r.headers[i] {
-						r.setDone()
-						r.parsingErr(ErrUnexpectedHeaderRowContents)
-						return false
-					}
-				}
-			}
-
-			headersHandled = true
-
-			if !removeHeaderRow {
-				return true
-			}
-
-			r.resetRecordBuffers()
-
-			return r.scan()
-		}
-	}
-
-	if r.headers == nil && !cfg.errOnNoRows {
-		return
-	}
-
-	// verify that true is returned at least once
-	// using a slip closure
-	{
-		errOnNoRows := cfg.errOnNoRows
-		next := r.scan
-		r.scan = func() bool {
-			r.scan = next
-			v := r.scan()
-			if !v {
-				if !headersHandled {
-					r.parsingErr(ErrNoHeaderRow)
-				} else if errOnNoRows {
-					r.parsingErr(ErrNoRows)
-				}
-			}
-			return v
-		}
-	}
 }
 
 // fieldNumOverflow invokes streamParsingErr if
@@ -1470,7 +1523,7 @@ func (r *Reader) initPipeline(cfg rCfg) {
 // of fields when processing the stream and short circuit
 // that processes - returning the error path - when the result
 // of this function is true
-func (r *Reader) fieldNumOverflow() bool {
+func (r *fastReader) fieldNumOverflow() bool {
 	if len(r.fieldLengths) == r.numFields {
 		r.streamParsingErr(tooManyFieldsErr(r.numFields))
 		return true
@@ -1479,59 +1532,19 @@ func (r *Reader) fieldNumOverflow() bool {
 	return false
 }
 
-func (r *Reader) setDone() {
+func (r *fastReader) setDone() {
 	if (r.bitFlags & stDone) != 0 {
 		return
 	}
 	r.bitFlags |= stDone
 
-	r.scan = func() bool {
+	r.pr.scan = func() bool {
 		return false
 	}
 }
 
-func (r *Reader) appendRecBuf(b ...byte) {
-	oldRef := r.recordBuf
-
-	r.recordBuf = append(r.recordBuf, b...)
-
-	if cap(oldRef) == 0 {
-		return
-	}
-
-	oldRef = oldRef[:cap(oldRef)]
-
-	if &oldRef[0] == &(r.recordBuf[:1])[0] {
-		return
-	}
-
-	for i := range oldRef {
-		oldRef[i] = 0
-	}
-}
-
-// IntoIter converts the reader state into an iterator.
-// Calling this method more than once returns the same iterator instance.
-//
-// If the reader is configured with BorrowRow(true) then the resulting
-// slice and field strings are only valid to use up until the next
-// iteration and should not be saved to persistent memory.
-//
-// It is best practice to check if Err() returns a non-nil
-// error after fully traversing this iterator.
-//
-// This is just a syntactic sugar method to work with range statements
-// in go1.23 and later.
-func (r *Reader) IntoIter() iter.Seq[[]string] {
-	return r.iter
-}
-
-func (r *Reader) iter(yield func([]string) bool) {
-	for r.scan() {
-		if !yield(r.row()) {
-			return
-		}
-	}
+func (r *fastReader) err() error {
+	return r.scanErr
 }
 
 //
@@ -1578,8 +1591,10 @@ func isByteOrderMarker(r uint32, size int) bool {
 	}
 }
 
-func (r *Reader) handleEOF() bool {
+func (r *fastReader) handleEOF() bool {
+	//
 	// r.done is always true when this function is called
+	//
 
 	// check if we're in a terminal state otherwise error
 	// there is no new character to process
@@ -1624,4 +1639,476 @@ func (r *Reader) handleEOF() bool {
 func endsInValidUTF8(p []byte) bool {
 	r, s := utf8.DecodeLastRune(p)
 	return (r != utf8.RuneError || s > 1)
+}
+
+type secOpReader struct {
+	*fastReader
+	close             func() error
+	prepareRow        func() bool
+	appendRecBuf      func(...byte) bool
+	incRecordIndex    func()
+	outOfCommentBytes func(int) bool
+	outOfCommentLines func() bool
+	fieldNumOverflow  func() bool
+}
+
+func (r *secOpReader) closeWithMemClear() error {
+	v := r.fastReader.close()
+	r.zeroRecordBuffers()
+	return v
+}
+
+func (r *secOpReader) zeroRecordBuffers() {
+	{
+		v := r.rawBuf[:cap(r.rawBuf)]
+		for i := range v {
+			v[i] = 0
+		}
+	}
+
+	if r.fieldLengths != nil {
+		v := r.fieldLengths[:cap(r.fieldLengths)]
+		for i := range v {
+			v[i] = 0
+		}
+	}
+
+	if r.recordBuf != nil {
+		v := r.recordBuf[:cap(r.recordBuf)]
+		for i := range v {
+			v[i] = 0
+		}
+	}
+
+	if r.rowBuf != nil {
+		v := r.rowBuf[:cap(r.rowBuf)]
+		for i := range v {
+			v[i] = ""
+		}
+	}
+
+	r.resetRecordBuffers()
+}
+
+func (r *secOpReader) defaultIncRecordIndex() {
+	r.recordIndex++
+}
+
+func (r *secOpReader) incRecordIndexWithMax(max uint64) func() {
+	return func() {
+		//
+		// detects when a record separator would exceed the allowed record count
+		//
+
+		// if it equals the limit then we could or could not be about to reach an error
+		//
+		// all depends on if another character would be added to the record buf after
+		// this statement is reached
+
+		n := r.recordIndex + 1
+		if n == 0 || n > max {
+			// impossible
+
+			// this flat out should never happen and may be removed in the future
+			// or turned into an at-test-runtime-only check
+			//
+			// reaching this state is equivalent to there being a low-level bug
+			// or severe data corruption
+			panic(panicMissedHandlingMaxRecordIndex)
+		}
+
+		r.recordIndex = n
+
+		if n != max {
+			return
+		}
+
+		// note that any new call to append record bytes would start building a record violating this limit
+		//
+		// so these handler are utilized to throw an error accordingly
+
+		// intercept trying to push record data to the record buffer
+		r.appendRecBuf = r.appendRecBufNotAllowed
+
+		// intercept trying to push a record to the caller which may not have data bytes
+		//
+		// should be called even on 1 field files and files that end without a terminal record separator
+
+		// note that this intentionally skips the middlewares as we want any call to it to error
+		// middlewares can and should be short circuited in this case
+		// otherwise setCheckNumFields would be used to alter the function pointer value
+		r.checkNumFields = r.checkNumFieldsNotAllowed
+	}
+}
+
+func (r *secOpReader) defaultAppendRecBuf(b ...byte) bool {
+	r.recordBuf = append(r.recordBuf, b...)
+
+	return false
+}
+
+func (r *secOpReader) appendRecBufWithMemclear(b ...byte) bool {
+	oldRef := r.recordBuf
+
+	r.recordBuf = append(r.recordBuf, b...)
+
+	if cap(oldRef) == 0 {
+		return false
+	}
+
+	oldRef = oldRef[:cap(oldRef)]
+
+	if &oldRef[0] == &(r.recordBuf[:1])[0] {
+		return false
+	}
+
+	for i := range oldRef {
+		oldRef[i] = 0
+	}
+
+	return false
+}
+
+func (r *secOpReader) appendRecBufMaxCheck(max int) func(...byte) bool {
+	return func(b ...byte) bool {
+		// check if addition exceeds max or overflows
+		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
+			// simulate adding bytes up to the max
+			// note that r.streamErr will make the index a "human" value and add 1
+			r.byteIndex += uint64(max - len(r.recordBuf))
+			r.secOpStreamParsingErr(ErrSecOpRecordByteCountAboveMax)
+			return true
+		}
+
+		r.recordBuf = append(r.recordBuf, b...)
+
+		return false
+	}
+}
+
+func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func(...byte) bool {
+	return func(b ...byte) bool {
+		// check if addition exceeds max or overflows
+		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
+			// simulate adding bytes up to the max
+			// note that r.streamErr will make the index a "human" value and add 1
+			r.byteIndex += uint64(max - len(r.recordBuf))
+			r.secOpStreamParsingErr(ErrSecOpRecordByteCountAboveMax)
+			return true
+		}
+
+		oldRef := r.recordBuf
+
+		r.recordBuf = append(r.recordBuf, b...)
+
+		if cap(oldRef) == 0 {
+			return false
+		}
+
+		oldRef = oldRef[:cap(oldRef)]
+
+		if &oldRef[0] == &(r.recordBuf[:1])[0] {
+			return false
+		}
+
+		for i := range oldRef {
+			oldRef[i] = 0
+		}
+
+		return false
+	}
+}
+
+func (r *secOpReader) appendRecBufNotAllowed(_ ...byte) bool {
+	r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
+	return true
+}
+
+func (r *secOpReader) scan() bool {
+
+	r.resetRecordBuffers()
+
+	return r.prepareRow()
+}
+
+func (sr *secOpReader) nopOutOfCommentBytes(_ int) bool {
+	return false
+}
+
+func (sr *secOpReader) newOutOfCommentBytes(remainingBytes int) func(int) bool {
+	return func(n int) bool {
+		if remainingBytes <= 0 || remainingBytes < n {
+			sr.byteIndex += uint64(max(0, remainingBytes))
+			// remainingBytes = 0 // no need to set it to zero, we'll never use it again
+			sr.secOpStreamParsingErr(ErrSecOpCommentBytesAboveMax)
+			return true
+		}
+
+		remainingBytes -= n
+
+		return false
+	}
+}
+
+func (sr *secOpReader) nopOutOfCommentLines() bool {
+	return false
+}
+
+func (sr *secOpReader) newOutOfCommentLines(remainingComments int) func() bool {
+	return func() bool {
+		if remainingComments <= 0 {
+			sr.secOpStreamParsingErr(ErrSecOpCommentsAboveMax)
+			return true
+		}
+
+		remainingComments--
+
+		return false
+	}
+}
+
+func (r *secOpReader) checkNumFieldsNotAllowed(_ error) bool {
+	r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
+	return false
+}
+
+type Reader interface {
+	Close() error
+	Err() error
+	IntoIter() iter.Seq[[]string]
+	Row() []string
+	Scan() bool
+}
+
+type internalReader any
+
+func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string, bitFlags rFlag) (Reader, internalReader) {
+
+	r := &readerStrat{}
+
+	fr := &fastReader{
+		controlRunes:   controlRunes,
+		rawBuf:         cfg.rawBuf[0:0:len(cfg.rawBuf)],
+		reader:         cfg.reader,
+		quote:          cfg.quote,
+		escape:         cfg.escape,
+		numFields:      cfg.numFields,
+		fieldSeparator: cfg.fieldSeparator,
+		comment:        cfg.comment,
+		headers:        headers,
+		recordBuf:      cfg.recordBuf[0:0:len(cfg.recordBuf)],
+		rowBuf:         rowBuf,
+		recordSep:      cfg.recordSep,
+		recordSepLen:   cfg.recordSepLen,
+		bitFlags:       bitFlags,
+		pr:             r,
+	}
+
+	var sr *secOpReader
+
+	if cfg.clearMemoryAfterFree || cfg.maxRecordBytesSet || cfg.maxRecordsSet || cfg.maxCommentBytesSet || cfg.maxCommentsSet || cfg.maxFieldsSet {
+		sr = &secOpReader{fastReader: fr}
+
+		if cfg.clearMemoryAfterFree {
+			sr.close = sr.closeWithMemClear
+			if cfg.maxRecordBytesSet {
+				sr.appendRecBuf = sr.appendRecBufMaxCheckMemClear(cfg.maxRecordBytes)
+			} else {
+				sr.appendRecBuf = sr.appendRecBufWithMemclear
+			}
+		} else {
+			sr.close = fr.close
+			if cfg.maxRecordBytesSet {
+				sr.appendRecBuf = sr.appendRecBufMaxCheck(cfg.maxRecordBytes)
+			} else {
+				sr.appendRecBuf = sr.defaultAppendRecBuf
+			}
+		}
+
+		sr.prepareRow = sr.prepareRow_memclearOn
+
+		if !cfg.maxCommentBytesSet {
+			sr.outOfCommentBytes = sr.nopOutOfCommentBytes
+		} else {
+			sr.outOfCommentBytes = sr.newOutOfCommentBytes(cfg.maxCommentBytes)
+		}
+
+		if !cfg.maxCommentsSet {
+			sr.outOfCommentLines = sr.nopOutOfCommentLines
+		} else {
+			sr.outOfCommentLines = sr.newOutOfCommentLines(cfg.maxComments)
+		}
+
+		if !cfg.maxRecordsSet {
+			sr.incRecordIndex = sr.defaultIncRecordIndex
+		} else {
+			sr.incRecordIndex = sr.incRecordIndexWithMax(cfg.maxRecords)
+		}
+
+		if cfg.maxFieldsSet {
+			sr.fieldNumOverflow = sr.fieldNumOverflowWithMaxCheck(cfg.maxFields)
+		} else {
+			sr.fieldNumOverflow = fr.fieldNumOverflow
+		}
+
+		r.scan = sr.scan
+	} else {
+		r.scan = fr.scan
+	}
+
+	if cfg.rawBufSizeSet {
+		fr.rawBuf = make([]byte, 0, cfg.rawBufSize)
+	} else if !cfg.rawBufSet {
+		fr.rawBuf = make([]byte, 0, defaultReaderBufferSize)
+	}
+
+	if cfg.initialRecordBufferSize > 0 {
+		fr.recordBuf = make([]byte, 0, cfg.initialRecordBufferSize)
+	}
+
+	if (fr.bitFlags & (rFlagDropBOM | rFlagErrOnNoBOM)) == 0 {
+		fr.state = rStateStartOfRecord
+	}
+
+	if fr.numFields == -1 {
+		fr.setCheckNumFields(fr.checkNumFieldsWithDiscovery)
+	} else {
+		if fr.numFields > 0 {
+			fr.fieldLengths = make([]int, 0, fr.numFields)
+		}
+		if (fr.bitFlags & rFlagComment) != 0 {
+			fr.setCheckNumFields(fr.checkNumFieldsWithStartOfRecordTracking)
+		} else {
+			fr.setCheckNumFields(fr.defaultCheckNumFields)
+		}
+	}
+
+	if !cfg.borrowRow {
+		r.row = fr.defaultRow
+	} else if cfg.borrowFields {
+		fr.setRowBorrowedAndFieldsBorrowed()
+	} else {
+		fr.setRowBorrowedAndFieldsCloned()
+	}
+
+	headersHandled := true
+	checkHeadersMatch := (fr.headers != nil)
+	if checkHeadersMatch || cfg.removeHeaderRow || cfg.trimHeaders {
+		headersHandled = false
+		trimHeaders := cfg.trimHeaders
+		removeHeaderRow := cfg.removeHeaderRow
+		next := r.scan
+		r.scan = func() bool {
+			r.scan = next
+
+			if !r.scan() {
+				return false
+			}
+
+			if trimHeaders {
+				headersStr := string(fr.recordBuf)
+				fr.recordBuf = fr.recordBuf[:0]
+
+				var p int
+				matching := checkHeadersMatch
+				for i, s := range fr.fieldLengths {
+					field := headersStr[p : p+s]
+					p += s
+
+					field = strings.TrimSpace(field)
+					fr.fieldLengths[i] = len(field)
+
+					fr.recordBuf = append(fr.recordBuf, []byte(field)...)
+
+					if matching && field != fr.headers[i] {
+						matching = false
+					}
+				}
+
+				if checkHeadersMatch && !matching {
+					fr.setDone()
+					fr.parsingErr(ErrUnexpectedHeaderRowContents)
+					return false
+				}
+			} else if checkHeadersMatch {
+
+				var p int
+				for i, s := range fr.fieldLengths {
+					var field string
+					if s > 0 {
+						// usage of unsafe here is actually safe because field is
+						// never modified and no parts of its contents exist
+						// without cloning values to other parts of memory
+						// past the lifecycle of this function
+						//
+						// It will also never be called if the len is zero,
+						// just as an extra precaution.
+						field = unsafe.String(&fr.recordBuf[p], s)
+					}
+					p += s
+
+					if field != fr.headers[i] {
+						fr.setDone()
+						fr.parsingErr(ErrUnexpectedHeaderRowContents)
+						return false
+					}
+				}
+			}
+
+			headersHandled = true
+
+			if !removeHeaderRow {
+				return true
+			}
+
+			fr.resetRecordBuffers()
+
+			return r.scan()
+		}
+	}
+
+	if fr.headers == nil && !cfg.errOnNoRows {
+		if sr != nil {
+			r.close = sr.close
+			r.err = sr.err
+
+			return r, sr
+		}
+
+		r.close = fr.close
+		r.err = fr.err
+
+		return r, fr
+	}
+
+	// verify that true is returned at least once
+	// using a slip closure
+	{
+		errOnNoRows := cfg.errOnNoRows
+		next := r.scan
+		r.scan = func() bool {
+			r.scan = next
+			v := r.scan()
+			if !v {
+				if !headersHandled {
+					fr.parsingErr(ErrNoHeaderRow)
+				} else if errOnNoRows {
+					fr.parsingErr(ErrNoRows)
+				}
+			}
+			return v
+		}
+	}
+
+	if sr != nil {
+		r.close = sr.close
+		r.err = sr.err
+
+		return r, sr
+	}
+
+	r.close = fr.close
+	r.err = fr.err
+
+	return r, fr
 }

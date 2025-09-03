@@ -2,7 +2,7 @@
 
 csv-go
 
-[![Go Report Card](https://goreportcard.com/badge/github.com/josephcopenhaver/csv-go)](https://goreportcard.com/report/github.com/josephcopenhaver/csv-go/v2)
+[![Go Report Card](https://goreportcard.com/badge/github.com/josephcopenhaver/csv-go)](https://goreportcard.com/report/github.com/josephcopenhaver/csv-go/v3)
 ![tests](https://github.com/josephcopenhaver/csv-go/actions/workflows/tests.yaml/badge.svg)
 ![code-coverage](https://img.shields.io/badge/code_coverage-100%25-rgb%2852%2C208%2C88%29)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -19,7 +19,7 @@ package main
 import (
 	"os"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 )
 
 func main() {
@@ -79,7 +79,7 @@ See the [Reader](internal/examples/reader/main.go) and [Writer](internal/example
 | Headers Support | ExpectHeaders + RemoveHeaderRow + TrimHeaders |
 | Reader Buffer tuning | ReaderBuffer + ReaderBufferSize |
 | Format Validation | ErrorOnNoRows + ErrorOnNewlineInUnquotedField + ErrorOnQuotesInUnquotedField |
-| Security Limits | *planned* |
+| Security Limits | MaxFields + MaxRecordBytes + MaxRecords + MaxComments + MaxCommentBytes |
 
 ## Writer Features
 
@@ -94,8 +94,8 @@ See the [Reader](internal/examples/reader/main.go) and [Writer](internal/example
 
 ---
 
-[CHANGELOG](docs/version/v2/CHANGELOG.md)
+[CHANGELOG](docs/version/v3/CHANGELOG.md)
 
 ---
 
-[![Go Reference](https://pkg.go.dev/badge/github.com/josephcopenhaver/csv-go/v2.svg)](https://pkg.go.dev/github.com/josephcopenhaver/csv-go/v2)
+[![Go Reference](https://pkg.go.dev/badge/github.com/josephcopenhaver/csv-go/v3.svg)](https://pkg.go.dev/github.com/josephcopenhaver/csv-go/v3)

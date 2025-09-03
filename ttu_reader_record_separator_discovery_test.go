@@ -11,6 +11,8 @@ import (
 )
 
 func TestUnitReaderDiscoverRecordSeparator(t *testing.T) {
+	t.Parallel()
+
 	tcs := [][]string{
 		{
 			"start of record",
@@ -69,7 +71,7 @@ func TestUnitReaderDiscoverRecordSeparator(t *testing.T) {
 				t.Run(name+" encounter "+recSep[0]+" with RecSepDiscovery=true withReadBufSize=ReaderMinBufferSize "+iOpts.name, func(t *testing.T) {
 					is := assert.New(t)
 
-					cr, err := NewReader(append([]ReaderOption{
+					cr, crv, err := internalNewReader(append([]ReaderOption{
 						ReaderOpts().Reader(strings.NewReader(strings.Join(tc, ""))),
 						ReaderOpts().Quote('"'),
 						ReaderOpts().Escape('\\'),
@@ -79,19 +81,29 @@ func TestUnitReaderDiscoverRecordSeparator(t *testing.T) {
 					}, iOpts.opts...)...)
 					is.Nil(err)
 					is.NotNil(cr)
+					is.NotNil(crv)
+
+					var cri *fastReader
+					if v, ok := crv.(*secOpReader); ok {
+						cri = v.fastReader
+					} else if v, ok := crv.(*fastReader); ok {
+						cri = v
+					} else {
+						is.FailNow("unexpected reader type")
+					}
 
 					// verify control runes initialized as expected
 					{
 						allPossibleNLRunes := []rune{asciiCarriageReturn, asciiLineFeed, asciiVerticalTab, asciiFormFeed, utf8NextLine, utf8LineSeparator}
 
-						expControlRunes := string(cr.fieldSeparator) + string(cr.quote) + string(cr.escape) + string(cr.comment)
+						expControlRunes := string(cri.fieldSeparator) + string(cri.quote) + string(cri.escape) + string(cri.comment)
 						for _, r := range allPossibleNLRunes {
 							if !bytes.ContainsRune([]byte(expControlRunes), r) {
 								expControlRunes += string(r)
 							}
 						}
 
-						is.Equal(expControlRunes, cr.controlRunes)
+						is.Equal(expControlRunes, cri.controlRunes)
 					}
 
 					is.Nil(cr.Row())
@@ -111,13 +123,13 @@ func TestUnitReaderDiscoverRecordSeparator(t *testing.T) {
 
 					// verify control runes changed to a subset as expected
 					{
-						expControlRunes := string(cr.fieldSeparator)
+						expControlRunes := string(cri.fieldSeparator)
 						if strings.HasPrefix(recSep[1], "\r") {
 							expControlRunes += "\r"
 						} else {
 							expControlRunes += string(recSep[1])
 						}
-						expControlRunes += string(cr.quote) + string(cr.escape) + string(cr.comment)
+						expControlRunes += string(cri.quote) + string(cri.escape) + string(cri.comment)
 						if !bytes.ContainsRune([]byte(expControlRunes), asciiCarriageReturn) {
 							expControlRunes += string(rune(asciiCarriageReturn))
 						}
@@ -125,7 +137,7 @@ func TestUnitReaderDiscoverRecordSeparator(t *testing.T) {
 							expControlRunes += string(rune(asciiLineFeed))
 						}
 
-						is.Equal(expControlRunes, cr.controlRunes)
+						is.Equal(expControlRunes, cri.controlRunes)
 					}
 
 					is.Nil(cr.Close())

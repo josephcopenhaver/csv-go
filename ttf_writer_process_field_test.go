@@ -3,10 +3,12 @@ package csv_test
 import (
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 )
 
 func TestFunctionalWriterProcessFieldOKPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalWriterTestCase{
 		{
 			when: "err on non-utf8 is disabled and non-utf8 present in field and escape disabled",

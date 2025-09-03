@@ -2,7 +2,7 @@
 
 main() {
     rm -f coverage.out
-    go test -coverprofile=coverage.out $(go list ./... | grep -vE '^(github\.com/josephcopenhaver/csv-go/v2/internal/examples/|github\.com/josephcopenhaver/csv-go/v2/internal/cmd/)')
+    go test -coverprofile=coverage.out $(go list ./... | grep -vE '^(github\.com/josephcopenhaver/csv-go/v3/internal/examples/|github\.com/josephcopenhaver/csv-go/v3/internal/cmd/)')
     local n="$(go tool cover -func coverage.out | grep -E '^total:' | sed -E 's/^.*\s+([0-9\.]+)\s*%.*$/\1/ ; s/100.0*$/100/')"
 
     local color='red'

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/josephcopenhaver/csv-go/v2"
+	"github.com/josephcopenhaver/csv-go/v3"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -30,6 +30,8 @@ func (ew *errWriter) Write(p []byte) (int, error) {
 }
 
 func TestFunctionalWriterErrorPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalWriterTestCase{
 		{
 			when: "a row with no fields - nil",
