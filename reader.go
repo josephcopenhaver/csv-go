@@ -146,12 +146,26 @@ var (
 type posTracedErr struct {
 	errType                error
 	err                    error
-	byteIndex, recordIndex uint64 // TODO: refactor into uint instead of uint64
+	byteIndex, recordIndex uint64 // TODO: refactor into uint instead of uint64 // SECONDARY - NOT URGENT
 	fieldIndex             uint
 }
 
 func (e posTracedErr) Error() string {
-	return fmt.Sprintf("%s at byte %d, record %d, field %d: %s", e.errType.Error(), e.byteIndex, e.recordIndex, e.fieldIndex, e.err.Error())
+	const maxCharsInUint64Str = 20
+	var sb strings.Builder
+	var uint64Buf [maxCharsInUint64Str]byte
+
+	sb.WriteString(e.errType.Error())
+	sb.WriteString(" at byte ")
+	sb.Write(strconv.AppendUint(uint64Buf[:0], e.byteIndex, 10))
+	sb.WriteString(", record ")
+	sb.Write(strconv.AppendUint(uint64Buf[:0], e.recordIndex, 10))
+	sb.WriteString(", field ")
+	sb.Write(strconv.AppendUint(uint64Buf[:0], uint64(e.fieldIndex), 10))
+	sb.WriteString(": ")
+	sb.WriteString(e.err.Error())
+
+	return sb.String()
 }
 
 func (e posTracedErr) Is(err error) bool {
@@ -1211,6 +1225,10 @@ func (r *secOpReader) secOpErr(err error) {
 	// TODO: might be able to remove this function and embed in the only caller
 	if r.scanErr == nil {
 		recordIndex, fieldIndex := r.humanIndexes()
+		if err == ErrSecOpCommentsAboveMax && recordIndex == 1 {
+			recordIndex -= 1
+			fieldIndex -= 1
+		}
 		r.scanErr = newSecOpError(r.byteIndex, recordIndex, fieldIndex, err)
 	}
 }

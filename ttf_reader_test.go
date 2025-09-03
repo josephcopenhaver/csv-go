@@ -237,6 +237,8 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 }
 
 func TestFunctionalReaderOKPaths(t *testing.T) {
+	t.Parallel()
+
 	tcs := []functionalReaderTestCase{
 		func() functionalReaderTestCase {
 			selfInit := func(tc *functionalReaderTestCase) {

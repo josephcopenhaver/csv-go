@@ -79,7 +79,7 @@ See the [Reader](internal/examples/reader/main.go) and [Writer](internal/example
 | Headers Support | ExpectHeaders + RemoveHeaderRow + TrimHeaders |
 | Reader Buffer tuning | ReaderBuffer + ReaderBufferSize |
 | Format Validation | ErrorOnNoRows + ErrorOnNewlineInUnquotedField + ErrorOnQuotesInUnquotedField |
-| Security Limits | *planned* |
+| Security Limits | MaxFields + MaxRecordBytes + MaxRecords + MaxComments + MaxCommentBytes |
 
 ## Writer Features
 

@@ -37,7 +37,7 @@ func TestFunctionalReaderPrepareRowOutOfCommentLinesRespTruePaths(t *testing.T) 
 				csv.ReaderOpts().MaxComments(1),
 			},
 			iterErrIs:  []error{csv.ErrSecOp, csv.ErrSecOpCommentsAboveMax},
-			iterErrStr: csv.ErrSecOp.Error() + " at byte 7, record 1, field 1: " + csv.ErrSecOpCommentsAboveMax.Error(), // TODO: NEXT: record and field indicator are wrong here
+			iterErrStr: csv.ErrSecOp.Error() + " at byte 7, record 0, field 0: " + csv.ErrSecOpCommentsAboveMax.Error(),
 		},
 	}
 
