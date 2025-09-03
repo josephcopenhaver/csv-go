@@ -154,8 +154,8 @@ func (e posTracedErr) Error() string {
 	return fmt.Sprintf("%s at byte %d, record %d, field %d: %s", e.errType.Error(), e.byteIndex, e.recordIndex, e.fieldIndex, e.err.Error())
 }
 
-func (e posTracedErr) Unwrap() []error {
-	return []error{e.errType, e.err}
+func (e posTracedErr) Is(err error) bool {
+	return errors.Is(e.errType, err) || errors.Is(e.err, err)
 }
 
 func newIOError(byteIndex, recordIndex uint64, fieldIndex uint, err error) posTracedErr {
@@ -193,8 +193,8 @@ type errNotEnoughFields struct {
 	Expected, Actual int
 }
 
-func (e errNotEnoughFields) Unwrap() []error {
-	return []error{ErrFieldCount, ErrNotEnoughFields}
+func (e errNotEnoughFields) Is(err error) bool {
+	return errors.Is(err, ErrFieldCount) || errors.Is(err, ErrNotEnoughFields)
 }
 
 func (e errNotEnoughFields) Error() string {
@@ -209,8 +209,8 @@ type errTooManyFields struct {
 	expected int
 }
 
-func (e errTooManyFields) Unwrap() []error {
-	return []error{ErrFieldCount, ErrTooManyFields}
+func (e errTooManyFields) Is(err error) bool {
+	return errors.Is(err, ErrFieldCount) || errors.Is(err, ErrTooManyFields)
 }
 
 func (e errTooManyFields) Error() string {
@@ -219,6 +219,16 @@ func (e errTooManyFields) Error() string {
 
 func tooManyFieldsErr(exp int) errTooManyFields {
 	return errTooManyFields{exp}
+}
+
+type errTooManyFieldsAboveMax struct{}
+
+func (e errTooManyFieldsAboveMax) Is(err error) bool {
+	return errors.Is(err, ErrFieldCount) || errors.Is(err, ErrTooManyFields) || errors.Is(err, ErrSecOpFieldCountAboveMax)
+}
+
+func (e errTooManyFieldsAboveMax) Error() string {
+	return ErrSecOpFieldCountAboveMax.Error()
 }
 
 type ReaderOption func(*rCfg)
@@ -764,13 +774,13 @@ type rCfg struct {
 }
 
 type fastReader struct {
-	checkNumFieldsMiddlewares [](func(func(error) bool) func(error) bool)
-	controlRunes              string
-	rawBuf                    []byte
-	rawIndex                  int
+	controlRunes string
+	rawBuf       []byte
+	rawIndex     int
 	//
-	readErr           error
-	scanErr           error
+	readErr error
+	scanErr error
+	// checkNumFields is called at the end of parsing a record to ensure field counts match expectations and that none are missing
 	checkNumFields    func(errTrailer error) bool
 	reader            io.Reader
 	recordSep         [2]rune
@@ -1225,49 +1235,26 @@ func (r *fastReader) streamParsingErr(err error) {
 	r.parsingErr(err)
 }
 
-func (r *secOpReader) checkNumFieldsMaxMiddleware(max uint) func(next func(error) bool) func(error) bool {
-	return func(next func(error) bool) func(error) bool {
-		return func(errTrailer error) bool {
-			n := r.fieldIndex + 1
-			if n == 0 || n > max {
-				// impossible
-
-				// this flat out should never happen and may be removed in the future
-				// or turned into an at-test-runtime-only check
-				//
-				// reaching this state is equivalent to there being a low-level bug
-				// or severe data corruption
-				panic(panicMissedHandlingMaxSecOpFieldIndex)
-			}
-
-			if n < max {
-				return next(errTrailer)
-			}
-
-			// otherwise we're done because the max has been exceeded
-
-			r.setDone()
-			if r.scanErr == nil {
-				r.secOpStreamParsingErr(ErrSecOpFieldCountAboveMax)
-				if errTrailer != nil {
-					r.scanErr = errors.Join(r.scanErr, errTrailer)
-				}
-			}
-
-			return false
+func (r *secOpReader) fieldNumOverflowWithMaxCheck(max uint) func() bool {
+	return func() bool {
+		// this block was just copied from fast-reader's fieldNumOverflow implementation
+		if len(r.fieldLengths) == r.numFields {
+			r.streamParsingErr(tooManyFieldsErr(r.numFields))
+			return true
 		}
+
+		// new addition for supporting max:
+		if uint(len(r.fieldLengths)) == max {
+			r.secOpStreamParsingErr(errTooManyFieldsAboveMax{})
+			return true
+		}
+
+		return false
 	}
 }
 
 func (r *fastReader) setCheckNumFields(f func(error) bool) {
-	h := f
-	mws := r.checkNumFieldsMiddlewares
-
-	for i := len(mws) - 1; i >= 0; i-- {
-		h = mws[i](h)
-	}
-
-	r.checkNumFields = h
+	r.checkNumFields = f
 }
 
 // secOpStreamParsingErr performs a side effect of increasing the byteIndex of state
@@ -1645,6 +1632,7 @@ type secOpReader struct {
 	incRecordIndex    func()
 	outOfCommentBytes func(int) bool
 	outOfCommentLines func() bool
+	fieldNumOverflow  func() bool
 }
 
 func (r *secOpReader) closeWithMemClear() error {
@@ -1728,7 +1716,6 @@ func (r *secOpReader) incRecordIndexWithMax(max uint64) func() {
 		// intercept trying to push a record to the caller which may not have data bytes
 		//
 		// should be called even on 1 field files and files that end without a terminal record separator
-		// TODO: test this
 
 		// note that this intentionally skips the middlewares as we want any call to it to error
 		// middlewares can and should be short circuited in this case
@@ -1833,15 +1820,8 @@ func (sr *secOpReader) nopOutOfCommentBytes(_ int) bool {
 
 func (sr *secOpReader) newOutOfCommentBytes(remainingBytes int) func(int) bool {
 	return func(n int) bool {
-		// TODO: combine these two clauses
-
-		if remainingBytes <= 0 {
-			sr.secOpStreamParsingErr(ErrSecOpCommentBytesAboveMax)
-			return true
-		}
-
-		if remainingBytes < n {
-			sr.byteIndex += uint64(remainingBytes)
+		if remainingBytes <= 0 || remainingBytes < n {
+			sr.byteIndex += uint64(max(0, remainingBytes))
 			// remainingBytes = 0 // no need to set it to zero, we'll never use it again
 			sr.secOpStreamParsingErr(ErrSecOpCommentBytesAboveMax)
 			return true
@@ -1919,8 +1899,6 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 			} else {
 				sr.appendRecBuf = sr.appendRecBufWithMemclear
 			}
-
-			sr.prepareRow = sr.prepareRow_memclearOn
 		} else {
 			sr.close = fr.close
 			if cfg.maxRecordBytesSet {
@@ -1928,9 +1906,9 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 			} else {
 				sr.appendRecBuf = sr.defaultAppendRecBuf
 			}
-
-			sr.prepareRow = sr.prepareRow_memclearOn // TODO: move to after block scope
 		}
+
+		sr.prepareRow = sr.prepareRow_memclearOn
 
 		if !cfg.maxCommentBytesSet {
 			sr.outOfCommentBytes = sr.nopOutOfCommentBytes
@@ -1950,6 +1928,12 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 			sr.incRecordIndex = sr.incRecordIndexWithMax(cfg.maxRecords)
 		}
 
+		if cfg.maxFieldsSet {
+			sr.fieldNumOverflow = sr.fieldNumOverflowWithMaxCheck(cfg.maxFields)
+		} else {
+			sr.fieldNumOverflow = fr.fieldNumOverflow
+		}
+
 		r.scan = sr.scan
 	} else {
 		r.scan = fr.scan
@@ -1967,12 +1951,6 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 
 	if (fr.bitFlags & (rFlagDropBOM | rFlagErrOnNoBOM)) == 0 {
 		fr.state = rStateStartOfRecord
-	}
-
-	if cfg.maxFieldsSet {
-		fr.checkNumFieldsMiddlewares = [](func(func(error) bool) func(error) bool){
-			sr.checkNumFieldsMaxMiddleware(cfg.maxFields),
-		}
 	}
 
 	if fr.numFields == -1 {

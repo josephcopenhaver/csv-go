@@ -372,6 +372,58 @@ func TestFunctionalReaderInitializationPaths(t *testing.T) {
 		})
 	})
 
+	t.Run("when creating a csv reader and clearing freed data mem and MaxRecordBytes=2", func(t *testing.T) {
+		t.Run("should not error and un-cloned extracted first row values should zero out", func(t *testing.T) {
+			cr, err := csv.NewReader(
+				csv.ReaderOpts().Reader(strings.NewReader("a,\n1,2")),
+				csv.ReaderOpts().BorrowRow(true),
+				csv.ReaderOpts().BorrowFields(true),
+				csv.ReaderOpts().ClearFreedDataMemory(true),
+				csv.ReaderOpts().InitialRecordBufferSize(1),
+				csv.ReaderOpts().MaxRecordBytes(2),
+			)
+			assert.Nil(t, err)
+			assert.NotNil(t, cr)
+			assert.Nil(t, cr.Row())
+
+			firstRow, secondRow := true, false
+			var f1p1, f1p2, f2p1, f2p2 string
+			for row := range cr.IntoIter() {
+				if firstRow {
+					firstRow = false
+					secondRow = true
+					f1p1 = row[0]
+					f1p2 = row[1]
+					assert.Equal(t, "a", f1p1)
+					assert.Equal(t, "", f1p2)
+				} else {
+					if !secondRow {
+						t.Log("entered into final block more than once when it should not be possible")
+						t.Fail()
+					}
+					secondRow = false
+
+					f2p1 = row[0]
+					f2p2 = row[1]
+					assert.Equal(t, "1", f2p1)
+					assert.Equal(t, "2", f2p2)
+					assert.Equal(t, "\x00", f1p1)
+					assert.Equal(t, "", f1p2)
+				}
+			}
+
+			assert.Nil(t, cr.Err())
+			assert.Nil(t, cr.Close())
+			assert.Nil(t, cr.Row())
+
+			assert.Equal(t, "\x00", f1p1)
+			assert.Equal(t, "", f1p2)
+
+			assert.Equal(t, "\x00", f2p1)
+			assert.Equal(t, "\x00", f2p2)
+		})
+	})
+
 	t.Run("when creating a csv reader with MaxField=2 NumField=1", func(t *testing.T) {
 		t.Run("should not error on init", func(t *testing.T) {
 			cr, err := csv.NewReader(

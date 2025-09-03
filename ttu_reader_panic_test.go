@@ -8,6 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// statically validates panicErr type satisfies interface implementations
+// that are normally required by panic handlers
 var (
 	// verify panicErr implements error interface
 	_ error = panicErr(0)
@@ -121,7 +123,7 @@ func TestUnitSecOpReaderPanicOnHandleEOF(t *testing.T) {
 
 	cri, ok := crv.(*secOpReader)
 	if !ok {
-		is.Fail("expected fastReader type, got %T", cr)
+		is.Fail("expected secOpReader type, got %T", cr)
 	}
 
 	cri.recordIndex = 1
@@ -140,4 +142,50 @@ func TestUnitSecOpReaderPanicOnHandleEOF(t *testing.T) {
 	is.Equal(r, panicMissedHandlingMaxRecordIndex)
 	is.Equal(panicMissedHandlingMaxRecordIndex.String(), panicMissedHandlingMaxRecordIndex.Error())
 	is.Equal(panicMissedHandlingMaxRecordIndex.String(), "missed handling record index at max value")
+}
+
+func TestUnitReaderPanicOnCorruptedFieldLengthsEOF(t *testing.T) {
+	t.Parallel()
+
+	//
+	// when secOpReader's recordIndex is in a corrupted state
+	//
+	// a panic should occur if incRecordIndexWithMax is called
+	//
+
+	is := assert.New(t)
+
+	cr, crv, err := internalNewReader(
+		ReaderOpts().Reader(strings.NewReader("")),
+		ReaderOpts().NumFields(1),
+	)
+	is.Nil(err)
+	is.NotNil(cr)
+	is.NotNil(crv)
+
+	cri, ok := crv.(*fastReader)
+	if !ok {
+		is.Fail("expected fastReader type, got %T", cr)
+	}
+
+	cri.fieldLengths = append(cri.fieldLengths, 0)
+	cri.fieldIndex++
+
+	cri.fieldLengths = append(cri.fieldLengths, 0)
+	cri.fieldIndex++
+
+	handlePanic := func() (r any) {
+		defer func() {
+			r = recover()
+		}()
+		cri.checkNumFields(nil)
+		return nil
+	}
+
+	r := handlePanic()
+	is.NotNil(r)
+
+	is.Equal(r, panicMissedHandlingMaxExpectedFieldIndex)
+	is.Equal(panicMissedHandlingMaxExpectedFieldIndex.String(), panicMissedHandlingMaxExpectedFieldIndex.Error())
+	is.Equal(panicMissedHandlingMaxExpectedFieldIndex.String(), "missed handling field index at expected max value")
 }

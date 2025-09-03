@@ -272,7 +272,7 @@ func TestFunctionalReaderParsingErrorPaths(t *testing.T) {
 				csv.ReaderOpts().ExpectHeaders(strings.Split("a,b", ",")),
 				csv.ReaderOpts().TrimHeaders(true),
 			},
-			iterErrIs:  []error{csv.ErrParsing, csv.ErrTooManyFields},
+			iterErrIs:  []error{csv.ErrParsing, csv.ErrFieldCount, csv.ErrTooManyFields},
 			iterErrStr: csv.ErrParsing.Error() + " at byte 7, record 1, field 2: " + csv.ErrTooManyFields.Error() + ": field count exceeds 2",
 		},
 		{
