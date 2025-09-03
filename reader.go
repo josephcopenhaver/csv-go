@@ -340,34 +340,6 @@ func (ReaderOptions) ErrorOnNewlineInUnquotedField(b bool) ReaderOption {
 	}
 }
 
-// // MaxNumFields does nothing at the moment except cause a panic
-// func (ReaderOptions) MaxNumFields(n int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxNumFields = n
-// 	}
-// }
-
-// // MaxNumBytes does nothing at the moment except cause a panic
-// func (ReaderOptions) MaxNumBytes(n int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxNumBytes = n
-// 	}
-// }
-
-// // MaxNumRecords does nothing at the moment except cause a panic
-// func (ReaderOptions) MaxNumRecords(n int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxNumRecords = n
-// 	}
-// }
-
-// // MaxNumRecordBytes does nothing at the moment except cause a panic
-// func (ReaderOptions) MaxNumRecordBytes(n int) ReaderOption {
-// 	return func(cfg *rCfg) {
-// 		cfg.maxNumRecordBytes = n
-// 	}
-// }
-
 func (ReaderOptions) FieldSeparator(r rune) ReaderOption {
 	return func(cfg *rCfg) {
 		cfg.fieldSeparator = r

@@ -25,6 +25,7 @@
 
 ### Breaking API changes
 - NewReader now returns the Reader interface: `Reader (interface)` (previously `*Reader (struct pointer)`).
+- ReaderOptions.ExpectHeaders() has changed signatures from `func([]string)` to `func(...string)` and no longer accepts a nil value.
 - Minimum supported Go version: 1.25.
 
 ---
@@ -32,4 +33,4 @@
 ## Moving to V3
 
 - NewReader now returns an interface rather than a pointer to a concrete exported type to match the spirit of hiding the internals as much as possible. To ease transition the *Reader struct that was returned is now a Reader interface with the same exported function signature.
-- ExpectHeaders now errors when a nil value is passed in. In addition it now takes a variadic slice of strings rather than a slice of strings.
+- ExpectHeaders now errors when a nil value is passed in. In addition it now takes a variadic slice of strings rather than a slice of strings to better match other option styles.
