@@ -15,24 +15,24 @@ func TestFunctionalReaderEOFPaths(t *testing.T) {
 
 	type TC struct {
 		Name        string
-		reader      func() (csv.Reader, error)
+		reader      func() (*csv.Reader, error)
 		err         error
 		validateErr func(*testing.T, error)
 	}
 
 	tcs := []TC{
-		{"doc start, errOnNoByteOrderMarker=default", func() (csv.Reader, error) {
+		{"doc start, errOnNoByteOrderMarker=default", func() (*csv.Reader, error) {
 			return csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("")),
 			)
 		}, nil, nil},
-		{"doc start, errOnNoByteOrderMarker=false", func() (csv.Reader, error) {
+		{"doc start, errOnNoByteOrderMarker=false", func() (*csv.Reader, error) {
 			return csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("")),
 				csv.ReaderOpts().ErrorOnNoByteOrderMarker(false),
 			)
 		}, nil, nil},
-		{"doc start, errOnNoByteOrderMarker=true", func() (csv.Reader, error) {
+		{"doc start, errOnNoByteOrderMarker=true", func() (*csv.Reader, error) {
 			return csv.NewReader(
 				csv.ReaderOpts().Reader(strings.NewReader("")),
 				csv.ReaderOpts().ErrorOnNoByteOrderMarker(true),

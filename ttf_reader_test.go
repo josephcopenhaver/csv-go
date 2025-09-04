@@ -57,7 +57,7 @@ func (tc *functionalReaderTestCase) Run(t *testing.T) {
 			tc := &tc_copy
 			is := assert.New(t)
 
-			var cr csv.Reader
+			var cr *csv.Reader
 			{
 				opts := tc.newOpts
 				if f := tc.newOptsF; f != nil {

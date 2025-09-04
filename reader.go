@@ -1002,12 +1002,15 @@ func (cfg *rCfg) validate() error {
 }
 
 // NewReader creates a new instance of a CSV reader which is not safe for concurrent reads.
-func NewReader(options ...ReaderOption) (Reader, error) {
+func NewReader(options ...ReaderOption) (*Reader, error) {
 	r, _, err := internalNewReader(options...)
-	return r, err
+	if err != nil {
+		return nil, err
+	}
+	return &Reader{r}, nil
 }
 
-func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) {
+func internalNewReader(options ...ReaderOption) (reader, internalReader, error) {
 
 	cfg := rCfg{
 		numFields:                   -1,
@@ -1844,7 +1847,7 @@ func (r *secOpReader) checkNumFieldsNotAllowed(_ error) bool {
 	return false
 }
 
-type Reader interface {
+type reader interface {
 	Close() error
 	Err() error
 	IntoIter() iter.Seq[[]string]
@@ -1852,9 +1855,13 @@ type Reader interface {
 	Scan() bool
 }
 
+type Reader struct {
+	reader
+}
+
 type internalReader any
 
-func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string, bitFlags rFlag) (Reader, internalReader) {
+func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string, bitFlags rFlag) (reader, internalReader) {
 
 	r := &readerStrat{}
 
