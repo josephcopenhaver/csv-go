@@ -636,19 +636,20 @@ func ReaderOpts() ReaderOptions {
 	return ReaderOptions{}
 }
 
-// readerStrat will never contain exported fields of any kind
+// Reader will never contain exported fields of any kind
 //
 // since closures and hook updates are common using a struct
 // with exports that satisfy a returned interface is the most
 // sane and supportable option
-type readerStrat struct {
+type Reader struct {
+	// TODO: this should become a wrapper around an interface in the future, for the time being this is more valuable
 	scan  func() bool
 	row   func() []string
 	close func() error
 	err   func() error
 }
 
-func (r *readerStrat) Scan() bool {
+func (r *Reader) Scan() bool {
 	return r.scan()
 }
 
@@ -661,7 +662,7 @@ func (r *readerStrat) Scan() bool {
 // If the reader is configured with BorrowRow(true) then the resulting slice and
 // field strings are only valid to use up until the next call to Scan and
 // should not be saved to persistent memory.
-func (r *readerStrat) Row() []string {
+func (r *Reader) Row() []string {
 	return r.row()
 }
 
@@ -676,11 +677,11 @@ func (r *readerStrat) Row() []string {
 // checks they will be implemented here.
 //
 // It will never attempt to close the underlying reader.
-func (r *readerStrat) Close() error {
+func (r *Reader) Close() error {
 	return r.close()
 }
 
-func (r *readerStrat) Err() error {
+func (r *Reader) Err() error {
 	return r.err()
 }
 
@@ -696,11 +697,11 @@ func (r *readerStrat) Err() error {
 //
 // This is just a syntactic sugar method to work with range statements
 // in go1.23 and later.
-func (r *readerStrat) IntoIter() iter.Seq[[]string] {
+func (r *Reader) IntoIter() iter.Seq[[]string] {
 	return r.iter
 }
 
-func (r *readerStrat) iter(yield func([]string) bool) {
+func (r *Reader) iter(yield func([]string) bool) {
 	for r.scan() {
 		if !yield(r.row()) {
 			return
@@ -786,7 +787,7 @@ type fastReader struct {
 	escape            rune
 	fieldSeparator    rune
 	comment           rune
-	pr                *readerStrat
+	pr                *Reader
 	state             rState
 	rawNumHiddenBytes uint8
 	// afterStartOfRecords is a flag set to communicate when the first records have been observed and potentially emitted
@@ -1004,13 +1005,10 @@ func (cfg *rCfg) validate() error {
 // NewReader creates a new instance of a CSV reader which is not safe for concurrent reads.
 func NewReader(options ...ReaderOption) (*Reader, error) {
 	r, _, err := internalNewReader(options...)
-	if err != nil {
-		return nil, err
-	}
-	return &Reader{r}, nil
+	return r, err
 }
 
-func internalNewReader(options ...ReaderOption) (reader, internalReader, error) {
+func internalNewReader(options ...ReaderOption) (*Reader, internalReader, error) {
 
 	cfg := rCfg{
 		numFields:                   -1,
@@ -1847,23 +1845,11 @@ func (r *secOpReader) checkNumFieldsNotAllowed(_ error) bool {
 	return false
 }
 
-type reader interface {
-	Close() error
-	Err() error
-	IntoIter() iter.Seq[[]string]
-	Row() []string
-	Scan() bool
-}
-
-type Reader struct {
-	reader
-}
-
 type internalReader any
 
-func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string, bitFlags rFlag) (reader, internalReader) {
+func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string, bitFlags rFlag) (*Reader, internalReader) {
 
-	r := &readerStrat{}
+	r := &Reader{}
 
 	fr := &fastReader{
 		controlRunes:   controlRunes,
