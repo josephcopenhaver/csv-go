@@ -779,7 +779,7 @@ type fastReader struct {
 	numFields         int
 	recordIndex       uint64
 	byteIndex         uint64
-	fieldIndex        uint
+	fieldIndex        uint // TODO: drop in favor of just using length of fieldLengths now that stability is good
 	quote             rune
 	escape            rune
 	fieldSeparator    rune
@@ -1232,10 +1232,6 @@ func (r *secOpReader) fieldNumOverflowWithMaxCheck(max uint) func() bool {
 
 		return false
 	}
-}
-
-func (r *fastReader) setCheckNumFields(f func(error) bool) {
-	r.checkNumFields = f
 }
 
 // secOpStreamParsingErr performs a side effect of increasing the byteIndex of state
