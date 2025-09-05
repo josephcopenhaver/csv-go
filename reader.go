@@ -47,14 +47,12 @@ type rFlag uint16
 
 const (
 	stDone rFlag = 1 << iota
+	// stAfterSOR stands for `parse state is after start of a record`
 	stAfterSOR
 	stEOF
 
 	rFlagDropBOM
 	rFlagErrOnNoBOM
-
-	// rFlagStartOfDoc = either of rFlagDropBOM, rFlagErrOnNoBOM
-
 	rFlagErrOnNLInUF
 	rFlagErrOnQInUF
 	rFlagComment
@@ -118,7 +116,7 @@ var (
 	// instances
 	ErrTooManyFields                = errors.New("too many fields")
 	ErrSecOpRecordByteCountAboveMax = errors.New("record byte count exceeds max")
-	// is a sub-instance of ErrTooManyFields
+	// ErrSecOpFieldCountAboveMax is a sub-instance of ErrTooManyFields
 	ErrSecOpFieldCountAboveMax     = errors.New("field count exceeds max")
 	ErrSecOpRecordCountAboveMax    = errors.New("record count exceeds max")
 	ErrSecOpCommentBytesAboveMax   = errors.New("comment byte count exceeds max")
@@ -789,14 +787,8 @@ type fastReader struct {
 	pr                *readerStrat
 	state             rState
 	rawNumHiddenBytes uint8
-	// afterStartOfRecords is a flag set to communicate when the first records have been observed and potentially emitted
-	//
-	// this is useful for supporting comments after start of records explicitly with disabled being the default
-	//
-	// the recordIndex could also have been used for this purpose but it may have overflow issues for some input types
-	// and keeping its purpose singular and disconnected from parsing management is likely ideal
-	recordSepLen int8
-	bitFlags     rFlag
+	recordSepLen      int8
+	bitFlags          rFlag
 }
 
 func (cfg *rCfg) validate() error {
@@ -1455,7 +1447,7 @@ func (r *fastReader) defaultCheckNumFields(errTrailer error) bool {
 func (r *fastReader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool {
 	if r.defaultCheckNumFields(errTrailer) {
 		r.bitFlags |= stAfterSOR
-		r.setCheckNumFields(r.defaultCheckNumFields)
+		r.checkNumFields = r.defaultCheckNumFields
 		return true
 	}
 
@@ -1466,7 +1458,7 @@ func (r *fastReader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) b
 func (r *fastReader) checkNumFieldsWithDiscovery(errTrailer error) bool {
 	r.numFields = len(r.fieldLengths)
 	r.bitFlags |= stAfterSOR
-	r.setCheckNumFields(r.defaultCheckNumFields)
+	r.checkNumFields = r.defaultCheckNumFields
 	return true
 }
 
@@ -1705,10 +1697,6 @@ func (r *secOpReader) incRecordIndexWithMax(max uint64) func() {
 		// intercept trying to push a record to the caller which may not have data bytes
 		//
 		// should be called even on 1 field files and files that end without a terminal record separator
-
-		// note that this intentionally skips the middlewares as we want any call to it to error
-		// middlewares can and should be short circuited in this case
-		// otherwise setCheckNumFields would be used to alter the function pointer value
 		r.checkNumFields = r.checkNumFieldsNotAllowed
 	}
 }
@@ -1943,15 +1931,15 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 	}
 
 	if fr.numFields == -1 {
-		fr.setCheckNumFields(fr.checkNumFieldsWithDiscovery)
+		fr.checkNumFields = fr.checkNumFieldsWithDiscovery
 	} else {
 		if fr.numFields > 0 {
 			fr.fieldLengths = make([]int, 0, fr.numFields)
 		}
 		if (fr.bitFlags & rFlagComment) != 0 {
-			fr.setCheckNumFields(fr.checkNumFieldsWithStartOfRecordTracking)
+			fr.checkNumFields = fr.checkNumFieldsWithStartOfRecordTracking
 		} else {
-			fr.setCheckNumFields(fr.defaultCheckNumFields)
+			fr.checkNumFields = fr.defaultCheckNumFields
 		}
 	}
 
