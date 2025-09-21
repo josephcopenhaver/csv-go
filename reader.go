@@ -1262,37 +1262,7 @@ func (r *fastReader) ioErr(err error) {
 }
 
 func (r *fastReader) setRowBorrowedAndFieldsCloned() {
-	if r.rowBuf == nil {
-		r.pr.row = func() []string {
-			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
-				return nil
-			}
-
-			r.rowBuf = make([]string, len(r.fieldLengths))
-
-			r.pr.row = func() []string {
-				if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
-					return nil
-				}
-
-				strBuf := string(r.recordBuf)
-
-				var p int
-				for i, s := range r.fieldLengths {
-					r.rowBuf[i] = strBuf[p : p+s]
-					p += s
-				}
-
-				return r.rowBuf
-			}
-
-			return r.pr.row()
-		}
-
-		return
-	}
-
-	r.pr.row = func() []string {
+	rowFunc := func() []string {
 		if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 			return nil
 		}
@@ -1307,53 +1277,27 @@ func (r *fastReader) setRowBorrowedAndFieldsCloned() {
 
 		return r.rowBuf
 	}
-}
 
-func (r *fastReader) setRowBorrowedAndFieldsBorrowed() {
-	if r.rowBuf == nil {
-		r.pr.row = func() []string {
-			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
-				return nil
-			}
-
-			r.rowBuf = make([]string, len(r.fieldLengths))
-
-			r.pr.row = func() []string {
-				if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
-					return nil
-				}
-
-				var p int
-				for i, s := range r.fieldLengths {
-					if s == 0 {
-						r.rowBuf[i] = ""
-						continue
-					}
-
-					// Usage of unsafe here is what empowers borrowing.
-					//
-					// This is why this option is NOT enabled by default
-					// and never will be. The caller must assure that they
-					// will never write to the backing slice or utilize it
-					// beyond the next call to Row() or Close()
-					//
-					// It will also never be called if the len is zero,
-					// just as an extra precaution.
-					r.rowBuf[i] = unsafe.String(&r.recordBuf[p], s)
-
-					p += s
-				}
-
-				return r.rowBuf
-			}
-
-			return r.pr.row()
-		}
-
+	if r.rowBuf != nil {
+		r.pr.row = rowFunc
 		return
 	}
 
 	r.pr.row = func() []string {
+		if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
+			return nil
+		}
+
+		r.rowBuf = make([]string, len(r.fieldLengths))
+
+		r.pr.row = rowFunc
+
+		return r.pr.row()
+	}
+}
+
+func (r *fastReader) setRowBorrowedAndFieldsBorrowed() {
+	rowFunc := func() []string {
 		if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 			return nil
 		}
@@ -1380,6 +1324,23 @@ func (r *fastReader) setRowBorrowedAndFieldsBorrowed() {
 		}
 
 		return r.rowBuf
+	}
+
+	if r.rowBuf != nil {
+		r.pr.row = rowFunc
+		return
+	}
+
+	r.pr.row = func() []string {
+		if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
+			return nil
+		}
+
+		r.rowBuf = make([]string, len(r.fieldLengths))
+
+		r.pr.row = rowFunc
+
+		return r.pr.row()
 	}
 }
 
