@@ -107,9 +107,13 @@ func main() {
 			DeltaCommentBytesCheck string
 			CommentLinesCheck      string
 			IncRecordIndex         string
+			SetFieldStart          string
+			NotQuotePossible       bool
 		}
 
 		render := renderer[cfg](&buf)
+
+		const quoteOnSetFieldStart = "r.fieldStart = len(r.recordBuf)"
 
 		render(t, []cfg{
 			{
@@ -117,6 +121,7 @@ func main() {
 				RecBufAppend0:  "r.recordBuf = append(r.recordBuf, ",
 				RecBufAppend1:  ")",
 				IncRecordIndex: "r.recordIndex++",
+				SetFieldStart:  quoteOnSetFieldStart,
 			},
 			{
 				Struct:                 "secOpReader",
@@ -126,6 +131,7 @@ func main() {
 				IncRecordIndex:         "r.incRecordIndex()",
 				DeltaCommentBytesCheck: "if r.outOfCommentBytes(delta) {return false}",
 				CommentLinesCheck:      "if r.outOfCommentLines() {return false}",
+				SetFieldStart:          quoteOnSetFieldStart,
 			},
 		})
 	}
@@ -135,22 +141,22 @@ func main() {
 		t := parse(tsProcessField)
 
 		type cfg struct {
-			EscapeSet           bool
-			QuoteForced         bool
+			EscapeOn            bool
+			ForceQuoteOn        bool
 			ClearMemoryAfterUse bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{EscapeSet: false, QuoteForced: false, ClearMemoryAfterUse: false},
-			{EscapeSet: true, QuoteForced: false, ClearMemoryAfterUse: false},
-			{EscapeSet: false, QuoteForced: true, ClearMemoryAfterUse: false},
-			{EscapeSet: true, QuoteForced: true, ClearMemoryAfterUse: false},
-			{EscapeSet: false, QuoteForced: false, ClearMemoryAfterUse: true},
-			{EscapeSet: true, QuoteForced: false, ClearMemoryAfterUse: true},
-			{EscapeSet: false, QuoteForced: true, ClearMemoryAfterUse: true},
-			{EscapeSet: true, QuoteForced: true, ClearMemoryAfterUse: true},
+			{EscapeOn: false, ForceQuoteOn: false, ClearMemoryAfterUse: false},
+			{EscapeOn: true, ForceQuoteOn: false, ClearMemoryAfterUse: false},
+			{EscapeOn: false, ForceQuoteOn: true, ClearMemoryAfterUse: false},
+			{EscapeOn: true, ForceQuoteOn: true, ClearMemoryAfterUse: false},
+			{EscapeOn: false, ForceQuoteOn: false, ClearMemoryAfterUse: true},
+			{EscapeOn: true, ForceQuoteOn: false, ClearMemoryAfterUse: true},
+			{EscapeOn: false, ForceQuoteOn: true, ClearMemoryAfterUse: true},
+			{EscapeOn: true, ForceQuoteOn: true, ClearMemoryAfterUse: true},
 		})
 	}
 
@@ -159,17 +165,17 @@ func main() {
 		t := parse(tsEscapeChars)
 
 		type cfg struct {
-			EscapeEnabled       bool
+			EscapeOn            bool
 			ClearMemoryAfterUse bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{EscapeEnabled: false, ClearMemoryAfterUse: false},
-			{EscapeEnabled: true, ClearMemoryAfterUse: false},
-			{EscapeEnabled: false, ClearMemoryAfterUse: true},
-			{EscapeEnabled: true, ClearMemoryAfterUse: true},
+			{EscapeOn: false, ClearMemoryAfterUse: false},
+			{EscapeOn: true, ClearMemoryAfterUse: false},
+			{EscapeOn: false, ClearMemoryAfterUse: true},
+			{EscapeOn: true, ClearMemoryAfterUse: true},
 		})
 	}
 

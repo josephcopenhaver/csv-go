@@ -43,7 +43,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 						if c := r.rawBuf[n-1]; c & invalidControlRune == 0 {
 							// ends in 1 byte ascii character
 
-							if c == asciiCarriageReturn && r.recordSepLen != 1 {
+							if c == asciiCarriageReturn && r.recordSepRuneLen != 1 {
 								// hide a floating CR character if record separator
 								// could be CRLF
 								//
@@ -113,7 +113,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 				// is off that this should also be off, but I will not be making that decision
 				// without a stronger opinion. A pull request with strong justification or a new
 				// option would be welcome here should you have a strong opinion.
-				if lastProcessedByte == asciiCarriageReturn && r.recordSepLen == 2 {
+				if lastProcessedByte == asciiCarriageReturn && r.recordSepRuneLen == 2 {
 					r.parsingErr(ErrUnsafeCRFileEnd)
 					return false
 				}
@@ -233,7 +233,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					r.rawIndex = idx + int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
-					r.fieldStart = len(r.recordBuf)
+					{{.SetFieldStart}}
 
 					if r.fieldNumOverflow() {
 						return false
@@ -267,7 +267,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					r.rawIndex += int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
-					r.fieldStart = len(r.recordBuf)
+					{{.SetFieldStart}}
 
 					if r.fieldNumOverflow() {
 						return false
@@ -283,7 +283,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.byteIndex += uint64(di)
 					r.rawIndex = idx + int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
-					r.fieldStart = len(r.recordBuf)
+					{{.SetFieldStart}}
 
 					if r.fieldNumOverflow() {
 						return false
@@ -299,7 +299,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.byteIndex += uint64(di)
 					r.rawIndex = idx + int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
-					r.fieldStart = len(r.recordBuf)
+					{{.SetFieldStart}}
 
 					if r.fieldNumOverflow() {
 						return false
@@ -320,7 +320,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				}
-			case r.escape:
+			{{ if not .NotQuotePossible }}case r.escape:
 				switch r.state {
 				case rStateStartOfDoc:
 					// HANDLING: r.escape
@@ -550,8 +550,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				}
-			case r.recordSep[0]:
-				if r.recordSepLen == 2 {
+			{{ end }}case r.recordSep[0]:
+				if r.recordSepRuneLen == 2 {
 					// checking for a full CRLF
 					//
 					// if not a CRLF sequence then just process the CR as field data
@@ -812,7 +812,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					// r.state = ... (unchanged)
 				}
 			default:
-				if r.recordSepLen != 0 {
+				if r.recordSepRuneLen != 0 {
 					// record separator detection is disabled or already hardened
 					//
 					// must have found a CR or LF character under circumstances where we're aiming to error
@@ -929,26 +929,26 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					// HANDLING: CR or LF as data given record-sep discovery=on
 
 					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
-						r.recordSepLen = 2
+						r.recordSepRuneLen = 2
 						r.recordSep[0] = asciiCarriageReturn
 						r.recordSep[1] = asciiLineFeed
 					} else {
-						r.recordSepLen = 1
+						r.recordSepRuneLen = 1
 						r.recordSep[0] = c
 					}
 
 					// preserve field separator
-					var buf [7]rune
+					var buf [{{ if .NotQuotePossible }}5{{ else }}7{{ end }}]rune
 					controlRunes := append(buf[:0], r.fieldSeparator)
 					controlRunes = append(controlRunes, c)
 
-					if (r.bitFlags & rFlagQuote) != 0 {
+					{{ if not .NotQuotePossible }}if (r.bitFlags & rFlagQuote) != 0 {
 						controlRunes = append(controlRunes, r.quote)
 					}
 					if (r.bitFlags & rFlagEscape) != 0 {
 						controlRunes = append(controlRunes, r.escape)
 					}
-					if (r.bitFlags & rFlagComment) != 0 {
+					{{ end }}if (r.bitFlags & rFlagComment) != 0 {
 						controlRunes = append(controlRunes, r.comment)
 					}
 

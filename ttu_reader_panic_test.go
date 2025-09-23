@@ -30,8 +30,8 @@ func TestUnitReaderPanicOnValidate(t *testing.T) {
 	is := assert.New(t)
 
 	cfg := rCfg{
-		reader:       strings.NewReader(""),
-		recordSepLen: -2,
+		reader:           strings.NewReader(""),
+		recordSepRuneLen: -2,
 	}
 
 	validate := func() (r any, _ error) {
@@ -45,20 +45,20 @@ func TestUnitReaderPanicOnValidate(t *testing.T) {
 	is.NotNil(r)
 	is.Nil(err)
 
-	is.Equal(r, panicRecordSepLen)
+	is.Equal(r, panicRecordSepRuneLen)
 
 	cfg = rCfg{
-		reader:       strings.NewReader(""),
-		recordSepLen: 3,
+		reader:           strings.NewReader(""),
+		recordSepRuneLen: 3,
 	}
 
 	r, err = validate()
 	is.NotNil(r)
 	is.Nil(err)
 
-	is.Equal(r, panicRecordSepLen)
-	is.Equal(panicRecordSepLen.String(), panicRecordSepLen.Error())
-	is.Equal(panicRecordSepLen.String(), "invalid record separator length")
+	is.Equal(r, panicRecordSepRuneLen)
+	is.Equal(panicRecordSepRuneLen.String(), panicRecordSepRuneLen.Error())
+	is.Equal(panicRecordSepRuneLen.String(), "invalid record separator rune length")
 }
 
 func TestUnitReaderPanicOnHandleEOF(t *testing.T) {

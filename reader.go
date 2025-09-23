@@ -84,7 +84,7 @@ type panicErr uint8
 const (
 	_ panicErr = iota
 
-	panicRecordSepLen                        // "invalid record separator length"
+	panicRecordSepRuneLen                    // "invalid record separator rune length"
 	panicUnknownReaderStateDuringEOF         // "reader in unknown state when EOF encountered"
 	panicMissedHandlingMaxRecordIndex        // "missed handling record index at max value"
 	panicMissedHandlingMaxSecOpFieldIndex    // "missed handling field index at max SecOp value"
@@ -93,7 +93,7 @@ const (
 
 func (p panicErr) String() string {
 	return []string{
-		"invalid record separator length",                   // panicRecordSepLen
+		"invalid record separator rune length",              // panicRecordSepRuneLen
 		"reader in unknown state when EOF encountered",      // panicUnknownReaderStateDuringEOF
 		"missed handling record index at max value",         // panicMissedHandlingMaxRecordIndex
 		"missed handling field index at SecOp max value",    // panicMissedHandlingMaxSecOpFieldIndex
@@ -498,7 +498,7 @@ func (ReaderOptions) RecordSeparator(s string) ReaderOption {
 	if n1 == len(v) {
 		return func(cfg *rCfg) {
 			cfg.recordSep[0] = r1
-			cfg.recordSepLen = 1
+			cfg.recordSepRuneLen = 1
 			cfg.recordSepSet = true
 		}
 	}
@@ -518,7 +518,7 @@ func (ReaderOptions) RecordSeparator(s string) ReaderOption {
 		return func(cfg *rCfg) {
 			cfg.recordSep[0] = r1
 			cfg.recordSep[1] = r2
-			cfg.recordSepLen = 2
+			cfg.recordSepRuneLen = 2
 			cfg.recordSepSet = true
 		}
 	}
@@ -727,7 +727,7 @@ type rCfg struct {
 	quote                              rune
 	escape                             rune
 	comment                            rune
-	recordSepLen                       int8
+	recordSepRuneLen                   int8
 	quoteSet                           bool
 	escapeSet                          bool
 	removeHeaderRow                    bool
@@ -787,7 +787,7 @@ type fastReader struct {
 	pr                *readerStrat
 	state             rState
 	rawNumHiddenBytes uint8
-	recordSepLen      int8
+	recordSepRuneLen  int8
 	bitFlags          rFlag
 }
 
@@ -832,12 +832,12 @@ func (cfg *rCfg) validate() error {
 		}
 	}
 
-	if cfg.recordSepLen == -1 {
+	if cfg.recordSepRuneLen == -1 {
 		return ErrBadRecordSeparator
 	}
 
 	if cfg.discoverRecordSeparator {
-		cfg.recordSepLen = 0
+		cfg.recordSepRuneLen = 0
 		// TODO: instead of setting a default value that is not reachable
 		// under normal circumstances, lets make sure the value cannot be used
 		// until after the separator is fully resolved by switching handlers.
@@ -853,13 +853,13 @@ func (cfg *rCfg) validate() error {
 	}
 
 	{
-		// (cfg.recordSepLen == 0 && !cfg.discoverRecordSeparator) here is a defensive check
+		// (cfg.recordSepRuneLen == 0 && !cfg.discoverRecordSeparator) here is a defensive check
 		// should the defaults ever be changed to no record sep specified by default
-		if (cfg.recordSepLen == 0 && !cfg.discoverRecordSeparator) || (cfg.discoverRecordSeparator && cfg.recordSepSet) {
+		if (cfg.recordSepRuneLen == 0 && !cfg.discoverRecordSeparator) || (cfg.discoverRecordSeparator && cfg.recordSepSet) {
 			return errors.New("must specify one and only one of automatic record separator discovery or a specific recordSeparator")
 		}
 
-		switch cfg.recordSepLen {
+		switch cfg.recordSepRuneLen {
 		case 0:
 			// must be discovering record separator
 			// so ensure there are no overlaps between discovery and other configuration values
@@ -908,12 +908,15 @@ func (cfg *rCfg) validate() error {
 				return errors.New("invalid record separator and escape combination")
 			}
 		default:
-			panic(panicRecordSepLen)
+			panic(panicRecordSepRuneLen)
 		}
 	}
 
-	if !validUtf8Rune(cfg.fieldSeparator) {
-		return errors.New("invalid field separator value")
+	{
+		fieldSepLen := int8(utf8.RuneLen(cfg.fieldSeparator))
+		if !validUtf8Rune(cfg.fieldSeparator) || fieldSepLen < 1 {
+			return errors.New("invalid field separator value")
+		}
 	}
 
 	if cfg.quoteSet {
@@ -1005,7 +1008,7 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 		numFields:                   -1,
 		fieldSeparator:              ',',
 		recordSep:                   [2]rune{asciiLineFeed, 0},
-		recordSepLen:                1,
+		recordSepRuneLen:            1,
 		errOnQuotesInUnquotedField:  true,
 		errOnNewlineInUnquotedField: true,
 	}
@@ -1069,7 +1072,7 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 	// - in-escape
 
 	var controlRunes []rune
-	if cfg.recordSepLen == 0 {
+	if cfg.recordSepRuneLen == 0 {
 		var buf [11]rune
 		controlRunes = append(buf[:0], cfg.fieldSeparator)
 	} else {
@@ -1112,7 +1115,7 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 		bitFlags |= rFlagErrOnQInUF
 	}
 
-	if cfg.recordSepLen != 0 {
+	if cfg.recordSepRuneLen != 0 {
 		controlRunes = append(controlRunes, cfg.recordSep[0])
 	}
 
@@ -1130,7 +1133,7 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 		}
 	}
 
-	if cfg.recordSepLen == 0 {
+	if cfg.recordSepRuneLen == 0 {
 		allPossibleNLRunes := []rune{asciiCarriageReturn, asciiLineFeed, asciiVerticalTab, asciiFormFeed, utf8NextLine, utf8LineSeparator}
 		crs := []byte(string(controlRunes))
 
@@ -1473,7 +1476,7 @@ func (r *fastReader) err() error {
 //
 
 func badRecordSeparatorRConfig(cfg *rCfg) {
-	cfg.recordSepLen = -1
+	cfg.recordSepRuneLen = -1
 }
 
 func isNewlineRune(c rune) (isCarriageReturn bool, ok bool) {
@@ -1804,21 +1807,21 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 	r := &readerStrat{}
 
 	fr := &fastReader{
-		controlRunes:   controlRunes,
-		rawBuf:         cfg.rawBuf[0:0:len(cfg.rawBuf)],
-		reader:         cfg.reader,
-		quote:          cfg.quote,
-		escape:         cfg.escape,
-		numFields:      cfg.numFields,
-		fieldSeparator: cfg.fieldSeparator,
-		comment:        cfg.comment,
-		headers:        headers,
-		recordBuf:      cfg.recordBuf[0:0:len(cfg.recordBuf)],
-		rowBuf:         rowBuf,
-		recordSep:      cfg.recordSep,
-		recordSepLen:   cfg.recordSepLen,
-		bitFlags:       bitFlags,
-		pr:             r,
+		controlRunes:     controlRunes,
+		rawBuf:           cfg.rawBuf[0:0:len(cfg.rawBuf)],
+		reader:           cfg.reader,
+		quote:            cfg.quote,
+		escape:           cfg.escape,
+		numFields:        cfg.numFields,
+		fieldSeparator:   cfg.fieldSeparator,
+		comment:          cfg.comment,
+		headers:          headers,
+		recordBuf:        cfg.recordBuf[0:0:len(cfg.recordBuf)],
+		rowBuf:           rowBuf,
+		recordSep:        cfg.recordSep,
+		recordSepRuneLen: cfg.recordSepRuneLen,
+		bitFlags:         bitFlags,
+		pr:               r,
 	}
 
 	var sr *secOpReader

@@ -44,7 +44,7 @@ type wCfg struct {
 	numFieldsSet         bool
 	errOnNonUTF8         bool
 	escapeSet            bool
-	recordSepLen         int8
+	recordSepRuneLen     int8
 	clearMemoryAfterFree bool
 }
 
@@ -107,7 +107,7 @@ func (WriterOptions) RecordSeparator(s string) WriterOption {
 
 		return func(cfg *wCfg) {
 			cfg.recordSep[0] = r1
-			cfg.recordSepLen = 1
+			cfg.recordSepRuneLen = 1
 		}
 	}
 
@@ -126,7 +126,7 @@ func (WriterOptions) RecordSeparator(s string) WriterOption {
 		return func(cfg *wCfg) {
 			cfg.recordSep[0] = r1
 			cfg.recordSep[1] = r2
-			cfg.recordSepLen = 2
+			cfg.recordSepRuneLen = 2
 		}
 	}
 
@@ -188,7 +188,7 @@ func (cfg *wCfg) validate() error {
 		return errors.New("nil writer")
 	}
 
-	if cfg.recordSepLen == 0 {
+	if cfg.recordSepRuneLen == 0 {
 		return errors.New("record separator can only be one valid utf8 newline rune long or \"\\r\\n\"")
 	}
 
@@ -264,7 +264,7 @@ type Writer struct {
 	err                     error
 	quote, fieldSep, escape rune
 	recordSep               [2]rune
-	recordSepLen            int8
+	recordSepRuneLen        int8
 	twoQuotesByteLen        int8
 	escapedQuoteByteLen     int8
 	escapedEscapeByteLen    int8
@@ -281,12 +281,12 @@ type Writer struct {
 func NewWriter(options ...WriterOption) (*Writer, error) {
 
 	cfg := wCfg{
-		numFields:      -1,
-		quote:          '"',
-		recordSep:      [2]rune{asciiLineFeed, 0},
-		recordSepLen:   1,
-		fieldSeparator: ',',
-		errOnNonUTF8:   true,
+		numFields:        -1,
+		quote:            '"',
+		recordSep:        [2]rune{asciiLineFeed, 0},
+		recordSepRuneLen: 1,
+		fieldSeparator:   ',',
+		errOnNonUTF8:     true,
 	}
 
 	for _, f := range options {
@@ -320,7 +320,7 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 
 	{
 		n := utf8.EncodeRune(recordSepBytes[:], cfg.recordSep[0])
-		if cfg.recordSepLen == 2 {
+		if cfg.recordSepRuneLen == 2 {
 			n += utf8.EncodeRune(recordSepBytes[n:], cfg.recordSep[1])
 		}
 		recordSepByteLen = int8(n)
@@ -346,7 +346,7 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		recordSepByteLen:     recordSepByteLen,
 		quote:                cfg.quote,
 		recordSep:            cfg.recordSep,
-		recordSepLen:         cfg.recordSepLen,
+		recordSepRuneLen:     cfg.recordSepRuneLen,
 		fieldSep:             cfg.fieldSeparator,
 		errOnNonUTF8:         cfg.errOnNonUTF8,
 		escape:               cfg.escape,
@@ -355,11 +355,11 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	}
 
 	if w.clearMemoryAfterFree {
-		w.writeRow = w.writeRow_memclearEnabled
-		w.writeDoubleQuotesForRecord = w.writeDoubleQuotesForRecord_memclearEnabled
+		w.writeRow = w.writeRow_memclearOn
+		w.writeDoubleQuotesForRecord = w.writeDoubleQuotesForRecord_memclearOn
 	} else {
-		w.writeRow = w.writeRow_memclearDisabled
-		w.writeDoubleQuotesForRecord = w.writeDoubleQuotesForRecord_memclearDisabled
+		w.writeRow = w.writeRow_memclearOff
+		w.writeDoubleQuotesForRecord = w.writeDoubleQuotesForRecord_memclearOff
 	}
 
 	w.processField = w.processFieldFunc(false)
@@ -756,29 +756,29 @@ func (w *Writer) processFieldFunc(forceQuote bool) func(v []byte) (int, error) {
 	if w.escapeSet {
 		if forceQuote {
 			if w.clearMemoryAfterFree {
-				return w.processField_escapeSet_quoteForced_memclearEnabled
+				return w.processField_escapeOn_forceQuoteOn_memclearOn
 			}
-			return w.processField_escapeSet_quoteForced_memclearDisabled
+			return w.processField_escapeOn_forceQuoteOn_memclearOff
 		}
 
 		if w.clearMemoryAfterFree {
-			return w.processField_escapeSet_quoteUnforced_memclearEnabled
+			return w.processField_escapeOn_forceQuoteOff_memclearOn
 		}
-		return w.processField_escapeSet_quoteUnforced_memclearDisabled
+		return w.processField_escapeOn_forceQuoteOff_memclearOff
 	}
 
 	if forceQuote {
 		if w.clearMemoryAfterFree {
-			return w.processField_escapeUnset_quoteForced_memclearEnabled
+			return w.processField_escapeOff_forceQuoteOn_memclearOn
 		}
-		return w.processField_escapeUnset_quoteForced_memclearDisabled
+		return w.processField_escapeOff_forceQuoteOn_memclearOff
 	}
 
 	if w.clearMemoryAfterFree {
-		return w.processField_escapeUnset_quoteUnforced_memclearEnabled
+		return w.processField_escapeOff_forceQuoteOff_memclearOn
 	}
 
-	return w.processField_escapeUnset_quoteUnforced_memclearDisabled
+	return w.processField_escapeOff_forceQuoteOff_memclearOff
 }
 
 func (w *Writer) WriteRow(row ...string) (int, error) {
@@ -806,7 +806,7 @@ func (w *Writer) setErr(err error) {
 //
 
 func badRecordSeparatorWConfig(cfg *wCfg) {
-	cfg.recordSepLen = 0
+	cfg.recordSepRuneLen = 0
 }
 
 func isNewlineRuneForWrite(c rune) bool {
