@@ -355,10 +355,10 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	}
 
 	if w.clearMemoryAfterFree {
-		w.writeRow = w.writeRow_memclearOn
+		w.setWriteRow(w.writeRow_memclearOn)
 		w.writeDoubleQuotesForRecord = w.writeDoubleQuotesForRecord_memclearOn
 	} else {
-		w.writeRow = w.writeRow_memclearOff
+		w.setWriteRow(w.writeRow_memclearOff)
 		w.writeDoubleQuotesForRecord = w.writeDoubleQuotesForRecord_memclearOff
 	}
 
@@ -783,6 +783,34 @@ func (w *Writer) processFieldFunc(forceQuote bool) func(v []byte) (int, error) {
 
 func (w *Writer) WriteRow(row ...string) (int, error) {
 	return w.writeRow(row)
+}
+
+func (w *Writer) writeRowWrapper(next func([]string) (int, error)) func([]string) (int, error) {
+	return func(fields []string) (int, error) {
+		defer func() {
+			w.recordBuf = w.recordBuf[:0]
+		}()
+
+		n := len(fields)
+
+		if n == 0 {
+			return 0, ErrRowNilOrEmpty
+		}
+
+		if v := w.numFields; v != n {
+			if v != -1 {
+				return 0, ErrInvalidFieldCountInRecord
+			}
+
+			w.numFields = n
+		}
+
+		return next(fields)
+	}
+}
+
+func (w *Writer) setWriteRow(f func([]string) (int, error)) {
+	w.writeRow = w.writeRowWrapper(f)
 }
 
 func (w *Writer) runeRequiresQuotes(r rune) bool {

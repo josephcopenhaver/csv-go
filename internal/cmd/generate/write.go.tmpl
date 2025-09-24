@@ -1,26 +1,6 @@
 {{define "appendRec0"}}{{if .ClearMemoryAfterUse}}w.appendRec({{else}}w.recordBuf = append(w.recordBuf, {{end}}{{end}}
 {{define "appendRec1"}}{{if .ClearMemoryAfterUse}}){{else}}...){{end}}{{end}}
 func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}(row []string) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
-	{
-		n := len(row)
-
-		if n == 0 {
-			return 0, ErrRowNilOrEmpty
-		}
-
-		if v := w.numFields; v != n {
-			if v != -1 {
-				return 0, ErrInvalidFieldCountInRecord
-			}
-
-			w.numFields = n
-		}
-	}
-
 	if len(row) == 1 && row[0] == "" {
 		// This is a safety feature that makes the document slightly more durable to being edited.
 		// If we could guarantee that the "record terminator" is never removed by accident via
