@@ -21,7 +21,12 @@ const (
 	asciiFormFeed       = 0x0C
 	utf8NextLine        = 0x85
 	utf8LineSeparator   = 0x2028
-	invalidControlRune  = 0x80
+	// invalidControlRune is as an impossible to read rune value used when parsing features of the state machine need to be disabled
+	invalidControlRune = 0x80
+	// asciiBitMask is used to tell us when a byte is part of a utf8 multi-byte rune sequence (bit 7 is set) vs is an ascii byte
+	//
+	// it is the same value as invalidControlRune but it has a different semantic meaning in the parser implementation
+	asciiBitMask = (1 << 7)
 
 	utf8ByteOrderMarker    = 0xEFBBBF
 	utf16ByteOrderMarkerBE = 0xFEFF

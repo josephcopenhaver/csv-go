@@ -18,6 +18,14 @@ func (r *fastReader) prepareRow() bool {
 	// next step is to thoroughly get coverage though over this new approach in the discrete form before
 	// it gets less verbose / more small via various tactics
 
+	// Given r.rawIndex holds the next write index position,
+	// if the raw buffer space is reaching its end (less than ReaderMinBufferSize bytes) then shift the unused segment
+	// to the head of the buffer space and fill the tail of the buffer space until the available buffer length
+	// is greater than or equal to ReaderMinBufferSize.
+	//
+	// After a sufficient segment is ready to parse, step through the state machine valid for the next found
+	// control rune present in the stream buffer.
+
 	for {
 		if len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex < ReaderMinBufferSize {
 			var lastProcessedByte byte
@@ -26,7 +34,7 @@ func (r *fastReader) prepareRow() bool {
 			}
 
 			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
-			r.rawBuf = r.rawBuf[0 : len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
+			r.rawBuf = r.rawBuf[:len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
 			r.rawIndex = 0
 			r.rawNumHiddenBytes = 0
 
@@ -52,7 +60,7 @@ func (r *fastReader) prepareRow() bool {
 					}
 
 					if n >= ReaderMinBufferSize {
-						if c := r.rawBuf[n-1]; c&invalidControlRune == 0 {
+						if c := r.rawBuf[n-1]; c&asciiBitMask == 0 {
 							// ends in 1 byte ascii character
 
 							if c == asciiCarriageReturn && r.recordSepRuneLen != 1 {
@@ -62,7 +70,7 @@ func (r *fastReader) prepareRow() bool {
 								// TODO: perhaps only do this if not in a
 								// quoted state to reduce copying ops?
 								//
-								r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-1]
+								r.rawBuf = r.rawBuf[:len(r.rawBuf)-1]
 								r.rawNumHiddenBytes = 1
 							}
 
@@ -87,7 +95,7 @@ func (r *fastReader) prepareRow() bool {
 							for i := 1; i <= rMaxOverflowNumBytes; i++ {
 								if (r.rawBuf[len(r.rawBuf)-i] & 0xC0) == 0xC0 {
 									r.rawNumHiddenBytes = uint8(i)
-									r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-i]
+									r.rawBuf = r.rawBuf[:len(r.rawBuf)-i]
 									break
 								}
 							}
@@ -207,7 +215,7 @@ func (r *fastReader) prepareRow() bool {
 
 			c := rune(r.rawBuf[idx])
 			size := uint8(1)
-			if (c & invalidControlRune) != 0 {
+			if (c & asciiBitMask) != 0 {
 				c, size = decodeMBControlRune(r.rawBuf[idx:])
 			}
 
@@ -1003,6 +1011,14 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 	// next step is to thoroughly get coverage though over this new approach in the discrete form before
 	// it gets less verbose / more small via various tactics
 
+	// Given r.rawIndex holds the next write index position,
+	// if the raw buffer space is reaching its end (less than ReaderMinBufferSize bytes) then shift the unused segment
+	// to the head of the buffer space and fill the tail of the buffer space until the available buffer length
+	// is greater than or equal to ReaderMinBufferSize.
+	//
+	// After a sufficient segment is ready to parse, step through the state machine valid for the next found
+	// control rune present in the stream buffer.
+
 	for {
 		if len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex < ReaderMinBufferSize {
 			var lastProcessedByte byte
@@ -1011,7 +1027,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 			}
 
 			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
-			r.rawBuf = r.rawBuf[0 : len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
+			r.rawBuf = r.rawBuf[:len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
 			r.rawIndex = 0
 			r.rawNumHiddenBytes = 0
 
@@ -1037,7 +1053,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					}
 
 					if n >= ReaderMinBufferSize {
-						if c := r.rawBuf[n-1]; c&invalidControlRune == 0 {
+						if c := r.rawBuf[n-1]; c&asciiBitMask == 0 {
 							// ends in 1 byte ascii character
 
 							if c == asciiCarriageReturn && r.recordSepRuneLen != 1 {
@@ -1047,7 +1063,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 								// TODO: perhaps only do this if not in a
 								// quoted state to reduce copying ops?
 								//
-								r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-1]
+								r.rawBuf = r.rawBuf[:len(r.rawBuf)-1]
 								r.rawNumHiddenBytes = 1
 							}
 
@@ -1072,7 +1088,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 							for i := 1; i <= rMaxOverflowNumBytes; i++ {
 								if (r.rawBuf[len(r.rawBuf)-i] & 0xC0) == 0xC0 {
 									r.rawNumHiddenBytes = uint8(i)
-									r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-i]
+									r.rawBuf = r.rawBuf[:len(r.rawBuf)-i]
 									break
 								}
 							}
@@ -1199,7 +1215,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 			c := rune(r.rawBuf[idx])
 			size := uint8(1)
-			if (c & invalidControlRune) != 0 {
+			if (c & asciiBitMask) != 0 {
 				c, size = decodeMBControlRune(r.rawBuf[idx:])
 			}
 
@@ -2434,26 +2450,6 @@ func (w *Writer) escapeChars_escapeOn_memclearOn(v []byte, i int) (int, error) {
 }
 
 func (w *Writer) writeRow_memclearOff(row []string) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
-	{
-		n := len(row)
-
-		if n == 0 {
-			return 0, ErrRowNilOrEmpty
-		}
-
-		if v := w.numFields; v != n {
-			if v != -1 {
-				return 0, ErrInvalidFieldCountInRecord
-			}
-
-			w.numFields = n
-		}
-	}
-
 	if len(row) == 1 && row[0] == "" {
 		// This is a safety feature that makes the document slightly more durable to being edited.
 		// If we could guarantee that the "record terminator" is never removed by accident via
@@ -2557,26 +2553,6 @@ func (w *Writer) writeField_memclearOff(processField func([]byte) (int, error), 
 }
 
 func (w *Writer) writeRow_memclearOn(row []string) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
-	{
-		n := len(row)
-
-		if n == 0 {
-			return 0, ErrRowNilOrEmpty
-		}
-
-		if v := w.numFields; v != n {
-			if v != -1 {
-				return 0, ErrInvalidFieldCountInRecord
-			}
-
-			w.numFields = n
-		}
-	}
-
 	if len(row) == 1 && row[0] == "" {
 		// This is a safety feature that makes the document slightly more durable to being edited.
 		// If we could guarantee that the "record terminator" is never removed by accident via
