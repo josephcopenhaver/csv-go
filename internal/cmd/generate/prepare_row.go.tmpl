@@ -328,7 +328,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				}
-			{{ if not .NotQuotePossible }}case r.escape:
+			{{if not .NotQuotePossible}}case r.escape:
 				switch r.state {
 				case rStateStartOfDoc:
 					// HANDLING: r.escape
@@ -558,7 +558,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				}
-			{{ end }}case r.recordSep[0]:
+			{{end}}case r.recordSep[0]:
 				if r.recordSepRuneLen == 2 {
 					// checking for a full CRLF
 					//
@@ -966,17 +966,17 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					}
 
 					// preserve field separator
-					var buf [{{ if .NotQuotePossible }}5{{ else }}7{{ end }}]rune
+					var buf [{{if .NotQuotePossible}}5{{else}}7{{end}}]rune
 					controlRunes := append(buf[:0], r.fieldSeparator)
 					controlRunes = append(controlRunes, c)
 
-					{{ if not .NotQuotePossible }}if (r.bitFlags & rFlagQuote) != 0 {
+					{{if not .NotQuotePossible}}if (r.bitFlags & rFlagQuote) != 0 {
 						controlRunes = append(controlRunes, r.quote)
 					}
 					if (r.bitFlags & rFlagEscape) != 0 {
 						controlRunes = append(controlRunes, r.escape)
 					}
-					{{ end }}if (r.bitFlags & rFlagComment) != 0 {
+					{{end}}if (r.bitFlags & rFlagComment) != 0 {
 						controlRunes = append(controlRunes, r.comment)
 					}
 

@@ -141,22 +141,22 @@ func main() {
 		t := parse(tsProcessField)
 
 		type cfg struct {
-			EscapeOn            bool
-			ForceQuoteOn        bool
+			Escape              bool
+			ForceQuote          bool
 			ClearMemoryAfterUse bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{EscapeOn: false, ForceQuoteOn: false, ClearMemoryAfterUse: false},
-			{EscapeOn: true, ForceQuoteOn: false, ClearMemoryAfterUse: false},
-			{EscapeOn: false, ForceQuoteOn: true, ClearMemoryAfterUse: false},
-			{EscapeOn: true, ForceQuoteOn: true, ClearMemoryAfterUse: false},
-			{EscapeOn: false, ForceQuoteOn: false, ClearMemoryAfterUse: true},
-			{EscapeOn: true, ForceQuoteOn: false, ClearMemoryAfterUse: true},
-			{EscapeOn: false, ForceQuoteOn: true, ClearMemoryAfterUse: true},
-			{EscapeOn: true, ForceQuoteOn: true, ClearMemoryAfterUse: true},
+			{Escape: false, ForceQuote: false, ClearMemoryAfterUse: false},
+			{Escape: true, ForceQuote: false, ClearMemoryAfterUse: false},
+			{Escape: false, ForceQuote: true, ClearMemoryAfterUse: false},
+			{Escape: true, ForceQuote: true, ClearMemoryAfterUse: false},
+			{Escape: false, ForceQuote: false, ClearMemoryAfterUse: true},
+			{Escape: true, ForceQuote: false, ClearMemoryAfterUse: true},
+			{Escape: false, ForceQuote: true, ClearMemoryAfterUse: true},
+			{Escape: true, ForceQuote: true, ClearMemoryAfterUse: true},
 		})
 	}
 
@@ -165,17 +165,17 @@ func main() {
 		t := parse(tsEscapeChars)
 
 		type cfg struct {
-			EscapeOn            bool
+			Escape              bool
 			ClearMemoryAfterUse bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{EscapeOn: false, ClearMemoryAfterUse: false},
-			{EscapeOn: true, ClearMemoryAfterUse: false},
-			{EscapeOn: false, ClearMemoryAfterUse: true},
-			{EscapeOn: true, ClearMemoryAfterUse: true},
+			{Escape: false, ClearMemoryAfterUse: false},
+			{Escape: true, ClearMemoryAfterUse: false},
+			{Escape: false, ClearMemoryAfterUse: true},
+			{Escape: true, ClearMemoryAfterUse: true},
 		})
 	}
 
