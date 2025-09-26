@@ -674,6 +674,14 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					// r.state = ... (unchanged)
 					if r.checkNumFields(nil) {
 						{{.IncRecordIndex}}
+
+						// commented out because it will always be zero here since state is rStateStartOfRecord
+						// // reset field index since we're returning true after processing a record terminator/separator
+						// //
+						// // this tells the error tracer that we're done with the end field loading and should point to the next
+						// // record's first field
+						// r.fieldIndex = 0
+
 						return true
 					}
 					return false
@@ -707,7 +715,13 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
 						{{.IncRecordIndex}}
+
+						// reset field index since we're returning true after processing a record terminator/separator
+						//
+						// this tells the error tracer that we're done with the end field loading and should point to the next
+						// record's first field
 						r.fieldIndex = 0
+
 						return true
 					}
 					return false
@@ -722,7 +736,13 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
 						{{.IncRecordIndex}}
+
+						// reset field index since we're returning true after processing a record terminator/separator
+						//
+						// this tells the error tracer that we're done with the end field loading and should point to the next
+						// record's first field
 						r.fieldIndex = 0
+
 						return true
 					}
 					return false

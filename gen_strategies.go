@@ -680,6 +680,14 @@ func (r *fastReader) prepareRow() bool {
 					// r.state = ... (unchanged)
 					if r.checkNumFields(nil) {
 						r.recordIndex++
+
+						// commented out because it will always be zero here since state is rStateStartOfRecord
+						// // reset field index since we're returning true after processing a record terminator/separator
+						// //
+						// // this tells the error tracer that we're done with the end field loading and should point to the next
+						// // record's first field
+						// r.fieldIndex = 0
+
 						return true
 					}
 					return false
@@ -713,7 +721,13 @@ func (r *fastReader) prepareRow() bool {
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
 						r.recordIndex++
+
+						// reset field index since we're returning true after processing a record terminator/separator
+						//
+						// this tells the error tracer that we're done with the end field loading and should point to the next
+						// record's first field
 						r.fieldIndex = 0
+
 						return true
 					}
 					return false
@@ -728,7 +742,13 @@ func (r *fastReader) prepareRow() bool {
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
 						r.recordIndex++
+
+						// reset field index since we're returning true after processing a record terminator/separator
+						//
+						// this tells the error tracer that we're done with the end field loading and should point to the next
+						// record's first field
 						r.fieldIndex = 0
+
 						return true
 					}
 					return false
@@ -1727,6 +1747,14 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					// r.state = ... (unchanged)
 					if r.checkNumFields(nil) {
 						r.incRecordIndex()
+
+						// commented out because it will always be zero here since state is rStateStartOfRecord
+						// // reset field index since we're returning true after processing a record terminator/separator
+						// //
+						// // this tells the error tracer that we're done with the end field loading and should point to the next
+						// // record's first field
+						// r.fieldIndex = 0
+
 						return true
 					}
 					return false
@@ -1762,7 +1790,13 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
 						r.incRecordIndex()
+
+						// reset field index since we're returning true after processing a record terminator/separator
+						//
+						// this tells the error tracer that we're done with the end field loading and should point to the next
+						// record's first field
 						r.fieldIndex = 0
+
 						return true
 					}
 					return false
@@ -1779,7 +1813,13 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
 						r.incRecordIndex()
+
+						// reset field index since we're returning true after processing a record terminator/separator
+						//
+						// this tells the error tracer that we're done with the end field loading and should point to the next
+						// record's first field
 						r.fieldIndex = 0
+
 						return true
 					}
 					return false

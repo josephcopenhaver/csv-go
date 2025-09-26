@@ -773,18 +773,21 @@ type fastReader struct {
 	readErr error
 	scanErr error
 	// checkNumFields is called at the end of parsing a record to ensure field counts match expectations and that none are missing
-	checkNumFields    func(errTrailer error) bool
-	reader            io.Reader
-	recordSep         [2]rune
-	recordBuf         []byte
-	fieldLengths      []int
-	rowBuf            []string
-	headers           []string
-	fieldStart        int
-	numFields         int
-	recordIndex       uint64
-	byteIndex         uint64
-	fieldIndex        uint // TODO: drop in favor of just using length of fieldLengths now that stability is good
+	checkNumFields func(errTrailer error) bool
+	reader         io.Reader
+	recordSep      [2]rune
+	recordBuf      []byte
+	fieldLengths   []int
+	rowBuf         []string
+	headers        []string
+	fieldStart     int
+	numFields      int
+	recordIndex    uint64
+	byteIndex      uint64
+
+	// DEV Note: cannot drop fieldIndex as some error field positions are after the last processed field and it would require another way to inform the error tracer
+
+	fieldIndex        uint
 	quote             rune
 	escape            rune
 	fieldSeparator    rune
