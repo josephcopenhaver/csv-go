@@ -1,4 +1,37 @@
-# V3.* Changes
+# V3.* Changes[^1]
+
+## v3.0.1 - 2025-10-07
+
+### New Functions
+- ReaderOptions.InitialRecordBufferSize()
+- ReaderOptions.InitialRecordBuffer()
+- ReaderOptions.InitialFieldBufferSize()
+- ReaderOptions.InitialFieldBuffer()
+- FieldWriters()
+- (*Writer).WriteFieldRow(row ...FieldWriter) (int, error)
+- (*Writer).WriteFieldRowBorrowed(row []FieldWriter) (int, error)
+
+### New Constants
+- ErrWriteHeaderFailed
+- ErrInvalidFieldWriter
+
+### NewStructs
+- FieldWriter
+
+This update adds allocation functions and structures which authors can
+use to speed up write operations. Specifically two new functions have
+been added to the csv Writer type: WriteFieldRow and WriteFieldRowBorrowed.
+Both these functions take a slice of FieldWriter instances which can be
+obtained via FieldWriters().SomeType(valueOfTypeToSerialize). The Borrowed
+variant can be used to reuse a slice from the parent context over and over
+to avoid some internal book-keeping should that be ideal for the developer.
+
+ErrWriteHeaderFailed it a new error type joined with errors that occur
+during the phase of writing a header should the writer state be negatively
+impacted from the attempt and prevents any other attempts to write a header
+or record.
+
+---
 
 ## v3.0.0 - 2025-09-03
 
@@ -34,3 +67,5 @@
 
 - NewReader now returns an interface rather than a pointer to a concrete exported type to match the spirit of hiding the internals as much as possible. To ease transition the *Reader struct that was returned is now a Reader interface with the same exported function signature.
 - ExpectHeaders now errors when a nil value is passed in. In addition it now takes a variadic slice of strings rather than a slice of strings to better match other option styles.
+
+[^1]: For V2.* changes [see here](../v2/CHANGELOG.md)

@@ -147,6 +147,40 @@ func TestFunctionalWriterInitializationErrorPaths(t *testing.T) {
 			newWriterErrIs:  []error{csv.ErrBadConfig},
 			newWriterErrStr: csv.ErrBadConfig.Error() + "\ninvalid field separator and escape combination",
 		},
+		{
+			when: "InitialRecordBufferSize < 0",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().InitialRecordBufferSize(-1),
+			},
+			newWriterErrIs:  []error{csv.ErrBadConfig},
+			newWriterErrStr: csv.ErrBadConfig.Error() + "\ninitial record buffer size must be greater than or equal to zero",
+		},
+		{
+			when: "InitialRecordBufferSize and InitialRecordBuffer used",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().InitialRecordBufferSize(0),
+				csv.WriterOpts().InitialRecordBuffer(nil),
+			},
+			newWriterErrIs:  []error{csv.ErrBadConfig},
+			newWriterErrStr: csv.ErrBadConfig.Error() + "\ninitial record buffer size cannot be specified when also setting the initial record buffer",
+		},
+		{
+			when: "InitialFieldBufferSize < 0",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().InitialFieldBufferSize(-1),
+			},
+			newWriterErrIs:  []error{csv.ErrBadConfig},
+			newWriterErrStr: csv.ErrBadConfig.Error() + "\ninitial field buffer size must be greater than or equal to zero",
+		},
+		{
+			when: "InitialFieldBufferSize and InitialFieldBuffer used",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().InitialFieldBufferSize(0),
+				csv.WriterOpts().InitialFieldBuffer(nil),
+			},
+			newWriterErrIs:  []error{csv.ErrBadConfig},
+			newWriterErrStr: csv.ErrBadConfig.Error() + "\ninitial field buffer size cannot be specified when also setting the initial field buffer",
+		},
 	}
 
 	for _, tc := range tcs {
