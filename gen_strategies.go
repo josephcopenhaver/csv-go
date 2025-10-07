@@ -2126,7 +2126,7 @@ func (w *Writer) processField_escapeOff_forceQuoteOff_memclearOff(v []byte) (int
 			return -1, nil
 		case 1:
 			if r == utf8.RuneError {
-				if w.errOnNonUTF8 {
+				if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
 					return -1, ErrNonUTF8InRecord
 				}
 
@@ -2172,7 +2172,7 @@ func (w *Writer) processField_escapeOn_forceQuoteOff_memclearOff(v []byte) (int,
 			return -1, nil
 		case 1:
 			if r == utf8.RuneError {
-				if w.errOnNonUTF8 {
+				if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
 					return -1, ErrNonUTF8InRecord
 				}
 
@@ -2244,7 +2244,7 @@ func (w *Writer) processField_escapeOff_forceQuoteOff_memclearOn(v []byte) (int,
 			return -1, nil
 		case 1:
 			if r == utf8.RuneError {
-				if w.errOnNonUTF8 {
+				if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
 					return -1, ErrNonUTF8InRecord
 				}
 
@@ -2289,7 +2289,7 @@ func (w *Writer) processField_escapeOn_forceQuoteOff_memclearOn(v []byte) (int, 
 			return -1, nil
 		case 1:
 			if r == utf8.RuneError {
-				if w.errOnNonUTF8 {
+				if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
 					return -1, ErrNonUTF8InRecord
 				}
 
@@ -2359,7 +2359,7 @@ func (w *Writer) escapeChars_escapeOff_memclearOff(v []byte, i int) (int, error)
 			return si, nil
 		case 1:
 			if r == utf8.RuneError {
-				if w.errOnNonUTF8 {
+				if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
 					return 0, ErrNonUTF8InRecord
 				}
 
@@ -2392,7 +2392,7 @@ func (w *Writer) escapeChars_escapeOn_memclearOff(v []byte, i int) (int, error) 
 			return si, nil
 		case 1:
 			if r == utf8.RuneError {
-				if w.errOnNonUTF8 {
+				if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
 					return 0, ErrNonUTF8InRecord
 				}
 
@@ -2431,7 +2431,7 @@ func (w *Writer) escapeChars_escapeOff_memclearOn(v []byte, i int) (int, error) 
 			return si, nil
 		case 1:
 			if r == utf8.RuneError {
-				if w.errOnNonUTF8 {
+				if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
 					return 0, ErrNonUTF8InRecord
 				}
 
@@ -2463,7 +2463,7 @@ func (w *Writer) escapeChars_escapeOn_memclearOn(v []byte, i int) (int, error) {
 			return si, nil
 		case 1:
 			if r == utf8.RuneError {
-				if w.errOnNonUTF8 {
+				if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
 					return 0, ErrNonUTF8InRecord
 				}
 
@@ -2529,7 +2529,7 @@ func (w *Writer) writeRow_memclearOff(row []FieldWriter) (int, error) {
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-	w.recordWritten = true
+	w.bitFlags |= wFlagRecordWritten
 	n, err := w.writer.Write(w.recordBuf)
 	if err != nil {
 		err := writeIOErr{err}
@@ -2655,7 +2655,7 @@ func (w *Writer) writeRow_memclearOn(row []FieldWriter) (int, error) {
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-	w.recordWritten = true
+	w.bitFlags |= wFlagRecordWritten
 	n, err := w.writer.Write(w.recordBuf)
 	if err != nil {
 		err := writeIOErr{err}

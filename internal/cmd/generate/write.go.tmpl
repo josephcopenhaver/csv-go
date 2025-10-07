@@ -40,7 +40,7 @@ func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}
 
 	{{template "appendRec0" .}}w.recordSepBytes[:w.recordSepByteLen]{{template "appendRec1" .}}
 
-	w.recordWritten = true
+	w.bitFlags |= wFlagRecordWritten
 	n, err := w.writer.Write(w.recordBuf)
 	if err != nil {
 		err := writeIOErr{err}

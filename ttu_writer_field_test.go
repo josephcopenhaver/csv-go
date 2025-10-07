@@ -112,22 +112,22 @@ func TestFieldWriterMarshalText(t *testing.T) {
 		is.Equal(`-1`, string(v))
 	}
 
-	// Int(math.MinInt64)
+	// Int(math.MinInt)
 	{
-		f := fw.Int(math.MinInt64)
+		f := fw.Int(math.MinInt)
 		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
-		is.Equal(strconv.FormatInt(math.MinInt64, 10), string(v))
+		is.Equal(strconv.FormatInt(math.MinInt, 10), string(v))
 	}
 
-	// Int(math.MaxInt64)
+	// Int(math.MaxInt)
 	{
-		f := fw.Int(math.MaxInt64)
+		f := fw.Int(math.MaxInt)
 		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
-		is.Equal(strconv.FormatInt(math.MaxInt64, 10), string(v))
+		is.Equal(strconv.FormatInt(math.MaxInt, 10), string(v))
 	}
 
 	// Int(math.MaxUint64)
@@ -438,7 +438,7 @@ func TestFieldWriterAppendMinInt64(t *testing.T) {
 		f := fw.Int64(math.MinInt64)
 		v, err := f.AppendText(buf)
 		is.Nil(err)
-		is.Equal(strconv.Itoa(math.MinInt64), string(v))
+		is.Equal(strconv.FormatInt(math.MinInt64, 10), string(v))
 		is.True(&(buf[:1][0]) == &v[0])
 	}
 
@@ -447,7 +447,7 @@ func TestFieldWriterAppendMinInt64(t *testing.T) {
 		f := fw.Int64(math.MinInt64)
 		v, err := f.AppendText(buf[: 0 : cap(buf)-1])
 		is.Nil(err)
-		is.Equal(strconv.Itoa(math.MinInt64), string(v))
+		is.Equal(strconv.FormatInt(math.MinInt64, 10), string(v))
 		is.False(&(buf[:1][0]) == &v[0])
 	}
 }
@@ -467,7 +467,7 @@ func TestFieldWriterAppendMaxInt64(t *testing.T) {
 		f := fw.Int64(math.MaxInt64)
 		v, err := f.AppendText(buf)
 		is.Nil(err)
-		is.Equal(strconv.Itoa(math.MaxInt64), string(v))
+		is.Equal(strconv.FormatInt(math.MaxInt64, 10), string(v))
 		is.True(&(buf[:1][0]) == &v[0])
 	}
 
@@ -476,7 +476,7 @@ func TestFieldWriterAppendMaxInt64(t *testing.T) {
 		f := fw.Int64(math.MaxInt64)
 		v, err := f.AppendText(buf[: 0 : cap(buf)-1])
 		is.Nil(err)
-		is.Equal(strconv.Itoa(math.MaxInt64), string(v))
+		is.Equal(strconv.FormatInt(math.MaxInt64, 10), string(v))
 		is.False(&(buf[:1][0]) == &v[0])
 	}
 }

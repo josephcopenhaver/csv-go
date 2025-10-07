@@ -9,7 +9,7 @@ func (w *Writer) escapeChars_escapeO{{if .Escape}}n{{else}}ff{{end}}_memclearO{{
 			return si, nil
 		case 1:
 			if r == utf8.RuneError {
-				if w.errOnNonUTF8 {
+				if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
 					return 0, ErrNonUTF8InRecord
 				}
 

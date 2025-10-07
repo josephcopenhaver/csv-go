@@ -35,7 +35,21 @@ var (
 	ErrInvalidRune               = errors.New("invalid rune")
 )
 
-type wFieldKind uint8
+type wFlag uint8
+
+const (
+	wFlagClosed wFlag = 1 << iota
+	wFlagErrOnNonUTF8
+	wFlagHeaderWritten
+	wFlagRecordWritten
+
+	//
+	// low access rate init-time flags
+	//
+
+	wFlagEscapeSet
+	wFlagClearMemoryAfterFree
+)
 
 const (
 	u64signBitMask uint64 = 0x8000000000000000
@@ -44,6 +58,8 @@ const (
 	maxLenSerializedBool    = 1
 	maxLenSerializedFloat64 = 24
 )
+
+type wFieldKind uint8
 
 const (
 	_ wFieldKind = iota
@@ -65,7 +81,7 @@ type FieldWriter struct {
 	time  time.Time
 	str   string
 	// _64_bits holds data for kinds that can be expressed within the 64 bits of uint64:
-	// int, int64, duration, uint64, bool, and float64
+	// int, int64, duration, uint64, rune, bool, and float64
 	_64_bits uint64
 }
 
@@ -263,18 +279,18 @@ func (e writeIOErr) Error() string {
 type wCfg struct {
 	writer                     io.Writer
 	initialRecordBufferSize    int
-	initialRecordBufferSizeSet bool
 	recordBuf                  []byte
-	recordBufSet               bool
 	initialFieldBufferSize     int
-	initialFieldBufferSizeSet  bool
 	fieldBuf                   []byte
-	fieldBufSet                bool
 	recordSep                  [2]rune
 	numFields                  int
 	fieldSeparator             rune
 	quote                      rune
 	escape                     rune
+	initialRecordBufferSizeSet bool
+	recordBufSet               bool
+	initialFieldBufferSizeSet  bool
+	fieldBufSet                bool
 	numFieldsSet               bool
 	errOnNonUTF8               bool
 	escapeSet                  bool
@@ -587,12 +603,7 @@ type Writer struct {
 	escapedQuoteByteLen     int8
 	escapedEscapeByteLen    int8
 	recordSepByteLen        int8
-	escapeSet               bool
-	errOnNonUTF8            bool
-	headerWritten           bool
-	recordWritten           bool
-	clearMemoryAfterFree    bool
-	closed                  bool
+	bitFlags                wFlag
 }
 
 // NewWriter creates a new instance of a CSV writer which is not safe for concurrent reads.
@@ -665,6 +676,17 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		fieldBuf = cfg.fieldBuf[:0:len(cfg.fieldBuf)]
 	}
 
+	var bitFlags wFlag
+	if cfg.errOnNonUTF8 {
+		bitFlags |= wFlagErrOnNonUTF8
+	}
+	if cfg.escapeSet {
+		bitFlags |= wFlagEscapeSet
+	}
+	if cfg.clearMemoryAfterFree {
+		bitFlags |= wFlagClearMemoryAfterFree
+	}
+
 	w := &Writer{
 		numFields:            cfg.numFields,
 		writer:               cfg.writer,
@@ -680,15 +702,13 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		recordSep:            cfg.recordSep,
 		recordSepRuneLen:     cfg.recordSepRuneLen,
 		fieldSep:             cfg.fieldSeparator,
-		errOnNonUTF8:         cfg.errOnNonUTF8,
 		escape:               cfg.escape,
-		escapeSet:            cfg.escapeSet,
-		clearMemoryAfterFree: cfg.clearMemoryAfterFree,
 		recordBuf:            recordBuf,
 		fieldBuf:             fieldBuf,
+		bitFlags:             bitFlags,
 	}
 
-	if w.clearMemoryAfterFree {
+	if cfg.clearMemoryAfterFree {
 		w.writeRow = w.writeRow_memclearOn
 		w.writeDoubleQuotesForRecord = w.writeDoubleQuotesForRecord_memclearOn
 	} else {
@@ -703,7 +723,7 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		f := w.writeRow
 		w.writeRow = func(row []FieldWriter) (int, error) {
 			w.writeRow = f
-			w.headerWritten = true
+			w.bitFlags |= wFlagHeaderWritten
 			return w.writeRow(row)
 		}
 	}
@@ -723,14 +743,14 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 // It will never attempt to flush or close the underlying writer
 // instance. That is left to the calling context.
 func (w *Writer) Close() error {
-	if w.closed {
+	if (w.bitFlags & wFlagClosed) != 0 {
 		return nil
 	}
-	w.closed = true
+	w.bitFlags |= wFlagClosed
 
 	w.setErr(ErrWriterClosed)
 
-	if w.clearMemoryAfterFree {
+	if (w.bitFlags & wFlagClearMemoryAfterFree) != 0 {
 		for _, v := range [][]byte{w.fieldBuf, w.recordBuf} {
 			v := v[:cap(v)]
 			for i := range v {
@@ -885,7 +905,7 @@ func (cfg *whCfg) validate(w *Writer) error {
 			return errors.New("invalid field separator and comment rune combination")
 		}
 
-		if w.escapeSet && w.escape == cfg.commentRune {
+		if (w.bitFlags&wFlagEscapeSet) != 0 && w.escape == cfg.commentRune {
 			return errors.New("invalid escape and comment rune combination")
 		}
 	} else if cfg.commentLinesSet {
@@ -922,10 +942,10 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 		return result, err
 	}
 
-	if w.headerWritten {
+	if (w.bitFlags & wFlagHeaderWritten) != 0 {
 		return result, ErrHeaderWritten
 	}
-	w.headerWritten = true
+	w.bitFlags |= wFlagHeaderWritten
 
 	cfg := whCfg{
 		// no defaults
@@ -941,7 +961,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 	if cfg.commentLinesSet {
 
 		var buf bytes.Buffer
-		if w.clearMemoryAfterFree {
+		if (w.bitFlags & wFlagClearMemoryAfterFree) != 0 {
 			defer func() {
 				buf.Reset()
 				b := buf.Bytes()
@@ -996,7 +1016,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 					for len(line) != 0 {
 						r, s := utf8.DecodeRune(line)
 						if s == 1 && r == utf8.RuneError {
-							if w.errOnNonUTF8 {
+							if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
 								return result, ErrNonUTF8InComment
 							}
 
@@ -1060,7 +1080,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 			fieldQuoter := w.processFieldFunc(true)
 
 			w.processFirstField = func(v []byte) (int, error) {
-				if !w.recordWritten {
+				if (w.bitFlags & wFlagRecordWritten) == 0 {
 					if r, _ := utf8.DecodeRune(v); r == commentRune {
 						return fieldQuoter(v)
 					}
@@ -1074,7 +1094,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 			}
 
 			w.writeDoubleQuotesForRecord = func() {
-				if !w.recordWritten {
+				if (w.bitFlags & wFlagRecordWritten) == 0 {
 					prevWriteDoubleQuotesForRecord()
 					return
 				}
@@ -1118,28 +1138,31 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 }
 
 func (w *Writer) processFieldFunc(forceQuote bool) func(v []byte) (int, error) {
-	if w.escapeSet {
+	escapeSet := ((w.bitFlags & wFlagEscapeSet) != 0)
+	clearMemoryAfterFree := ((w.bitFlags & wFlagClearMemoryAfterFree) != 0)
+
+	if escapeSet {
 		if forceQuote {
-			if w.clearMemoryAfterFree {
+			if clearMemoryAfterFree {
 				return w.processField_escapeOn_forceQuoteOn_memclearOn
 			}
 			return w.processField_escapeOn_forceQuoteOn_memclearOff
 		}
 
-		if w.clearMemoryAfterFree {
+		if clearMemoryAfterFree {
 			return w.processField_escapeOn_forceQuoteOff_memclearOn
 		}
 		return w.processField_escapeOn_forceQuoteOff_memclearOff
 	}
 
 	if forceQuote {
-		if w.clearMemoryAfterFree {
+		if clearMemoryAfterFree {
 			return w.processField_escapeOff_forceQuoteOn_memclearOn
 		}
 		return w.processField_escapeOff_forceQuoteOn_memclearOff
 	}
 
-	if w.clearMemoryAfterFree {
+	if clearMemoryAfterFree {
 		return w.processField_escapeOff_forceQuoteOff_memclearOn
 	}
 
@@ -1213,14 +1236,22 @@ func (w *Writer) writeRowPreflightCheck(n int) (_err error) {
 
 	// check if the number of fields to write is zero
 	if n == 0 {
-		// abandons
-		w.headerWritten = true
+		// short circuit to return an error
+
+		// a row write was attempted so even on the error path we
+		// must not allow another write header attempt in any way
+		w.bitFlags |= wFlagHeaderWritten
+
 		return ErrRowNilOrEmpty
 	}
 
 	if v := w.numFields; v != n {
 		if v != -1 {
-			w.headerWritten = true
+
+			// a row write was attempted so even on the error path we
+			// must not allow another write header attempt in any way
+			w.bitFlags |= wFlagHeaderWritten
+
 			return ErrInvalidFieldCountInRecord
 		}
 		w.numFields = n

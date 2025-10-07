@@ -15,7 +15,7 @@ func (w *Writer) processField_escapeO{{if .Escape}}n{{else}}ff{{end}}_forceQuote
 			return -1, nil
 		case 1:
 			if r == utf8.RuneError {
-				if w.errOnNonUTF8 {
+				if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
 					return -1, ErrNonUTF8InRecord
 				}
 
