@@ -68,4 +68,4 @@ or record.
 - NewReader now returns an interface rather than a pointer to a concrete exported type to match the spirit of hiding the internals as much as possible. To ease transition the *Reader struct that was returned is now a Reader interface with the same exported function signature.
 - ExpectHeaders now errors when a nil value is passed in. In addition it now takes a variadic slice of strings rather than a slice of strings to better match other option styles.
 
-[^1]: For V2.* changes [see here](../v2/CHANGELOG.md)
+[^1]: For V2.* changes [see here](/docs/version/v2/CHANGELOG.md)
