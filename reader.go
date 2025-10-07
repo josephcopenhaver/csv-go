@@ -173,8 +173,8 @@ func (e posTracedErr) Error() string {
 	return sb.String()
 }
 
-func (e posTracedErr) Is(err error) bool {
-	return errors.Is(e.errType, err) || errors.Is(e.err, err)
+func (e posTracedErr) Is(target error) bool {
+	return errors.Is(e.errType, target) || errors.Is(e.err, target)
 }
 
 func newIOError(byteIndex, recordIndex uint64, fieldIndex uint, err error) posTracedErr {
@@ -212,8 +212,8 @@ type errNotEnoughFields struct {
 	Expected, Actual int
 }
 
-func (e errNotEnoughFields) Is(err error) bool {
-	return errors.Is(err, ErrFieldCount) || errors.Is(err, ErrNotEnoughFields)
+func (e errNotEnoughFields) Is(target error) bool {
+	return errors.Is(ErrFieldCount, target) || errors.Is(ErrNotEnoughFields, target)
 }
 
 func (e errNotEnoughFields) Error() string {
@@ -228,8 +228,8 @@ type errTooManyFields struct {
 	expected int
 }
 
-func (e errTooManyFields) Is(err error) bool {
-	return errors.Is(err, ErrFieldCount) || errors.Is(err, ErrTooManyFields)
+func (e errTooManyFields) Is(target error) bool {
+	return errors.Is(ErrFieldCount, target) || errors.Is(ErrTooManyFields, target)
 }
 
 func (e errTooManyFields) Error() string {
@@ -242,8 +242,8 @@ func tooManyFieldsErr(exp int) errTooManyFields {
 
 type errTooManyFieldsAboveMax struct{}
 
-func (e errTooManyFieldsAboveMax) Is(err error) bool {
-	return errors.Is(err, ErrFieldCount) || errors.Is(err, ErrTooManyFields) || errors.Is(err, ErrSecOpFieldCountAboveMax)
+func (e errTooManyFieldsAboveMax) Is(target error) bool {
+	return errors.Is(ErrFieldCount, target) || errors.Is(ErrTooManyFields, target) || errors.Is(ErrSecOpFieldCountAboveMax, target)
 }
 
 func (e errTooManyFieldsAboveMax) Error() string {
@@ -1598,21 +1598,21 @@ func (r *secOpReader) zeroRecordBuffers() {
 		}
 	}
 
-	if r.fieldLengths != nil {
+	{
 		v := r.fieldLengths[:cap(r.fieldLengths)]
 		for i := range v {
 			v[i] = 0
 		}
 	}
 
-	if r.recordBuf != nil {
+	{
 		v := r.recordBuf[:cap(r.recordBuf)]
 		for i := range v {
 			v[i] = 0
 		}
 	}
 
-	if r.rowBuf != nil {
+	{
 		v := r.rowBuf[:cap(r.rowBuf)]
 		for i := range v {
 			v[i] = ""

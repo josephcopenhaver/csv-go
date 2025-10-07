@@ -85,7 +85,7 @@ See the [Reader](internal/examples/reader/main.go) and [Writer](internal/example
 
 | Name | option(s) |
 | - | - |
-| Zero allocations | *planned* |
+| Zero allocations | InitialRecordBufferSize, InitialRecordBuffer, InitialFieldBufferSize, InitialFieldBuffer |
 | Header and Comment Specification | CommentRune + CommentLines + IncludeByteOrderMarker + Headers + TrimHeaders|
 | Format Specification | Escape + FieldSeparator + Quote + RecordSeparator + NumFields |
 | Data Loss Prevention | ClearFreedDataMemory |
