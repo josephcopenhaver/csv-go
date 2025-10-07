@@ -7,6 +7,8 @@ import (
 )
 
 func Test_pow10u64(t *testing.T) {
+	t.Parallel()
+
 	is := assert.New(t)
 
 	v := uint64(1)

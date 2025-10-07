@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -49,6 +50,24 @@ func TestFieldWriterMarshalText(t *testing.T) {
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`9999999999999999999999999999999999999999999999999`, string(v))
+	}
+
+	// rune
+	{
+		f := fw.Rune('"')
+		is.False(f.isZeroLen())
+		v, err := f.MarshalText()
+		is.Nil(err)
+		is.Equal(`"`, string(v))
+	}
+
+	// invalid rune
+	{
+		f := fw.Rune(0x808080)
+		is.False(f.isZeroLen())
+		v, err := f.MarshalText()
+		is.ErrorIs(err, ErrInvalidRune)
+		is.Nil(v)
 	}
 
 	//
@@ -692,6 +711,47 @@ func TestFieldWriterAppendBytes(t *testing.T) {
 		is.Nil(err)
 		is.Equal(testStr, string(v))
 		is.False(&(buf[:1][0]) == &v[0])
+	}
+}
+
+func TestFieldWriterAppendRune(t *testing.T) {
+	t.Parallel()
+
+	is := assert.New(t)
+	fw := FieldWriters()
+
+	// byte length of rune is known to be 1
+	{
+		buf := make([]byte, 0, 1)
+
+		// valid bounds
+		{
+			f := fw.Rune('"')
+			v, err := f.AppendText(buf)
+			is.Nil(err)
+			is.Equal(`"`, string(v))
+			is.True(&(buf[:1][0]) == &v[0])
+		}
+
+		// bounds too short
+		{
+			f := fw.Rune('"')
+			v, err := f.AppendText(buf[: 0 : cap(buf)-1])
+			is.Nil(err)
+			is.Equal(`"`, string(v))
+			is.False(&(buf[:1][0]) == &v[0])
+		}
+	}
+
+	// byte length of run is unknown
+	{
+		buf := make([]byte, 0, utf8.UTFMax)
+
+		f := fw.Rune('"')
+		v, err := f.AppendText(buf)
+		is.Nil(err)
+		is.Equal(`"`, string(v))
+		is.True(&(buf[:1][0]) == &v[0])
 	}
 }
 

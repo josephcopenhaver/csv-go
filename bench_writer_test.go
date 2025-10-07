@@ -94,6 +94,34 @@ func BenchmarkWriteWithSliceBorrowed(b *testing.B) {
 	_ = cw.Close()
 }
 
+func BenchmarkWriteWithQuotes(b *testing.B) {
+	b.ReportAllocs()
+
+	cw, err := csv.NewWriter(
+		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().Quote('"'),
+	)
+	if err != nil {
+		panic(err)
+	}
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+
+	fw := csv.FieldWriters()
+
+	for b.Loop() {
+		_, err = cw.WriteFieldRow(
+			fw.Int(-1),
+			fw.Int(-1),
+			fw.Rune('"'),
+		)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	_ = cw.Close()
+}
+
 func BenchmarkFieldWriterAppendMinInt(b *testing.B) {
 	buf := make([]byte, 0, 20)
 	b.ReportAllocs()

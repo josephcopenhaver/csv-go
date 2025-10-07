@@ -32,6 +32,7 @@ var (
 	ErrHeaderWritten             = errors.New("header already written")
 	ErrInvalidFieldCountInRecord = errors.New("invalid field count in record")
 	ErrInvalidFieldWriter        = errors.New("invalid field writer")
+	ErrInvalidRune               = errors.New("invalid rune")
 )
 
 type wFieldKind uint8
@@ -53,6 +54,7 @@ const (
 	wfkDuration
 	wfkUint64
 	wfkTime
+	wfkRune
 	wfkBool
 	wfkFloat64
 )
@@ -73,7 +75,7 @@ func (w *FieldWriter) isZeroLen() bool {
 		return len(w.bytes) == 0
 	case wfkString:
 		return len(w.str) == 0
-	case wfkInt, wfkInt64, wfkDuration, wfkUint64, wfkTime, wfkBool, wfkFloat64:
+	case wfkInt, wfkInt64, wfkDuration, wfkUint64, wfkTime, wfkRune, wfkBool, wfkFloat64:
 		return false
 	default:
 		// I reserve the right to panic here in the future should I wish to.
@@ -94,6 +96,12 @@ func (w *FieldWriter) AppendText(b []byte) ([]byte, error) {
 		return strconv.AppendUint(b, uint64(w._64_bits), 10), nil
 	case wfkTime:
 		return w.time.AppendFormat(b, time.RFC3339Nano), nil
+	case wfkRune:
+		r := rune(w._64_bits)
+		if r == utf8.RuneError {
+			return nil, ErrInvalidRune
+		}
+		return append(b, string(r)...), nil
 	case wfkBool:
 		boolAsByte := byte('0') + byte(w._64_bits)
 		return append(b, boolAsByte), nil
@@ -142,6 +150,9 @@ func (w *FieldWriter) MarshalText() (text []byte, err error) {
 		b = make([]byte, 0, base10ByteLen)
 	case wfkTime:
 		b = make([]byte, 0, maxLenSerializedTime)
+	case wfkRune:
+		// would be at most utf8.UTFMax (4) bytes in length and never empty
+		b = make([]byte, 0, utf8.UTFMax)
 	case wfkBool:
 		b = make([]byte, 0, maxLenSerializedBool)
 	case wfkFloat64:
@@ -192,6 +203,18 @@ func (FieldWriterFactory) Time(t time.Time) FieldWriter {
 	return FieldWriter{
 		kind: wfkTime,
 		time: t,
+	}
+}
+
+func (FieldWriterFactory) Rune(r rune) FieldWriter {
+	decodedRune, _ := utf8.DecodeRune([]byte(string(r)))
+	if decodedRune == utf8.RuneError || decodedRune != r {
+		r = utf8.RuneError
+	}
+
+	return FieldWriter{
+		kind:     wfkRune,
+		_64_bits: uint64(r),
 	}
 }
 
@@ -878,6 +901,21 @@ func (cfg *whCfg) validate(w *Writer) error {
 	return nil
 }
 
+func (w *Writer) writeBOM() (int, error) {
+	utf8BOMBytes := []byte{
+		0xFF & (utf8ByteOrderMarker >> 16),
+		0xFF & (utf8ByteOrderMarker >> 8),
+		0xFF & utf8ByteOrderMarker,
+	}
+
+	n, err := w.writer.Write(utf8BOMBytes)
+	if err != nil {
+		err = errors.Join(ErrWriteHeaderFailed, writeIOErr{err})
+		w.setErr(err)
+	}
+	return n, err
+}
+
 func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 	var result int
 	if err := w.err; err != nil {
@@ -996,17 +1034,9 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 		}
 
 		if cfg.includeBOM {
-			utf8BOMBytes := []byte{
-				0xFF & (utf8ByteOrderMarker >> 16),
-				0xFF & (utf8ByteOrderMarker >> 8),
-				0xFF & utf8ByteOrderMarker,
-			}
-
-			n, err := w.writer.Write(utf8BOMBytes)
+			n, err := w.writeBOM()
 			result += n
 			if err != nil {
-				err := errors.Join(ErrWriteHeaderFailed, writeIOErr{err})
-				w.setErr(err)
 				return result, err
 			}
 		}
@@ -1055,17 +1085,9 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 			}
 		}
 	} else if cfg.includeBOM {
-		utf8BOMBytes := []byte{
-			0xFF & (utf8ByteOrderMarker >> 16),
-			0xFF & (utf8ByteOrderMarker >> 8),
-			0xFF & utf8ByteOrderMarker,
-		}
-
-		n, err := w.writer.Write(utf8BOMBytes)
+		n, err := w.writeBOM()
 		result += n
 		if err != nil {
-			err := errors.Join(ErrWriteHeaderFailed, writeIOErr{err})
-			w.setErr(err)
 			return result, err
 		}
 	}

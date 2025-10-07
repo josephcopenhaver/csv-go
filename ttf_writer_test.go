@@ -519,6 +519,8 @@ func TestFunctionalWriterOKPaths(t *testing.T) {
 }
 
 func TestWriteFieldRow(t *testing.T) {
+	t.Parallel()
+
 	is := assert.New(t)
 
 	var buf bytes.Buffer
@@ -553,7 +555,48 @@ func TestWriteFieldRow(t *testing.T) {
 	is.Equal(buf.String(), `-1,,a,,b,1`+"\n")
 }
 
+func TestWriteFieldRowWithQuote(t *testing.T) {
+	t.Parallel()
+
+	is := assert.New(t)
+
+	var buf bytes.Buffer
+
+	func() {
+		fw := csv.FieldWriters()
+
+		cw, err := csv.NewWriter(
+			csv.WriterOpts().Writer(&buf),
+			csv.WriterOpts().Quote('"'),
+		)
+		is.Nil(err)
+		defer func() {
+			is.Nil(cw.Close())
+
+			n, err := cw.WriteFieldRow()
+			is.Equal(csv.ErrWriterClosed, err)
+			is.Zero(n)
+		}()
+
+		n, err := cw.WriteFieldRow(
+			fw.Int(-1),
+			fw.String(""),
+			fw.String("a"),
+			fw.Bytes(nil),
+			fw.Bytes([]byte("b")),
+			fw.Bool(true),
+			fw.Rune('"'),
+		)
+		is.Nil(err)
+		is.Equal(16, n)
+	}()
+
+	is.Equal(buf.String(), `-1,,a,,b,1,""""`+"\n")
+}
+
 func TestWriteFieldRowWithMemclearOn(t *testing.T) {
+	t.Parallel()
+
 	is := assert.New(t)
 
 	var buf bytes.Buffer
@@ -590,6 +633,8 @@ func TestWriteFieldRowWithMemclearOn(t *testing.T) {
 }
 
 func TestWriteFieldRowBorrowed(t *testing.T) {
+	t.Parallel()
+
 	is := assert.New(t)
 
 	var buf bytes.Buffer
@@ -627,6 +672,8 @@ func TestWriteFieldRowBorrowed(t *testing.T) {
 }
 
 func TestWriteFieldRowBorrowedWithMemclearOn(t *testing.T) {
+	t.Parallel()
+
 	is := assert.New(t)
 
 	var buf bytes.Buffer
@@ -665,6 +712,8 @@ func TestWriteFieldRowBorrowedWithMemclearOn(t *testing.T) {
 }
 
 func TestWriteFieldRowWithInvalidField(t *testing.T) {
+	t.Parallel()
+
 	is := assert.New(t)
 
 	var buf bytes.Buffer
@@ -695,6 +744,8 @@ func TestWriteFieldRowWithInvalidField(t *testing.T) {
 }
 
 func TestWriteFieldRowWithInvalidFieldWithMemclearOn(t *testing.T) {
+	t.Parallel()
+
 	is := assert.New(t)
 
 	var buf bytes.Buffer

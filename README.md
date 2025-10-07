@@ -92,6 +92,8 @@ See the [Reader](internal/examples/reader/main.go) and [Writer](internal/example
 | Encoding Validation | ErrorOnNonUTF8 |
 | Security Limits | *planned* |
 
+Note that the writer also has WriteFieldRow*() functions to reduce allocations associated with converting non-string types to human readable string forms for csv use.
+
 ---
 
 [CHANGELOG](docs/version/v3/CHANGELOG.md)

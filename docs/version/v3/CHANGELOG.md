@@ -7,9 +7,19 @@
 - ReaderOptions.InitialRecordBuffer()
 - ReaderOptions.InitialFieldBufferSize()
 - ReaderOptions.InitialFieldBuffer()
-- FieldWriters()
 - (*Writer).WriteFieldRow(row ...FieldWriter) (int, error)
 - (*Writer).WriteFieldRowBorrowed(row []FieldWriter) (int, error)
+- FieldWriters()
+- FieldWriterFactory.Bytes()
+- FieldWriterFactory.String()
+- FieldWriterFactory.Int()
+- FieldWriterFactory.Int64()
+- FieldWriterFactory.Uint64()
+- FieldWriterFactory.Time()
+- FieldWriterFactory.Rune()
+- FieldWriterFactory.Bool()
+- FieldWriterFactory.Duration()
+- FieldWriterFactory.Float64()
 
 ### New Constants
 - ErrWriteHeaderFailed
@@ -26,7 +36,7 @@ obtained via FieldWriters().SomeType(valueOfTypeToSerialize). The Borrowed
 variant can be used to reuse a slice from the parent context over and over
 to avoid some internal book-keeping should that be ideal for the developer.
 
-ErrWriteHeaderFailed it a new error type joined with errors that occur
+ErrWriteHeaderFailed is a new error type joined with errors that occur
 during the phase of writing a header should the writer state be negatively
 impacted from the attempt and prevents any other attempts to write a header
 or record.
