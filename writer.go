@@ -246,7 +246,11 @@ func (FieldWriterFactory) Rune(r rune) FieldWriter {
 	offset := uint8(utf8.UTFMax - numBytes)
 	utf8.EncodeRune(buf[offset:], r)
 
-	v := (uint64(offset) << (8 * 4)) | (uint64(buf[0]) << (8 * 3)) | (uint64(buf[1]) << (8 * 2)) | (uint64(buf[2]) << (8 * 1)) | uint64(buf[3])
+	v := (uint64(offset) << (8 * 4)) |
+		(uint64(buf[0]) << (8 * 3)) |
+		(uint64(buf[1]) << (8 * 2)) |
+		(uint64(buf[2]) << (8 * 1)) |
+		uint64(buf[3])
 
 	return FieldWriter{
 		kind:     wfkRune,
