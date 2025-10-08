@@ -111,7 +111,6 @@ func BenchmarkWriteWithQuotes(b *testing.B) {
 	for b.Loop() {
 		_, err = cw.WriteFieldRow(
 			fw.Int(-1),
-			fw.Int(-1),
 			fw.Rune('"'),
 		)
 		if err != nil {
