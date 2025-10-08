@@ -26,6 +26,7 @@
 - ErrInvalidFieldWriter
 
 ### NewStructs
+- FieldWriterFactory
 - FieldWriter
 
 This update adds allocation functions and structures which authors can
