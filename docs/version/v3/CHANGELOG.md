@@ -1,5 +1,9 @@
 # V3.* Changes[^1]
 
+## v3.0.2 - 2025-10-08
+
+Rune writing now behaves in a simpler/faster fashion while keeping all other behaviors the same.
+
 ## v3.0.1 - 2025-10-07
 
 ### New Functions

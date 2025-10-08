@@ -57,6 +57,9 @@ const (
 	maxLenSerializedTime    = 35
 	maxLenSerializedBool    = 1
 	maxLenSerializedFloat64 = 24
+
+	invalidRuneUTF8Encoded           = 0xEFBFBD
+	invalidRuneUTF8EncodedWithOffset = ((1 << (8 * 4)) | invalidRuneUTF8Encoded)
 )
 
 type wFieldKind uint8
@@ -113,11 +116,19 @@ func (w *FieldWriter) AppendText(b []byte) ([]byte, error) {
 	case wfkTime:
 		return w.time.AppendFormat(b, time.RFC3339Nano), nil
 	case wfkRune:
-		r := rune(w._64_bits)
-		if r == utf8.RuneError {
+		r := w._64_bits
+		if r == invalidRuneUTF8EncodedWithOffset {
 			return nil, ErrInvalidRune
 		}
-		return append(b, string(r)...), nil
+
+		var buf [utf8.UTFMax]byte
+		buf[3] = byte(r)
+		buf[2] = byte(r >> (8 * 1))
+		buf[1] = byte(r >> (8 * 2))
+		buf[0] = byte(r >> (8 * 3))
+		offset := uint8(r >> (8 * 4))
+
+		return append(b, buf[offset:]...), nil
 	case wfkBool:
 		boolAsByte := byte('0') + byte(w._64_bits)
 		return append(b, boolAsByte), nil
@@ -223,14 +234,23 @@ func (FieldWriterFactory) Time(t time.Time) FieldWriter {
 }
 
 func (FieldWriterFactory) Rune(r rune) FieldWriter {
-	decodedRune, _ := utf8.DecodeRune([]byte(string(r)))
-	if decodedRune == utf8.RuneError || decodedRune != r {
-		r = utf8.RuneError
+	numBytes := utf8.RuneLen(r)
+	if numBytes == -1 {
+		return FieldWriter{
+			kind:     wfkRune,
+			_64_bits: invalidRuneUTF8EncodedWithOffset,
+		}
 	}
+
+	var buf [utf8.UTFMax]byte
+	offset := uint8(utf8.UTFMax - numBytes)
+	utf8.EncodeRune(buf[offset:], r)
+
+	v := (uint64(offset) << (8 * 4)) | (uint64(buf[0]) << (8 * 3)) | (uint64(buf[1]) << (8 * 2)) | (uint64(buf[2]) << (8 * 1)) | uint64(buf[3])
 
 	return FieldWriter{
 		kind:     wfkRune,
-		_64_bits: uint64(r),
+		_64_bits: v,
 	}
 }
 
