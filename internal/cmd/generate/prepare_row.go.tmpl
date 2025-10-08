@@ -6,6 +6,14 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 	// next step is to thoroughly get coverage though over this new approach in the discrete form before
 	// it gets less verbose / more small via various tactics
 
+	// Given r.rawIndex holds the next write index position,
+	// if the raw buffer space is reaching its end (less than ReaderMinBufferSize bytes) then shift the unused segment
+	// to the head of the buffer space and fill the tail of the buffer space until the available buffer length
+	// is greater than or equal to ReaderMinBufferSize.
+	//
+	// After a sufficient segment is ready to parse, step through the state machine valid for the next found
+	// control rune present in the stream buffer.
+
 	for {
 		if len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex < ReaderMinBufferSize {
 			var lastProcessedByte byte
@@ -14,7 +22,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 			}
 
 			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
-			r.rawBuf = r.rawBuf[0 : len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
+			r.rawBuf = r.rawBuf[: len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
 			r.rawIndex = 0
 			r.rawNumHiddenBytes = 0
 
@@ -40,17 +48,17 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					}
 
 					if n >= ReaderMinBufferSize {
-						if c := r.rawBuf[n-1]; c & invalidControlRune == 0 {
+						if c := r.rawBuf[n-1]; c & asciiBitMask == 0 {
 							// ends in 1 byte ascii character
 
-							if c == asciiCarriageReturn && r.recordSepLen != 1 {
+							if c == asciiCarriageReturn && r.recordSepRuneLen != 1 {
 								// hide a floating CR character if record separator
 								// could be CRLF
 								//
 								// TODO: perhaps only do this if not in a
 								// quoted state to reduce copying ops?
 								//
-								r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-1]
+								r.rawBuf = r.rawBuf[: len(r.rawBuf)-1]
 								r.rawNumHiddenBytes = 1
 							}
 
@@ -75,7 +83,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 							for i := 1; i <= rMaxOverflowNumBytes; i++ {
 								if (r.rawBuf[len(r.rawBuf)-i] & 0xC0) == 0xC0 {
 									r.rawNumHiddenBytes = uint8(i)
-									r.rawBuf = r.rawBuf[0 : len(r.rawBuf)-i]
+									r.rawBuf = r.rawBuf[: len(r.rawBuf)-i]
 									break
 								}
 							}
@@ -113,7 +121,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 				// is off that this should also be off, but I will not be making that decision
 				// without a stronger opinion. A pull request with strong justification or a new
 				// option would be welcome here should you have a strong opinion.
-				if lastProcessedByte == asciiCarriageReturn && r.recordSepLen == 2 {
+				if lastProcessedByte == asciiCarriageReturn && r.recordSepRuneLen == 2 {
 					r.parsingErr(ErrUnsafeCRFileEnd)
 					return false
 				}
@@ -196,7 +204,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 			c := rune(r.rawBuf[idx])
 			size := uint8(1)
-			if (c & invalidControlRune) != 0 {
+			if (c & asciiBitMask) != 0 {
 				c, size = decodeMBControlRune(r.rawBuf[idx:])
 			}
 
@@ -233,7 +241,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					r.rawIndex = idx + int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
-					r.fieldStart = len(r.recordBuf)
+					{{.SetFieldStart}}
 
 					if r.fieldNumOverflow() {
 						return false
@@ -267,7 +275,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					r.rawIndex += int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
-					r.fieldStart = len(r.recordBuf)
+					{{.SetFieldStart}}
 
 					if r.fieldNumOverflow() {
 						return false
@@ -283,7 +291,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.byteIndex += uint64(di)
 					r.rawIndex = idx + int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
-					r.fieldStart = len(r.recordBuf)
+					{{.SetFieldStart}}
 
 					if r.fieldNumOverflow() {
 						return false
@@ -299,7 +307,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.byteIndex += uint64(di)
 					r.rawIndex = idx + int(size)
 					r.fieldLengths = append(r.fieldLengths, len(r.recordBuf)-r.fieldStart)
-					r.fieldStart = len(r.recordBuf)
+					{{.SetFieldStart}}
 
 					if r.fieldNumOverflow() {
 						return false
@@ -320,7 +328,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				}
-			case r.escape:
+			{{if not .NotQuotePossible}}case r.escape:
 				switch r.state {
 				case rStateStartOfDoc:
 					// HANDLING: r.escape
@@ -550,8 +558,8 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				}
-			case r.recordSep[0]:
-				if r.recordSepLen == 2 {
+			{{end}}case r.recordSep[0]:
+				if r.recordSepRuneLen == 2 {
 					// checking for a full CRLF
 					//
 					// if not a CRLF sequence then just process the CR as field data
@@ -666,6 +674,14 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					// r.state = ... (unchanged)
 					if r.checkNumFields(nil) {
 						{{.IncRecordIndex}}
+
+						// commented out because it will always be zero here since state is rStateStartOfRecord
+						// // reset field index since we're returning true after processing a record terminator/separator
+						// //
+						// // this tells the error tracer that we're done with the end field loading and should point to the next
+						// // record's first field
+						// r.fieldIndex = 0
+
 						return true
 					}
 					return false
@@ -699,7 +715,13 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
 						{{.IncRecordIndex}}
+
+						// reset field index since we're returning true after processing a record terminator/separator
+						//
+						// this tells the error tracer that we're done with the end field loading and should point to the next
+						// record's first field
 						r.fieldIndex = 0
+
 						return true
 					}
 					return false
@@ -714,7 +736,13 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					r.state = rStateStartOfRecord
 					if r.checkNumFields(nil) {
 						{{.IncRecordIndex}}
+
+						// reset field index since we're returning true after processing a record terminator/separator
+						//
+						// this tells the error tracer that we're done with the end field loading and should point to the next
+						// record's first field
 						r.fieldIndex = 0
+
 						return true
 					}
 					return false
@@ -812,7 +840,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					// r.state = ... (unchanged)
 				}
 			default:
-				if r.recordSepLen != 0 {
+				if r.recordSepRuneLen != 0 {
 					// record separator detection is disabled or already hardened
 					//
 					// must have found a CR or LF character under circumstances where we're aiming to error
@@ -929,26 +957,26 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					// HANDLING: CR or LF as data given record-sep discovery=on
 
 					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
-						r.recordSepLen = 2
+						r.recordSepRuneLen = 2
 						r.recordSep[0] = asciiCarriageReturn
 						r.recordSep[1] = asciiLineFeed
 					} else {
-						r.recordSepLen = 1
+						r.recordSepRuneLen = 1
 						r.recordSep[0] = c
 					}
 
 					// preserve field separator
-					var buf [7]rune
+					var buf [{{if .NotQuotePossible}}5{{else}}7{{end}}]rune
 					controlRunes := append(buf[:0], r.fieldSeparator)
 					controlRunes = append(controlRunes, c)
 
-					if (r.bitFlags & rFlagQuote) != 0 {
+					{{if not .NotQuotePossible}}if (r.bitFlags & rFlagQuote) != 0 {
 						controlRunes = append(controlRunes, r.quote)
 					}
 					if (r.bitFlags & rFlagEscape) != 0 {
 						controlRunes = append(controlRunes, r.escape)
 					}
-					if (r.bitFlags & rFlagComment) != 0 {
+					{{end}}if (r.bitFlags & rFlagComment) != 0 {
 						controlRunes = append(controlRunes, r.comment)
 					}
 

@@ -85,12 +85,14 @@ See the [Reader](internal/examples/reader/main.go) and [Writer](internal/example
 
 | Name | option(s) |
 | - | - |
-| Zero allocations | *planned* |
+| Zero allocations | InitialRecordBufferSize + InitialRecordBuffer + InitialFieldBufferSize + InitialFieldBuffer |
 | Header and Comment Specification | CommentRune + CommentLines + IncludeByteOrderMarker + Headers + TrimHeaders|
 | Format Specification | Escape + FieldSeparator + Quote + RecordSeparator + NumFields |
 | Data Loss Prevention | ClearFreedDataMemory |
 | Encoding Validation | ErrorOnNonUTF8 |
 | Security Limits | *planned* |
+
+Note that the writer also has WriteFieldRow*() functions (WriteFieldRow, WriteFieldRowBorrowed) to reduce allocations when converting non‑string types to human‑readable CSV field values.
 
 ---
 

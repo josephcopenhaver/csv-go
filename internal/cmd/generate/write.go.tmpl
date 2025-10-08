@@ -1,23 +1,11 @@
 {{define "appendRec0"}}{{if .ClearMemoryAfterUse}}w.appendRec({{else}}w.recordBuf = append(w.recordBuf, {{end}}{{end}}
 {{define "appendRec1"}}{{if .ClearMemoryAfterUse}}){{else}}...){{end}}{{end}}
-func (w *Writer) writeRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled(row []string) (int, error) {
-	defer func() {
+func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}(row []FieldWriter) (int, error) {
+	defer func(){
 		w.recordBuf = w.recordBuf[:0]
 	}()
 
-	if len(row) == 0 {
-		return 0, ErrRowNilOrEmpty
-	}
-
-	if w.numFields != len(row) {
-		if w.numFields != -1 {
-			return 0, ErrInvalidFieldCountInRecord
-		}
-
-		w.numFields = len(row)
-	}
-
-	if len(row) == 1 && row[0] == "" {
+	if len(row) == 1 && row[0].isZeroLen() {
 		// This is a safety feature that makes the document slightly more durable to being edited.
 		// If we could guarantee that the "record terminator" is never removed by accident via
 		// "whitespace removal" of editors then this is extra work with no benefit. If this ever
@@ -35,7 +23,7 @@ func (w *Writer) writeRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}
 		// seems like an odd path to optimize for, but we could
 		w.writeDoubleQuotesForRecord()
 	} else {
-		if err := w.writeField_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled(w.processFirstField, row[0]); err != nil {
+		if err := w.writeField_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}(w.processFirstField, row[0]); err != nil {
 			return 0, err
 		}
 
@@ -44,7 +32,7 @@ func (w *Writer) writeRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}
 			// write field separator
 			{{template "appendRec0" .}}[]byte(string(w.fieldSep)){{template "appendRec1" .}}
 
-			if err := w.writeField_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled(w.processField, v); err != nil {
+			if err := w.writeField_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}(w.processField, v); err != nil {
 				return 0, err
 			}
 		}
@@ -52,7 +40,7 @@ func (w *Writer) writeRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}
 
 	{{template "appendRec0" .}}w.recordSepBytes[:w.recordSepByteLen]{{template "appendRec1" .}}
 
-	w.recordWritten = true
+	w.bitFlags |= wFlagRecordWritten
 	n, err := w.writer.Write(w.recordBuf)
 	if err != nil {
 		err := writeIOErr{err}
@@ -63,32 +51,51 @@ func (w *Writer) writeRow_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}
 	return n, nil
 }
 
-func (w *Writer) writeDoubleQuotesForRecord_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled() {
+func (w *Writer) writeDoubleQuotesForRecord_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}() {
 	{{template "appendRec0" .}}w.twoQuotes[:w.twoQuotesByteLen]{{template "appendRec1" .}}
 }
 
-func (w *Writer) writeField_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled(processField func([]byte) (int, error), input string) error {
-	if input == "" {
-		return nil
+func (w *Writer) writeField_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}(processField func([]byte) (int, error), fw FieldWriter) error {
+	// v here is immutable once set
+	var v []byte
+
+	switch fw.kind{
+	case wfkBytes:
+		b := fw.bytes
+		if len(b) == 0 {
+			return nil
+		}
+		v = b
+	case wfkString:
+		s := fw.str
+		if len(s) == 0 {
+			return nil
+		}
+		// since v here is immutable once set
+		//
+		// unsafe may look concerning and scary, and it can be,
+		// however in this case we're never writing to the slice
+		// created here which is stored within `v`
+		//
+		// since strings are immutable as well this is actually a safe
+		// usage of the unsafe package to avoid an allocation we're
+		// just going to read from and then throw away before this
+		// returns
+		//
+		// It will also never be called if the len is zero,
+		// just as an extra precaution.
+		v = unsafe.Slice(unsafe.StringData(s), len(s))
+	default:
+		x, err := fw.AppendText(w.fieldWriterBuf[:0])
+		if err != nil {
+			return err
+		}
+		v = x
 	}
+
 	defer func() {
 		w.fieldBuf = w.fieldBuf[:0]
 	}()
-
-	// v here is immutable
-	//
-	// unsafe may look concerning and scary, and it can be,
-	// however in this case we're never writing to the slice
-	// created here which is stored within `v`
-	//
-	// since strings are immutable as well this is actually a safe
-	// usage of the unsafe package to avoid an allocation we're
-	// just going to read from and then throw away before this
-	// returns
-	//
-	// It will also never be called if the len is zero,
-	// just as an extra precaution.
-	v := unsafe.Slice(unsafe.StringData(input), len(input))
 
 	si, err := processField(v)
 	if err != nil {

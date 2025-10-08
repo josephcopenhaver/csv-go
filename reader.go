@@ -21,7 +21,12 @@ const (
 	asciiFormFeed       = 0x0C
 	utf8NextLine        = 0x85
 	utf8LineSeparator   = 0x2028
-	invalidControlRune  = 0x80
+	// invalidControlRune is as an impossible to read rune value used when parsing features of the state machine need to be disabled
+	invalidControlRune = 0x80
+	// asciiBitMask is used to tell us when a byte is part of a utf8 multi-byte rune sequence (bit 7 is set) vs is an ascii byte
+	//
+	// it is the same value as invalidControlRune but it has a different semantic meaning in the parser implementation
+	asciiBitMask = (1 << 7)
 
 	utf8ByteOrderMarker    = 0xEFBBBF
 	utf16ByteOrderMarkerBE = 0xFEFF
@@ -47,14 +52,12 @@ type rFlag uint16
 
 const (
 	stDone rFlag = 1 << iota
+	// stAfterSOR stands for `parse state is after start of a record`
 	stAfterSOR
 	stEOF
 
 	rFlagDropBOM
 	rFlagErrOnNoBOM
-
-	// rFlagStartOfDoc = either of rFlagDropBOM, rFlagErrOnNoBOM
-
 	rFlagErrOnNLInUF
 	rFlagErrOnQInUF
 	rFlagComment
@@ -86,7 +89,7 @@ type panicErr uint8
 const (
 	_ panicErr = iota
 
-	panicRecordSepLen                        // "invalid record separator length"
+	panicRecordSepRuneLen                    // "invalid record separator rune length"
 	panicUnknownReaderStateDuringEOF         // "reader in unknown state when EOF encountered"
 	panicMissedHandlingMaxRecordIndex        // "missed handling record index at max value"
 	panicMissedHandlingMaxSecOpFieldIndex    // "missed handling field index at max SecOp value"
@@ -95,7 +98,7 @@ const (
 
 func (p panicErr) String() string {
 	return []string{
-		"invalid record separator length",                   // panicRecordSepLen
+		"invalid record separator rune length",              // panicRecordSepRuneLen
 		"reader in unknown state when EOF encountered",      // panicUnknownReaderStateDuringEOF
 		"missed handling record index at max value",         // panicMissedHandlingMaxRecordIndex
 		"missed handling field index at SecOp max value",    // panicMissedHandlingMaxSecOpFieldIndex
@@ -118,7 +121,7 @@ var (
 	// instances
 	ErrTooManyFields                = errors.New("too many fields")
 	ErrSecOpRecordByteCountAboveMax = errors.New("record byte count exceeds max")
-	// is a sub-instance of ErrTooManyFields
+	// ErrSecOpFieldCountAboveMax is a sub-instance of ErrTooManyFields
 	ErrSecOpFieldCountAboveMax     = errors.New("field count exceeds max")
 	ErrSecOpRecordCountAboveMax    = errors.New("record count exceeds max")
 	ErrSecOpCommentBytesAboveMax   = errors.New("comment byte count exceeds max")
@@ -170,8 +173,8 @@ func (e posTracedErr) Error() string {
 	return sb.String()
 }
 
-func (e posTracedErr) Is(err error) bool {
-	return errors.Is(e.errType, err) || errors.Is(e.err, err)
+func (e posTracedErr) Is(target error) bool {
+	return errors.Is(e.errType, target) || errors.Is(e.err, target)
 }
 
 func newIOError(byteIndex, recordIndex uint64, fieldIndex uint, err error) posTracedErr {
@@ -209,8 +212,8 @@ type errNotEnoughFields struct {
 	Expected, Actual int
 }
 
-func (e errNotEnoughFields) Is(err error) bool {
-	return errors.Is(err, ErrFieldCount) || errors.Is(err, ErrNotEnoughFields)
+func (e errNotEnoughFields) Is(target error) bool {
+	return errors.Is(ErrFieldCount, target) || errors.Is(ErrNotEnoughFields, target)
 }
 
 func (e errNotEnoughFields) Error() string {
@@ -225,8 +228,8 @@ type errTooManyFields struct {
 	expected int
 }
 
-func (e errTooManyFields) Is(err error) bool {
-	return errors.Is(err, ErrFieldCount) || errors.Is(err, ErrTooManyFields)
+func (e errTooManyFields) Is(target error) bool {
+	return errors.Is(ErrFieldCount, target) || errors.Is(ErrTooManyFields, target)
 }
 
 func (e errTooManyFields) Error() string {
@@ -239,8 +242,8 @@ func tooManyFieldsErr(exp int) errTooManyFields {
 
 type errTooManyFieldsAboveMax struct{}
 
-func (e errTooManyFieldsAboveMax) Is(err error) bool {
-	return errors.Is(err, ErrFieldCount) || errors.Is(err, ErrTooManyFields) || errors.Is(err, ErrSecOpFieldCountAboveMax)
+func (e errTooManyFieldsAboveMax) Is(target error) bool {
+	return errors.Is(ErrFieldCount, target) || errors.Is(ErrTooManyFields, target) || errors.Is(ErrSecOpFieldCountAboveMax, target)
 }
 
 func (e errTooManyFieldsAboveMax) Error() string {
@@ -500,7 +503,7 @@ func (ReaderOptions) RecordSeparator(s string) ReaderOption {
 	if n1 == len(v) {
 		return func(cfg *rCfg) {
 			cfg.recordSep[0] = r1
-			cfg.recordSepLen = 1
+			cfg.recordSepRuneLen = 1
 			cfg.recordSepSet = true
 		}
 	}
@@ -520,7 +523,7 @@ func (ReaderOptions) RecordSeparator(s string) ReaderOption {
 		return func(cfg *rCfg) {
 			cfg.recordSep[0] = r1
 			cfg.recordSep[1] = r2
-			cfg.recordSepLen = 2
+			cfg.recordSepRuneLen = 2
 			cfg.recordSepSet = true
 		}
 	}
@@ -729,7 +732,7 @@ type rCfg struct {
 	quote                              rune
 	escape                             rune
 	comment                            rune
-	recordSepLen                       int8
+	recordSepRuneLen                   int8
 	quoteSet                           bool
 	escapeSet                          bool
 	removeHeaderRow                    bool
@@ -770,17 +773,20 @@ type fastReader struct {
 	readErr error
 	scanErr error
 	// checkNumFields is called at the end of parsing a record to ensure field counts match expectations and that none are missing
-	checkNumFields    func(errTrailer error) bool
-	reader            io.Reader
-	recordSep         [2]rune
-	recordBuf         []byte
-	fieldLengths      []int
-	rowBuf            []string
-	headers           []string
-	fieldStart        int
-	numFields         int
-	recordIndex       uint64
-	byteIndex         uint64
+	checkNumFields func(errTrailer error) bool
+	reader         io.Reader
+	recordSep      [2]rune
+	recordBuf      []byte
+	fieldLengths   []int
+	rowBuf         []string
+	headers        []string
+	fieldStart     int
+	numFields      int
+	recordIndex    uint64
+	byteIndex      uint64
+
+	// DEV Note: cannot drop fieldIndex as some error field positions are after the last processed field and it would require another way to inform the error tracer
+
 	fieldIndex        uint
 	quote             rune
 	escape            rune
@@ -789,14 +795,8 @@ type fastReader struct {
 	pr                *readerStrat
 	state             rState
 	rawNumHiddenBytes uint8
-	// afterStartOfRecords is a flag set to communicate when the first records have been observed and potentially emitted
-	//
-	// this is useful for supporting comments after start of records explicitly with disabled being the default
-	//
-	// the recordIndex could also have been used for this purpose but it may have overflow issues for some input types
-	// and keeping its purpose singular and disconnected from parsing management is likely ideal
-	recordSepLen int8
-	bitFlags     rFlag
+	recordSepRuneLen  int8
+	bitFlags          rFlag
 }
 
 func (cfg *rCfg) validate() error {
@@ -840,12 +840,12 @@ func (cfg *rCfg) validate() error {
 		}
 	}
 
-	if cfg.recordSepLen == -1 {
+	if cfg.recordSepRuneLen == -1 {
 		return ErrBadRecordSeparator
 	}
 
 	if cfg.discoverRecordSeparator {
-		cfg.recordSepLen = 0
+		cfg.recordSepRuneLen = 0
 		// TODO: instead of setting a default value that is not reachable
 		// under normal circumstances, lets make sure the value cannot be used
 		// until after the separator is fully resolved by switching handlers.
@@ -861,13 +861,13 @@ func (cfg *rCfg) validate() error {
 	}
 
 	{
-		// (cfg.recordSepLen == 0 && !cfg.discoverRecordSeparator) here is a defensive check
+		// (cfg.recordSepRuneLen == 0 && !cfg.discoverRecordSeparator) here is a defensive check
 		// should the defaults ever be changed to no record sep specified by default
-		if (cfg.recordSepLen == 0 && !cfg.discoverRecordSeparator) || (cfg.discoverRecordSeparator && cfg.recordSepSet) {
+		if (cfg.recordSepRuneLen == 0 && !cfg.discoverRecordSeparator) || (cfg.discoverRecordSeparator && cfg.recordSepSet) {
 			return errors.New("must specify one and only one of automatic record separator discovery or a specific recordSeparator")
 		}
 
-		switch cfg.recordSepLen {
+		switch cfg.recordSepRuneLen {
 		case 0:
 			// must be discovering record separator
 			// so ensure there are no overlaps between discovery and other configuration values
@@ -916,12 +916,15 @@ func (cfg *rCfg) validate() error {
 				return errors.New("invalid record separator and escape combination")
 			}
 		default:
-			panic(panicRecordSepLen)
+			panic(panicRecordSepRuneLen)
 		}
 	}
 
-	if !validUtf8Rune(cfg.fieldSeparator) {
-		return errors.New("invalid field separator value")
+	{
+		fieldSepLen := int8(utf8.RuneLen(cfg.fieldSeparator))
+		if !validUtf8Rune(cfg.fieldSeparator) || fieldSepLen < 1 {
+			return errors.New("invalid field separator value")
+		}
 	}
 
 	if cfg.quoteSet {
@@ -1013,7 +1016,7 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 		numFields:                   -1,
 		fieldSeparator:              ',',
 		recordSep:                   [2]rune{asciiLineFeed, 0},
-		recordSepLen:                1,
+		recordSepRuneLen:            1,
 		errOnQuotesInUnquotedField:  true,
 		errOnNewlineInUnquotedField: true,
 	}
@@ -1077,7 +1080,7 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 	// - in-escape
 
 	var controlRunes []rune
-	if cfg.recordSepLen == 0 {
+	if cfg.recordSepRuneLen == 0 {
 		var buf [11]rune
 		controlRunes = append(buf[:0], cfg.fieldSeparator)
 	} else {
@@ -1120,7 +1123,7 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 		bitFlags |= rFlagErrOnQInUF
 	}
 
-	if cfg.recordSepLen != 0 {
+	if cfg.recordSepRuneLen != 0 {
 		controlRunes = append(controlRunes, cfg.recordSep[0])
 	}
 
@@ -1138,7 +1141,7 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 		}
 	}
 
-	if cfg.recordSepLen == 0 {
+	if cfg.recordSepRuneLen == 0 {
 		allPossibleNLRunes := []rune{asciiCarriageReturn, asciiLineFeed, asciiVerticalTab, asciiFormFeed, utf8NextLine, utf8LineSeparator}
 		crs := []byte(string(controlRunes))
 
@@ -1242,10 +1245,6 @@ func (r *secOpReader) fieldNumOverflowWithMaxCheck(max uint) func() bool {
 	}
 }
 
-func (r *fastReader) setCheckNumFields(f func(error) bool) {
-	r.checkNumFields = f
-}
-
 // secOpStreamParsingErr performs a side effect of increasing the byteIndex of state
 //
 // therefore it should never be called more than once in an invocation to Scan
@@ -1274,37 +1273,7 @@ func (r *fastReader) ioErr(err error) {
 }
 
 func (r *fastReader) setRowBorrowedAndFieldsCloned() {
-	if r.rowBuf == nil {
-		r.pr.row = func() []string {
-			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
-				return nil
-			}
-
-			r.rowBuf = make([]string, len(r.fieldLengths))
-
-			r.pr.row = func() []string {
-				if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
-					return nil
-				}
-
-				strBuf := string(r.recordBuf)
-
-				var p int
-				for i, s := range r.fieldLengths {
-					r.rowBuf[i] = strBuf[p : p+s]
-					p += s
-				}
-
-				return r.rowBuf
-			}
-
-			return r.pr.row()
-		}
-
-		return
-	}
-
-	r.pr.row = func() []string {
+	rowFunc := func() []string {
 		if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 			return nil
 		}
@@ -1319,53 +1288,27 @@ func (r *fastReader) setRowBorrowedAndFieldsCloned() {
 
 		return r.rowBuf
 	}
-}
 
-func (r *fastReader) setRowBorrowedAndFieldsBorrowed() {
-	if r.rowBuf == nil {
-		r.pr.row = func() []string {
-			if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
-				return nil
-			}
-
-			r.rowBuf = make([]string, len(r.fieldLengths))
-
-			r.pr.row = func() []string {
-				if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
-					return nil
-				}
-
-				var p int
-				for i, s := range r.fieldLengths {
-					if s == 0 {
-						r.rowBuf[i] = ""
-						continue
-					}
-
-					// Usage of unsafe here is what empowers borrowing.
-					//
-					// This is why this option is NOT enabled by default
-					// and never will be. The caller must assure that they
-					// will never write to the backing slice or utilize it
-					// beyond the next call to Row() or Close()
-					//
-					// It will also never be called if the len is zero,
-					// just as an extra precaution.
-					r.rowBuf[i] = unsafe.String(&r.recordBuf[p], s)
-
-					p += s
-				}
-
-				return r.rowBuf
-			}
-
-			return r.pr.row()
-		}
-
+	if r.rowBuf != nil {
+		r.pr.row = rowFunc
 		return
 	}
 
 	r.pr.row = func() []string {
+		if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
+			return nil
+		}
+
+		r.rowBuf = make([]string, len(r.fieldLengths))
+
+		r.pr.row = rowFunc
+
+		return r.pr.row()
+	}
+}
+
+func (r *fastReader) setRowBorrowedAndFieldsBorrowed() {
+	rowFunc := func() []string {
 		if len(r.fieldLengths) != r.numFields || r.scanErr != nil {
 			return nil
 		}
@@ -1392,6 +1335,23 @@ func (r *fastReader) setRowBorrowedAndFieldsBorrowed() {
 		}
 
 		return r.rowBuf
+	}
+
+	if r.rowBuf != nil {
+		r.pr.row = rowFunc
+		return
+	}
+
+	r.pr.row = func() []string {
+		if r.fieldLengths == nil || len(r.fieldLengths) != r.numFields || r.scanErr != nil {
+			return nil
+		}
+
+		r.rowBuf = make([]string, len(r.fieldLengths))
+
+		r.pr.row = rowFunc
+
+		return r.pr.row()
 	}
 }
 
@@ -1455,7 +1415,7 @@ func (r *fastReader) defaultCheckNumFields(errTrailer error) bool {
 func (r *fastReader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) bool {
 	if r.defaultCheckNumFields(errTrailer) {
 		r.bitFlags |= stAfterSOR
-		r.setCheckNumFields(r.defaultCheckNumFields)
+		r.checkNumFields = r.defaultCheckNumFields
 		return true
 	}
 
@@ -1466,7 +1426,7 @@ func (r *fastReader) checkNumFieldsWithStartOfRecordTracking(errTrailer error) b
 func (r *fastReader) checkNumFieldsWithDiscovery(errTrailer error) bool {
 	r.numFields = len(r.fieldLengths)
 	r.bitFlags |= stAfterSOR
-	r.setCheckNumFields(r.defaultCheckNumFields)
+	r.checkNumFields = r.defaultCheckNumFields
 	return true
 }
 
@@ -1524,7 +1484,7 @@ func (r *fastReader) err() error {
 //
 
 func badRecordSeparatorRConfig(cfg *rCfg) {
-	cfg.recordSepLen = -1
+	cfg.recordSepRuneLen = -1
 }
 
 func isNewlineRune(c rune) (isCarriageReturn bool, ok bool) {
@@ -1638,21 +1598,21 @@ func (r *secOpReader) zeroRecordBuffers() {
 		}
 	}
 
-	if r.fieldLengths != nil {
+	{
 		v := r.fieldLengths[:cap(r.fieldLengths)]
 		for i := range v {
 			v[i] = 0
 		}
 	}
 
-	if r.recordBuf != nil {
+	{
 		v := r.recordBuf[:cap(r.recordBuf)]
 		for i := range v {
 			v[i] = 0
 		}
 	}
 
-	if r.rowBuf != nil {
+	{
 		v := r.rowBuf[:cap(r.rowBuf)]
 		for i := range v {
 			v[i] = ""
@@ -1705,10 +1665,6 @@ func (r *secOpReader) incRecordIndexWithMax(max uint64) func() {
 		// intercept trying to push a record to the caller which may not have data bytes
 		//
 		// should be called even on 1 field files and files that end without a terminal record separator
-
-		// note that this intentionally skips the middlewares as we want any call to it to error
-		// middlewares can and should be short circuited in this case
-		// otherwise setCheckNumFields would be used to alter the function pointer value
 		r.checkNumFields = r.checkNumFieldsNotAllowed
 	}
 }
@@ -1859,21 +1815,21 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 	r := &readerStrat{}
 
 	fr := &fastReader{
-		controlRunes:   controlRunes,
-		rawBuf:         cfg.rawBuf[0:0:len(cfg.rawBuf)],
-		reader:         cfg.reader,
-		quote:          cfg.quote,
-		escape:         cfg.escape,
-		numFields:      cfg.numFields,
-		fieldSeparator: cfg.fieldSeparator,
-		comment:        cfg.comment,
-		headers:        headers,
-		recordBuf:      cfg.recordBuf[0:0:len(cfg.recordBuf)],
-		rowBuf:         rowBuf,
-		recordSep:      cfg.recordSep,
-		recordSepLen:   cfg.recordSepLen,
-		bitFlags:       bitFlags,
-		pr:             r,
+		controlRunes:     controlRunes,
+		rawBuf:           cfg.rawBuf[0:0:len(cfg.rawBuf)],
+		reader:           cfg.reader,
+		quote:            cfg.quote,
+		escape:           cfg.escape,
+		numFields:        cfg.numFields,
+		fieldSeparator:   cfg.fieldSeparator,
+		comment:          cfg.comment,
+		headers:          headers,
+		recordBuf:        cfg.recordBuf[0:0:len(cfg.recordBuf)],
+		rowBuf:           rowBuf,
+		recordSep:        cfg.recordSep,
+		recordSepRuneLen: cfg.recordSepRuneLen,
+		bitFlags:         bitFlags,
+		pr:               r,
 	}
 
 	var sr *secOpReader
@@ -1943,15 +1899,15 @@ func newReader(cfg rCfg, controlRunes string, headers []string, rowBuf []string,
 	}
 
 	if fr.numFields == -1 {
-		fr.setCheckNumFields(fr.checkNumFieldsWithDiscovery)
+		fr.checkNumFields = fr.checkNumFieldsWithDiscovery
 	} else {
 		if fr.numFields > 0 {
 			fr.fieldLengths = make([]int, 0, fr.numFields)
 		}
 		if (fr.bitFlags & rFlagComment) != 0 {
-			fr.setCheckNumFields(fr.checkNumFieldsWithStartOfRecordTracking)
+			fr.checkNumFields = fr.checkNumFieldsWithStartOfRecordTracking
 		} else {
-			fr.setCheckNumFields(fr.defaultCheckNumFields)
+			fr.checkNumFields = fr.defaultCheckNumFields
 		}
 	}
 

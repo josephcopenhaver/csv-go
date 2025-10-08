@@ -29,7 +29,7 @@ func TestUnitReaderRecordSeparatorErrorPaths(t *testing.T) {
 
 			var cfg rCfg
 			resp(&cfg)
-			assert.Equal(t, int8(-1), cfg.recordSepLen)
+			assert.Equal(t, int8(-1), cfg.recordSepRuneLen)
 		})
 	}
 }

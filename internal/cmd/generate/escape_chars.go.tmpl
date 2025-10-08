@@ -1,4 +1,4 @@
-func (w *Writer) escapeChars_escape{{if .EscapeEnabled}}En{{else}}Dis{{end}}abled_memclear{{if .ClearMemoryAfterUse}}En{{else}}Dis{{end}}abled(v []byte, i int) (int, error) {
+func (w *Writer) escapeChars_escapeO{{if .Escape}}n{{else}}ff{{end}}_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}(v []byte, i int) (int, error) {
 	var si, di int
 	var r rune
 
@@ -9,7 +9,7 @@ func (w *Writer) escapeChars_escape{{if .EscapeEnabled}}En{{else}}Dis{{end}}able
 			return si, nil
 		case 1:
 			if r == utf8.RuneError {
-				if w.errOnNonUTF8 {
+				if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
 					return 0, ErrNonUTF8InRecord
 				}
 
@@ -28,7 +28,7 @@ func (w *Writer) escapeChars_escape{{if .EscapeEnabled}}En{{else}}Dis{{end}}able
 
 			i += di
 			si = i
-		{{if .EscapeEnabled}}case w.escape:{{if .ClearMemoryAfterUse}}
+		{{if .Escape}}case w.escape:{{if .ClearMemoryAfterUse}}
 			w.appendField(v[si:i], w.escapedEscape[:w.escapedEscapeByteLen])
 			{{else}}
 			w.fieldBuf = append(w.fieldBuf, v[si:i]...)

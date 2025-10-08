@@ -109,7 +109,24 @@ func TestFunctionalWriterErrorPaths(t *testing.T) {
 					assert.Empty(t, buf.String())
 				}
 			},
-			whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+			whErrStr: csv.ErrWriteHeaderFailed.Error() + "\n" + csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+		},
+		{
+			when: "io error encountered when writing a BOM and a comment",
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().IncludeByteOrderMarker(true),
+				csv.WriteHeaderOpts().CommentRune('#'),
+				csv.WriteHeaderOpts().CommentLines("hia"),
+			},
+			selfInit: func(tc *functionalWriterTestCase) {
+				var buf bytes.Buffer
+				w := &errWriter{writer: &buf, err: io.ErrClosedPipe}
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
+				tc.afterTest = func(t *testing.T) {
+					assert.Empty(t, buf.String())
+				}
+			},
+			whErrStr: csv.ErrWriteHeaderFailed.Error() + "\n" + csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
 		},
 		{
 			when: "io error encountered when writing a comment",
@@ -125,7 +142,7 @@ func TestFunctionalWriterErrorPaths(t *testing.T) {
 					assert.Empty(t, buf.String())
 				}
 			},
-			whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+			whErrStr: csv.ErrWriteHeaderFailed.Error() + "\n" + csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
 		},
 		{
 			when: "io error encountered when writing a comment after successful BOM",
@@ -142,7 +159,7 @@ func TestFunctionalWriterErrorPaths(t *testing.T) {
 					assert.Equal(t, string(bomBytes()), buf.String())
 				}
 			},
-			whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+			whErrStr: csv.ErrWriteHeaderFailed.Error() + "\n" + csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
 		},
 		{
 			when: "io error encountered when writing a header row",
@@ -159,7 +176,12 @@ func TestFunctionalWriterErrorPaths(t *testing.T) {
 					assert.Equal(t, "# hello\n", buf.String())
 				}
 			},
-			whErrStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+			whErrIs: []error{
+				csv.ErrWriteHeaderFailed,
+				csv.ErrIO,
+				io.ErrClosedPipe,
+			},
+			whErrStr: csv.ErrWriteHeaderFailed.Error() + "\n" + csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
 		},
 	}
 

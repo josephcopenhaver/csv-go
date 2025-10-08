@@ -67,6 +67,8 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 		}
 
 		return func(t *testing.T) {
+			t.Helper()
+
 			tc := &tc_copy
 			is := assert.New(t)
 			var errWriterInIOErrState error
@@ -141,6 +143,7 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 				}
 				if errors.Is(err, csv.ErrIO) {
 					errWriterInIOErrState = err
+					is.ErrorIs(err, csv.ErrWriteHeaderFailed)
 				}
 				if tc.hasWHeaderErr || len(tc.whErrIs) > 0 || len(tc.whErrAs) > 0 || len(tc.whErrIsNot) > 0 || len(tc.whErrAsNot) > 0 || tc.whErrStr != "" {
 					is.NotNil(err)
@@ -193,6 +196,10 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 				// result in a header already written error
 				//
 				// unless there was an io level error previously or the writer was closed
+				//
+				// note that another category of errors exists: preflight validation
+				// failed given call inputs and no state was altered but since this is a
+				// second attempt call it cannot be returned
 				{
 					v, err := cw.WriteHeader()
 					is.Zero(v)
@@ -509,4 +516,262 @@ func TestFunctionalWriterOKPaths(t *testing.T) {
 	for _, tc := range tcs {
 		tc.Run(t)
 	}
+}
+
+func TestWriteFieldRow(t *testing.T) {
+	t.Parallel()
+
+	is := assert.New(t)
+
+	var buf bytes.Buffer
+
+	func() {
+		fw := csv.FieldWriters()
+
+		cw, err := csv.NewWriter(
+			csv.WriterOpts().Writer(&buf),
+		)
+		is.Nil(err)
+		defer func() {
+			is.Nil(cw.Close())
+
+			n, err := cw.WriteFieldRow()
+			is.Equal(csv.ErrWriterClosed, err)
+			is.Zero(n)
+		}()
+
+		n, err := cw.WriteFieldRow(
+			fw.Int(-1),
+			fw.String(""),
+			fw.String("a"),
+			fw.Bytes(nil),
+			fw.Bytes([]byte("b")),
+			fw.Bool(true),
+		)
+		is.Nil(err)
+		is.Equal(11, n)
+	}()
+
+	is.Equal(buf.String(), `-1,,a,,b,1`+"\n")
+}
+
+func TestWriteFieldRowWithQuote(t *testing.T) {
+	t.Parallel()
+
+	is := assert.New(t)
+
+	var buf bytes.Buffer
+
+	func() {
+		fw := csv.FieldWriters()
+
+		cw, err := csv.NewWriter(
+			csv.WriterOpts().Writer(&buf),
+			csv.WriterOpts().Quote('"'),
+		)
+		is.Nil(err)
+		defer func() {
+			is.Nil(cw.Close())
+
+			n, err := cw.WriteFieldRow()
+			is.Equal(csv.ErrWriterClosed, err)
+			is.Zero(n)
+		}()
+
+		n, err := cw.WriteFieldRow(
+			fw.Int(-1),
+			fw.String(""),
+			fw.String("a"),
+			fw.Bytes(nil),
+			fw.Bytes([]byte("b")),
+			fw.Bool(true),
+			fw.Rune('"'),
+		)
+		is.Nil(err)
+		is.Equal(16, n)
+	}()
+
+	is.Equal(buf.String(), `-1,,a,,b,1,""""`+"\n")
+}
+
+func TestWriteFieldRowWithMemclearOn(t *testing.T) {
+	t.Parallel()
+
+	is := assert.New(t)
+
+	var buf bytes.Buffer
+
+	func() {
+		fw := csv.FieldWriters()
+
+		cw, err := csv.NewWriter(
+			csv.WriterOpts().Writer(&buf),
+			csv.WriterOpts().ClearFreedDataMemory(true),
+		)
+		is.Nil(err)
+		defer func() {
+			is.Nil(cw.Close())
+
+			n, err := cw.WriteFieldRow()
+			is.Equal(csv.ErrWriterClosed, err)
+			is.Zero(n)
+		}()
+
+		n, err := cw.WriteFieldRow(
+			fw.Int(-1),
+			fw.String(""),
+			fw.String("a"),
+			fw.Bytes(nil),
+			fw.Bytes([]byte("b")),
+			fw.Bool(true),
+		)
+		is.Nil(err)
+		is.Equal(11, n)
+	}()
+
+	is.Equal(buf.String(), `-1,,a,,b,1`+"\n")
+}
+
+func TestWriteFieldRowBorrowed(t *testing.T) {
+	t.Parallel()
+
+	is := assert.New(t)
+
+	var buf bytes.Buffer
+
+	func() {
+		fw := csv.FieldWriters()
+
+		cw, err := csv.NewWriter(
+			csv.WriterOpts().Writer(&buf),
+		)
+		is.Nil(err)
+		defer func() {
+			is.Nil(cw.Close())
+
+			n, err := cw.WriteFieldRowBorrowed(nil)
+			is.Equal(csv.ErrWriterClosed, err)
+			is.Zero(n)
+		}()
+
+		fields := []csv.FieldWriter{
+			fw.Int(-1),
+			fw.String(""),
+			fw.String("a"),
+			fw.Bytes(nil),
+			fw.Bytes([]byte("b")),
+			fw.Bool(true),
+		}
+
+		n, err := cw.WriteFieldRowBorrowed(fields)
+		is.Nil(err)
+		is.Equal(11, n)
+	}()
+
+	is.Equal(buf.String(), `-1,,a,,b,1`+"\n")
+}
+
+func TestWriteFieldRowBorrowedWithMemclearOn(t *testing.T) {
+	t.Parallel()
+
+	is := assert.New(t)
+
+	var buf bytes.Buffer
+
+	func() {
+		fw := csv.FieldWriters()
+
+		cw, err := csv.NewWriter(
+			csv.WriterOpts().Writer(&buf),
+			csv.WriterOpts().ClearFreedDataMemory(true),
+		)
+		is.Nil(err)
+		defer func() {
+			is.Nil(cw.Close())
+
+			n, err := cw.WriteFieldRowBorrowed(nil)
+			is.Equal(csv.ErrWriterClosed, err)
+			is.Zero(n)
+		}()
+
+		fields := []csv.FieldWriter{
+			fw.Int(-1),
+			fw.String(""),
+			fw.String("a"),
+			fw.Bytes(nil),
+			fw.Bytes([]byte("b")),
+			fw.Bool(true),
+		}
+
+		n, err := cw.WriteFieldRowBorrowed(fields)
+		is.Nil(err)
+		is.Equal(11, n)
+	}()
+
+	is.Equal(buf.String(), `-1,,a,,b,1`+"\n")
+}
+
+func TestWriteFieldRowWithInvalidField(t *testing.T) {
+	t.Parallel()
+
+	is := assert.New(t)
+
+	var buf bytes.Buffer
+
+	func() {
+		cw, err := csv.NewWriter(
+			csv.WriterOpts().Writer(&buf),
+		)
+		is.Nil(err)
+		defer func() {
+			is.Nil(cw.Close())
+
+			n, err := cw.WriteFieldRow()
+			is.Equal(csv.ErrWriterClosed, err)
+			is.Zero(n)
+		}()
+
+		invalidField := csv.FieldWriter{}
+		n, err := cw.WriteFieldRow(
+			invalidField,
+		)
+		is.NotNil(err)
+		is.ErrorIs(err, csv.ErrInvalidFieldWriter)
+		is.Zero(n)
+	}()
+
+	is.Equal(buf.String(), ``)
+}
+
+func TestWriteFieldRowWithInvalidFieldWithMemclearOn(t *testing.T) {
+	t.Parallel()
+
+	is := assert.New(t)
+
+	var buf bytes.Buffer
+
+	func() {
+		cw, err := csv.NewWriter(
+			csv.WriterOpts().Writer(&buf),
+			csv.WriterOpts().ClearFreedDataMemory(true),
+		)
+		is.Nil(err)
+		defer func() {
+			is.Nil(cw.Close())
+
+			n, err := cw.WriteFieldRow()
+			is.Equal(csv.ErrWriterClosed, err)
+			is.Zero(n)
+		}()
+
+		invalidField := csv.FieldWriter{}
+		n, err := cw.WriteFieldRow(
+			invalidField,
+		)
+		is.NotNil(err)
+		is.ErrorIs(err, csv.ErrInvalidFieldWriter)
+		is.Zero(n)
+	}()
+
+	is.Equal(buf.String(), ``)
 }
