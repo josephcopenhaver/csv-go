@@ -1,5 +1,10 @@
 # V3.* Changes[^1]
 
+## v3.1.0 - 2025-10-08
+
+Changes in v3.0.1 and v3.0.2 are new additions and should have had the minor version bumped.
+Going to fix forward by just crafting the new release.
+
 ## v3.0.2 - 2025-10-08
 
 Rune writing now behaves in a simpler/faster fashion while keeping all other behaviors the same.
