@@ -230,6 +230,18 @@ func BenchmarkFieldWriterAppendTime(b *testing.B) {
 	}
 }
 
+func BenchmarkFieldWriterAppendRune(b *testing.B) {
+	buf := make([]byte, 0, 1)
+	b.ReportAllocs()
+
+	fw := csv.FieldWriters()
+
+	for b.Loop() {
+		f := fw.Rune('T')
+		_, _ = f.AppendText(buf)
+	}
+}
+
 func BenchmarkFieldWriterAppendBoolTrue(b *testing.B) {
 	buf := make([]byte, 0, 1)
 	b.ReportAllocs()
