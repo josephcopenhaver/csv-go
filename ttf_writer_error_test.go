@@ -2,6 +2,7 @@ package csv_test
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -170,10 +171,160 @@ func TestFunctionalWriterErrorPaths(t *testing.T) {
 			},
 			selfInit: func(tc *functionalWriterTestCase) {
 				var buf bytes.Buffer
-				w := &errWriter{writer: &buf, numWrites: 1, err: io.ErrClosedPipe}
+				w := &errWriter{writer: &buf, numWrites: 3, err: io.ErrClosedPipe}
 				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
 				tc.afterTest = func(t *testing.T) {
 					assert.Equal(t, "# hello\n", buf.String())
+				}
+			},
+			whErrIs: []error{
+				csv.ErrWriteHeaderFailed,
+				csv.ErrIO,
+				io.ErrClosedPipe,
+			},
+			whErrStr: csv.ErrWriteHeaderFailed.Error() + "\n" + csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+		},
+		{
+			when: "an io error is encountered when writing a single column using an empty bytes writer",
+			selfInit: func(tc *functionalWriterTestCase) {
+				w := &errWriter{err: errors.New("test-error: 0199fa41b62a2d0d6c4df872eaa9c367")}
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Bytes(nil)}, errIs: []error{csv.ErrIO}, errStr: csv.ErrIO.Error() + `: test-error: 0199fa41b62a2d0d6c4df872eaa9c367`},
+			},
+		},
+		{
+			when: "an io error is encountered when writing a single column using an empty string writer",
+			selfInit: func(tc *functionalWriterTestCase) {
+				w := &errWriter{err: errors.New("test-error: 0199fa565f45ca1407f90d3baa484ce7")}
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().String("")}, errIs: []error{csv.ErrIO}, errStr: csv.ErrIO.Error() + `: test-error: 0199fa565f45ca1407f90d3baa484ce7`},
+			},
+		},
+		{
+			when: "writing a single column using a rune writer and an invalid rune value",
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Rune(0x7FFFFFFF)}, errIs: []error{csv.ErrInvalidRune}, errStr: csv.ErrInvalidRune.Error()},
+			},
+		},
+		{
+			when: "writing a single column using an incorrectly initialized FieldWriter with field sep set to a colon rune overlapping with field writer chars",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().FieldSeparator(':'),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{{}}, errIs: []error{csv.ErrInvalidFieldWriter}, errStr: csv.ErrInvalidFieldWriter.Error()},
+			},
+		},
+		{
+			when: "writing two columns using an incorrectly initialized FieldWriter for the second field",
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Bool(false), {}}, errIs: []error{csv.ErrInvalidFieldWriter}, errStr: csv.ErrInvalidFieldWriter.Error()},
+			},
+		},
+		{
+			when: "writing two columns using a RuneWriter with an invalid rune for the second field",
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Bool(false), csv.FieldWriters().Rune(0x7FFFFFFF)}, errIs: []error{csv.ErrInvalidRune}, errStr: csv.ErrInvalidRune.Error()},
+			},
+		},
+		{
+			when: "writing two columns using an incorrectly initialized FieldWriter for the second field with field sep set to a colon rune overlapping with field writer chars",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().FieldSeparator(':'),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Bool(false), {}}, errIs: []error{csv.ErrInvalidFieldWriter}, errStr: csv.ErrInvalidFieldWriter.Error()},
+			},
+		},
+		{
+			when: "writing two string columns where the second column as a comma followed by an incorrect uf8 byte sequence",
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().String(""), csv.FieldWriters().String(",\x7F\xFF\xFF\xFF")}, errIs: []error{csv.ErrNonUTF8InRecord}, errStr: csv.ErrNonUTF8InRecord.Error()},
+			},
+		},
+		{
+			when: "io error encountered when writing a terminating comment record separator",
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().CommentRune('#'),
+				csv.WriteHeaderOpts().CommentLines("hello"),
+				csv.WriteHeaderOpts().Headers(strings.Split("a,b,c", ",")...),
+			},
+			selfInit: func(tc *functionalWriterTestCase) {
+				var buf bytes.Buffer
+				w := &errWriter{writer: &buf, numWrites: 2, err: io.ErrClosedPipe}
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
+				tc.afterTest = func(t *testing.T) {
+					assert.Equal(t, "# hello", buf.String())
+				}
+			},
+			whErrIs: []error{
+				csv.ErrWriteHeaderFailed,
+				csv.ErrIO,
+				io.ErrClosedPipe,
+			},
+			whErrStr: csv.ErrWriteHeaderFailed.Error() + "\n" + csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+		},
+		{
+			when: "io error encountered when writing a comment recSepAndLinePrefix",
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().CommentRune('#'),
+				csv.WriteHeaderOpts().CommentLines("hell\no"),
+				csv.WriteHeaderOpts().Headers(strings.Split("a,b,c", ",")...),
+			},
+			selfInit: func(tc *functionalWriterTestCase) {
+				var buf bytes.Buffer
+				w := &errWriter{writer: &buf, numWrites: 2, err: io.ErrClosedPipe}
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
+				tc.afterTest = func(t *testing.T) {
+					assert.Equal(t, "# hell", buf.String())
+				}
+			},
+			whErrIs: []error{
+				csv.ErrWriteHeaderFailed,
+				csv.ErrIO,
+				io.ErrClosedPipe,
+			},
+			whErrStr: csv.ErrWriteHeaderFailed.Error() + "\n" + csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+		},
+		{
+			when: "io error encountered when writing a comment segment before recSepAndLinePrefix",
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().CommentRune('#'),
+				csv.WriteHeaderOpts().CommentLines("hell\no"),
+				csv.WriteHeaderOpts().Headers(strings.Split("a,b,c", ",")...),
+			},
+			selfInit: func(tc *functionalWriterTestCase) {
+				var buf bytes.Buffer
+				w := &errWriter{writer: &buf, numWrites: 1, err: io.ErrClosedPipe}
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
+				tc.afterTest = func(t *testing.T) {
+					assert.Equal(t, "# ", buf.String())
+				}
+			},
+			whErrIs: []error{
+				csv.ErrWriteHeaderFailed,
+				csv.ErrIO,
+				io.ErrClosedPipe,
+			},
+			whErrStr: csv.ErrWriteHeaderFailed.Error() + "\n" + csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+		},
+		{
+			when: "io error encountered when writing a comment line without writer newline runes",
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().CommentRune('#'),
+				csv.WriteHeaderOpts().CommentLines("hello"),
+				csv.WriteHeaderOpts().Headers(strings.Split("a,b,c", ",")...),
+			},
+			selfInit: func(tc *functionalWriterTestCase) {
+				var buf bytes.Buffer
+				w := &errWriter{writer: &buf, numWrites: 1, err: io.ErrClosedPipe}
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
+				tc.afterTest = func(t *testing.T) {
+					assert.Equal(t, "# ", buf.String())
 				}
 			},
 			whErrIs: []error{

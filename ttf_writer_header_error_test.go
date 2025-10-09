@@ -98,6 +98,18 @@ func TestFunctionalWriterHeaderErrorPaths(t *testing.T) {
 			whErrIs:  []error{csv.ErrNonUTF8InComment},
 			whErrStr: csv.ErrNonUTF8InComment.Error(),
 		},
+		{
+			when: "writer has comment rune set and WriteHeader uses the same comment rune",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().CommentRune('#'),
+			},
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().CommentRune('#'),
+				csv.WriteHeaderOpts().CommentLines(``),
+			},
+			whErrIs:  []error{csv.ErrBadConfig},
+			whErrStr: csv.ErrBadConfig.Error() + "\n" + `comment rune cannot be specified when writing headers while the writer instance already has one specified`,
+		},
 	}
 
 	for _, tc := range tcs {

@@ -22,7 +22,7 @@ const (
 	utf8NextLine        = 0x85
 	utf8LineSeparator   = 0x2028
 	// invalidControlRune is as an impossible to read rune value used when parsing features of the state machine need to be disabled
-	invalidControlRune = 0x80
+	invalidControlRune = 0x7FFFFFFF // really the max value is utf8.RuneSelf a.k.a. 0x10FFFF
 	// asciiBitMask is used to tell us when a byte is part of a utf8 multi-byte rune sequence (bit 7 is set) vs is an ascii byte
 	//
 	// it is the same value as invalidControlRune but it has a different semantic meaning in the parser implementation
@@ -94,6 +94,7 @@ const (
 	panicMissedHandlingMaxRecordIndex        // "missed handling record index at max value"
 	panicMissedHandlingMaxSecOpFieldIndex    // "missed handling field index at max SecOp value"
 	panicMissedHandlingMaxExpectedFieldIndex // "missed handling field index at expected max configured value"
+	panicIntOverflow                         // "int overflow"
 )
 
 func (p panicErr) String() string {
@@ -103,6 +104,7 @@ func (p panicErr) String() string {
 		"missed handling record index at max value",         // panicMissedHandlingMaxRecordIndex
 		"missed handling field index at SecOp max value",    // panicMissedHandlingMaxSecOpFieldIndex
 		"missed handling field index at expected max value", // panicMissedHandlingMaxExpectedFieldIndex
+		"int overflow", // panicIntOverflow
 	}[p-1]
 }
 
@@ -1577,7 +1579,7 @@ type secOpReader struct {
 	*fastReader
 	close             func() error
 	prepareRow        func() bool
-	appendRecBuf      func(...byte) bool
+	appendRecBuf      func([]byte) bool
 	incRecordIndex    func()
 	outOfCommentBytes func(int) bool
 	outOfCommentLines func() bool
@@ -1591,33 +1593,11 @@ func (r *secOpReader) closeWithMemClear() error {
 }
 
 func (r *secOpReader) zeroRecordBuffers() {
-	{
-		v := r.rawBuf[:cap(r.rawBuf)]
-		for i := range v {
-			v[i] = 0
-		}
-	}
 
-	{
-		v := r.fieldLengths[:cap(r.fieldLengths)]
-		for i := range v {
-			v[i] = 0
-		}
-	}
-
-	{
-		v := r.recordBuf[:cap(r.recordBuf)]
-		for i := range v {
-			v[i] = 0
-		}
-	}
-
-	{
-		v := r.rowBuf[:cap(r.rowBuf)]
-		for i := range v {
-			v[i] = ""
-		}
-	}
+	clear(r.rawBuf[:cap(r.rawBuf)])
+	clear(r.fieldLengths[:cap(r.fieldLengths)])
+	clear(r.recordBuf[:cap(r.recordBuf)])
+	clear(r.rowBuf[:cap(r.rowBuf)])
 
 	r.resetRecordBuffers()
 }
@@ -1669,13 +1649,17 @@ func (r *secOpReader) incRecordIndexWithMax(max uint64) func() {
 	}
 }
 
-func (r *secOpReader) defaultAppendRecBuf(b ...byte) bool {
+func (r *secOpReader) defaultAppendRecBuf(b []byte) bool {
 	r.recordBuf = append(r.recordBuf, b...)
 
 	return false
 }
 
-func (r *secOpReader) appendRecBufWithMemclear(b ...byte) bool {
+func (r *secOpReader) appendRecBufWithMemclear(b []byte) bool {
+	if len(b) == 0 {
+		return false
+	}
+
 	oldRef := r.recordBuf
 
 	r.recordBuf = append(r.recordBuf, b...)
@@ -1686,19 +1670,21 @@ func (r *secOpReader) appendRecBufWithMemclear(b ...byte) bool {
 
 	oldRef = oldRef[:cap(oldRef)]
 
-	if &oldRef[0] == &(r.recordBuf[:1])[0] {
+	if &oldRef[0] == &r.recordBuf[0] {
 		return false
 	}
 
-	for i := range oldRef {
-		oldRef[i] = 0
-	}
+	clear(oldRef)
 
 	return false
 }
 
-func (r *secOpReader) appendRecBufMaxCheck(max int) func(...byte) bool {
-	return func(b ...byte) bool {
+func (r *secOpReader) appendRecBufMaxCheck(max int) func([]byte) bool {
+	return func(b []byte) bool {
+		if len(b) == 0 {
+			return false
+		}
+
 		// check if addition exceeds max or overflows
 		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
 			// simulate adding bytes up to the max
@@ -1714,8 +1700,12 @@ func (r *secOpReader) appendRecBufMaxCheck(max int) func(...byte) bool {
 	}
 }
 
-func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func(...byte) bool {
-	return func(b ...byte) bool {
+func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func([]byte) bool {
+	return func(b []byte) bool {
+		if len(b) == 0 {
+			return false
+		}
+
 		// check if addition exceeds max or overflows
 		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
 			// simulate adding bytes up to the max
@@ -1735,19 +1725,17 @@ func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func(...byte) bool {
 
 		oldRef = oldRef[:cap(oldRef)]
 
-		if &oldRef[0] == &(r.recordBuf[:1])[0] {
+		if &oldRef[0] == &r.recordBuf[0] {
 			return false
 		}
 
-		for i := range oldRef {
-			oldRef[i] = 0
-		}
+		clear(oldRef)
 
 		return false
 	}
 }
 
-func (r *secOpReader) appendRecBufNotAllowed(_ ...byte) bool {
+func (r *secOpReader) appendRecBufNotAllowed(_ []byte) bool {
 	r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
 	return true
 }

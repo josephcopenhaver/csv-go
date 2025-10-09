@@ -15,6 +15,7 @@ import (
 
 type wr struct {
 	r                []string
+	fwr              []csv.FieldWriter
 	errAs            []any
 	errAsNot         []any
 	errIs            []error
@@ -213,7 +214,18 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 			}
 
 			for _, v := range tc.wrs {
-				n, err := cw.WriteRow(v.r...)
+				var n int
+				var err error
+				if v.fwr == nil {
+					n, err = cw.WriteRow(v.r...)
+				} else {
+					if v.r != nil {
+						t.Fatal("record slices to write can only be specified using one of r => []string or fwr => []csv.FieldWriter")
+					}
+
+					n, err = cw.WriteFieldRow(v.fwr...)
+				}
+
 				if errors.Is(err, csv.ErrIO) {
 					errWriterInIOErrState = err
 				}
@@ -510,6 +522,222 @@ func TestFunctionalWriterOKPaths(t *testing.T) {
 				{r: strings.Split("a\"b,zzzzzzzzzzzzzzz\"zzzzzzzzzzzzzzz", ","), n: 42},
 			},
 			res: "\"a\"\"b\",\"zzzzzzzzzzzzzzz\"\"zzzzzzzzzzzzzzz\"\n",
+		},
+		{
+			when: "comment rune on writer, comment header, escape set, and two records that start with comment runes",
+			then: "first row, first column should be quoted",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Escape('\\'),
+				csv.WriterOpts().CommentRune('#'),
+			},
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().CommentLines("hello world"),
+			},
+			whN: 14,
+			wrs: []wr{
+				{r: strings.Split("#,b", ","), n: 6},
+				{r: strings.Split("#,2", ","), n: 4},
+			},
+			res: "# hello world\n\"#\",b\n#,2\n",
+		},
+		{
+			when: "comment rune on writer, no comment header, escape set, and two records that start with comment runes",
+			then: "first row, first column should be quoted",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Escape('\\'),
+				csv.WriterOpts().CommentRune('#'),
+			},
+			whN: 14,
+			wrs: []wr{
+				{r: strings.Split("#,b", ","), n: 6},
+				{r: strings.Split("#,2", ","), n: 4},
+			},
+			res: "\"#\",b\n#,2\n",
+		},
+		{
+			when: "writing a record using supposedly already UTF8 encoded string and []byte field writers which are not properly utf8 encoded",
+			then: "no error should be thrown on write",
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().UncheckedUTF8Bytes([]byte("\xF8")), csv.FieldWriters().UncheckedUTF8String("\xFF")}, n: 4},
+			},
+			res: "\xF8,\xFF\n",
+		},
+		{
+			when: "writing a record using string and []byte field writers which are not properly utf8 encoded and the writer has ErrOnNonUTF8=false",
+			then: "no error should be thrown on write",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().ErrorOnNonUTF8(false),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Bytes([]byte("\xF8")), csv.FieldWriters().String("\xFF")}, n: 4},
+			},
+			res: "\xF8,\xFF\n",
+		},
+		{
+			when: "data to write has 2 columns and a field separator value that is numeric",
+			then: "wFlagControlRuneOverlap paths are used to format the output",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().FieldSeparator('0'),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Int(1), csv.FieldWriters().Int(9)}, n: 4},
+			},
+			res: "109\n",
+		},
+		{
+			when: "data to write has 2 columns and a field separator value that is numeric and fields are the numeric sep value",
+			then: "wFlagControlRuneOverlap paths are used to format the output and quotes are used",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().FieldSeparator('0'),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Int(0), csv.FieldWriters().Int(0)}, n: 8},
+			},
+			res: "\"0\"0\"0\"\n",
+		},
+		{
+			when: "writing a record of one empty byte slice column",
+			then: "the output is quoted",
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Bytes(nil)}, n: 3},
+			},
+			res: "\"\"\n",
+		},
+		{
+			when: "writing a record of two empty byte slice columns",
+			then: "the output is not quoted",
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Bytes(nil), csv.FieldWriters().Bytes(nil)}, n: 2},
+			},
+			res: ",\n",
+		},
+		{
+			when: "writing a record of one empty string slice column",
+			then: "the output is quoted",
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().String("")}, n: 3},
+			},
+			res: "\"\"\n",
+		},
+		{
+			when: "writing a record of two empty string slice columns",
+			then: "the output is not quoted",
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().String(""), csv.FieldWriters().String("")}, n: 2},
+			},
+			res: ",\n",
+		},
+		{
+			when: "writing a record of one rune column",
+			then: "the output is not quoted",
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Rune('A')}, n: 2},
+			},
+			res: "A\n",
+		},
+		{
+			when: "writing a record of one UncheckedUTF8String column with value set to escape rune",
+			then: "escape rune should be doubly escaped and quoted",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().UncheckedUTF8String(`\`)}, n: 5},
+			},
+			res: "\"\\\\\"\n",
+		},
+		{
+			when: "writing a record of one UncheckedUTF8String column with value set to two escape runes",
+			then: "escape rune should be doubly escaped and quoted",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().UncheckedUTF8String(`\\`)}, n: 7},
+			},
+			res: "\"\\\\\\\\\"\n",
+		},
+		{
+			when: "writing a record of two UncheckedUTF8String columns with second value set to escape rune",
+			then: "escape rune should be doubly escaped and quoted",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().UncheckedUTF8String(""), csv.FieldWriters().UncheckedUTF8String(`\`)}, n: 6},
+			},
+			res: ",\"\\\\\"\n",
+		},
+		{
+			when: "writing a record of two UncheckedUTF8String column with second value set to two escape runes",
+			then: "escape rune should be doubly escaped and quoted",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().UncheckedUTF8String(""), csv.FieldWriters().UncheckedUTF8String(`\\`)}, n: 8},
+			},
+			res: ",\"\\\\\\\\\"\n",
+		},
+		{
+			when: "writing a record of two UncheckedUTF8String columns with second value set to quote rune",
+			then: "quote rune should be escaped and quoted",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().UncheckedUTF8String(""), csv.FieldWriters().UncheckedUTF8String(`"`)}, n: 6},
+			},
+			res: ",\"\\\"\"\n",
+		},
+		{
+			when: "writing a record of two UncheckedUTF8String column with second value set to two quote runes",
+			then: "quote rune should be escaped and quoted",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().UncheckedUTF8String(""), csv.FieldWriters().UncheckedUTF8String(`""`)}, n: 8},
+			},
+			res: ",\"\\\"\\\"\"\n",
+		},
+		{
+			when: "writing a record of two String columns with second value set to escape rune",
+			then: "escape rune should be doubly escaped and quoted",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().String(""), csv.FieldWriters().String(`\`)}, n: 6},
+			},
+			res: ",\"\\\\\"\n",
+		},
+		{
+			when: "writing a record of two String columns with second value set to quote rune",
+			then: "quote rune should be escaped and quoted",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().String(""), csv.FieldWriters().String(`"`)}, n: 6},
+			},
+			res: ",\"\\\"\"\n",
+		},
+		{
+			when: "writing a record of two Rune column with second value set to comma",
+			then: "comma rune should be quoted",
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Rune('0'), csv.FieldWriters().Rune(',')}, n: 6},
+			},
+			res: "0,\",\"\n",
+		},
+		{
+			when: "writing a record of two String column with second value set to comma",
+			then: "comma rune should be quoted",
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().String(""), csv.FieldWriters().String(",")}, n: 5},
+			},
+			res: ",\",\"\n",
 		},
 	}
 
