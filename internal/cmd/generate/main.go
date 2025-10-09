@@ -4,7 +4,6 @@ package main
 import (
 	"bytes"
 	_ "embed"
-	"go/format"
 	"io"
 	"os"
 	"text/template"
@@ -24,6 +23,9 @@ var tsEscapeChars string
 
 //go:embed write.go.tmpl
 var tsWrite string
+
+//go:embed writeRow.go.tmpl
+var tsWriteRow string
 
 func parse(s string) *template.Template {
 	t, err := template.New("").Option("missingkey=error").Parse(s)
@@ -195,18 +197,33 @@ func main() {
 		})
 	}
 
-	// // for debugging
-	// _, err = f.Write(buf.Bytes())
+	// render writeRow strategies
+	{
+		t := parse(tsWriteRow)
+
+		type cfg struct {
+			Escape                 bool
+			ForceQuoteCommentStart bool
+			ClearMemoryAfterUse    bool
+		}
+
+		render := renderer[cfg](&buf)
+
+		render(t, []cfg{
+			{Escape: false, ForceQuoteCommentStart: false, ClearMemoryAfterUse: false},
+		})
+	}
+
+	b := buf.Bytes()
+
+	//
+	// comment out the next block if you are trying to debug
+	//
+
+	// b, err = format.Source(b) // uses standard "go/format" lib
 	// if err != nil {
 	// 	panic(err)
-	// } else {
-	// 	return
 	// }
-
-	b, err := format.Source(buf.Bytes())
-	if err != nil {
-		panic(err)
-	}
 
 	_, err = f.Write(b)
 	if err != nil {

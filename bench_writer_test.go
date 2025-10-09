@@ -3,11 +3,26 @@ package csv_test
 import (
 	"io"
 	"math"
+	"strconv"
 	"testing"
 	"time"
 
+	std_csv "encoding/csv"
+
 	"github.com/josephcopenhaver/csv-go/v3"
 )
+
+func BenchmarkSTDWrite(b *testing.B) {
+	b.ReportAllocs()
+
+	cw := std_csv.NewWriter(io.Discard)
+	for b.Loop() {
+		err := cw.Write([]string{strconv.Itoa(-1), strconv.Itoa(-1)})
+		if err != nil {
+			panic(err)
+		}
+	}
+}
 
 func BenchmarkWrite(b *testing.B) {
 	b.ReportAllocs()

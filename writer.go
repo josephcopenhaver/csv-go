@@ -60,6 +60,8 @@ const (
 
 	invalidRuneUTF8Encoded           = 0xEFBFBD
 	invalidRuneUTF8EncodedWithOffset = ((1 << (8 * 4)) | invalidRuneUTF8Encoded)
+
+	// runeOptionDenyList = "-:.+0123456789aefInNTZ" // 0-9, float, NaN, Inf, time
 )
 
 type wFieldKind uint8
@@ -744,6 +746,10 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	} else {
 		w.writeRow = w.writeRow_memclearOff
 		w.writeDoubleQuotesForRecord = w.writeDoubleQuotesForRecord_memclearOff
+	}
+
+	if true {
+		w.writeRow = w.writeRow_escapeOff_quoteFirstFieldIfStartsWithCommentOff_memclearOff
 	}
 
 	w.processField = w.processFieldFunc(false)

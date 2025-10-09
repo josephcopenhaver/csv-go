@@ -59,7 +59,7 @@ func (w *Writer) writeField_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 	// v here is immutable once set
 	var v []byte
 
-	switch fw.kind{
+	switch fw.kind {
 	case wfkBytes:
 		b := fw.bytes
 		if len(b) == 0 {
@@ -89,6 +89,10 @@ func (w *Writer) writeField_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end
 		x, err := fw.AppendText(w.fieldWriterBuf[:0])
 		if err != nil {
 			return err
+		}
+		if fw.kind != wfkRune {
+			{{template "appendRec0" .}}x{{template "appendRec1" .}}
+			return nil
 		}
 		v = x
 	}
