@@ -164,7 +164,13 @@ func (w *FieldWriter) MarshalText() (text []byte, err error) {
 		//
 		// might be better off making a buffer pool of a fixed size
 		// but I leave that for callers of AppendText to implement
-		base10ByteLen := decLenU64(w._64_bits) + int((w._64_bits&u64signBitMask)>>63)
+		input := w._64_bits
+		var signAdjustment int
+		if input&u64signBitMask != 0 {
+			input = uint64(-int64(w._64_bits))
+			signAdjustment = 1
+		}
+		base10ByteLen := decLenU64(input) + signAdjustment
 
 		b = make([]byte, 0, base10ByteLen)
 	case wfkUint64:

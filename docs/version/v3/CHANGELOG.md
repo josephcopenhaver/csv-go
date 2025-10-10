@@ -1,5 +1,14 @@
 # V3.* Changes[^1]
 
+## v3.1.1 - 2025-10-10
+
+Internal allocation size bugfix. The FieldWriter types that are processed as signed integers
+would for negative values allocate buffers exceeding the size of their values when writing via MarshalText.
+The exceeding size would never be greater than 19 bytes.
+
+This code path is not regularly traversed by csv processing so while no impact is expected - persons
+who chose to use that code path for various tests or quick analysis will see less bytes allocated for their allocation actions.
+
 ## v3.1.0 - 2025-10-08
 
 Changes in v3.0.1 and v3.0.2 are new additions and should have had the minor version bumped.
