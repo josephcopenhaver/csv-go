@@ -4,6 +4,7 @@ package main
 import (
 	"bytes"
 	_ "embed"
+	"go/format"
 	"io"
 	"os"
 	"text/template"
@@ -15,14 +16,14 @@ var tsImports string
 //go:embed prepare_row.go.tmpl
 var tsPrepareRow string
 
-//go:embed process_field.go.tmpl
-var tsProcessField string
+// //go:embed process_field.go.tmpl
+// var tsProcessField string
 
-//go:embed escape_chars.go.tmpl
-var tsEscapeChars string
+// //go:embed escape_chars.go.tmpl
+// var tsEscapeChars string
 
-//go:embed write.go.tmpl
-var tsWrite string
+// //go:embed write.go.tmpl
+// var tsWrite string
 
 //go:embed writeRow.go.tmpl
 var tsWriteRow string
@@ -139,78 +140,94 @@ func main() {
 	}
 
 	// render processField strategies
-	{
-		t := parse(tsProcessField)
+	// {
+	// 	t := parse(tsProcessField)
 
-		type cfg struct {
-			Escape              bool
-			ForceQuote          bool
-			ClearMemoryAfterUse bool
-		}
+	// 	type cfg struct {
+	// 		Escape              bool
+	// 		ForceQuote          bool
+	// 		ClearMemoryAfterUse bool
+	// 	}
 
-		render := renderer[cfg](&buf)
+	// 	render := renderer[cfg](&buf)
 
-		render(t, []cfg{
-			{Escape: false, ForceQuote: false, ClearMemoryAfterUse: false},
-			{Escape: true, ForceQuote: false, ClearMemoryAfterUse: false},
-			{Escape: false, ForceQuote: true, ClearMemoryAfterUse: false},
-			{Escape: true, ForceQuote: true, ClearMemoryAfterUse: false},
-			{Escape: false, ForceQuote: false, ClearMemoryAfterUse: true},
-			{Escape: true, ForceQuote: false, ClearMemoryAfterUse: true},
-			{Escape: false, ForceQuote: true, ClearMemoryAfterUse: true},
-			{Escape: true, ForceQuote: true, ClearMemoryAfterUse: true},
-		})
-	}
+	// 	render(t, []cfg{
+	// 		{Escape: false, ForceQuote: false, ClearMemoryAfterUse: false},
+	// 		{Escape: true, ForceQuote: false, ClearMemoryAfterUse: false},
+	// 		{Escape: false, ForceQuote: true, ClearMemoryAfterUse: false},
+	// 		{Escape: true, ForceQuote: true, ClearMemoryAfterUse: false},
+	// 		{Escape: false, ForceQuote: false, ClearMemoryAfterUse: true},
+	// 		{Escape: true, ForceQuote: false, ClearMemoryAfterUse: true},
+	// 		{Escape: false, ForceQuote: true, ClearMemoryAfterUse: true},
+	// 		{Escape: true, ForceQuote: true, ClearMemoryAfterUse: true},
+	// 	})
+	// }
 
 	// render EscapeChars strategies
-	{
-		t := parse(tsEscapeChars)
+	// {
+	// 	t := parse(tsEscapeChars)
 
-		type cfg struct {
-			Escape              bool
-			ClearMemoryAfterUse bool
-		}
+	// 	type cfg struct {
+	// 		Escape              bool
+	// 		ClearMemoryAfterUse bool
+	// 	}
 
-		render := renderer[cfg](&buf)
+	// 	render := renderer[cfg](&buf)
 
-		render(t, []cfg{
-			{Escape: false, ClearMemoryAfterUse: false},
-			{Escape: true, ClearMemoryAfterUse: false},
-			{Escape: false, ClearMemoryAfterUse: true},
-			{Escape: true, ClearMemoryAfterUse: true},
-		})
-	}
+	// 	render(t, []cfg{
+	// 		{Escape: false, ClearMemoryAfterUse: false},
+	// 		{Escape: true, ClearMemoryAfterUse: false},
+	// 		{Escape: false, ClearMemoryAfterUse: true},
+	// 		{Escape: true, ClearMemoryAfterUse: true},
+	// 	})
+	// }
 
 	// render writing strategies
-	{
-		t := parse(tsWrite)
+	// {
+	// 	t := parse(tsWrite)
 
-		type cfg struct {
-			ClearMemoryAfterUse bool
-		}
+	// 	type cfg struct {
+	// 		ClearMemoryAfterUse bool
+	// 	}
 
-		render := renderer[cfg](&buf)
+	// 	render := renderer[cfg](&buf)
 
-		render(t, []cfg{
-			{ClearMemoryAfterUse: false},
-			{ClearMemoryAfterUse: true},
-		})
-	}
+	// 	render(t, []cfg{
+	// 		{ClearMemoryAfterUse: false},
+	// 		{ClearMemoryAfterUse: true},
+	// 	})
+	// }
 
 	// render writeRow strategies
 	{
 		t := parse(tsWriteRow)
 
 		type cfg struct {
-			Escape                 bool
 			ForceQuoteCommentStart bool
+			Escape                 bool
 			ClearMemoryAfterUse    bool
+			CheckUTF8              bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{Escape: false, ForceQuoteCommentStart: false, ClearMemoryAfterUse: false},
+			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: false},
+			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: true},
+			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: false},
+			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: true},
+			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: false},
+			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: true},
+			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: false},
+			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: true},
+			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: false},
+			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: true},
+			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: false},
+			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: true},
+			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: false},
+			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: true},
+			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: false},
+			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: true},
 		})
 	}
 
@@ -220,10 +237,10 @@ func main() {
 	// comment out the next block if you are trying to debug
 	//
 
-	// b, err = format.Source(b) // uses standard "go/format" lib
-	// if err != nil {
-	// 	panic(err)
-	// }
+	b, err = format.Source(b) // uses standard "go/format" lib
+	if err != nil {
+		panic(err)
+	}
 
 	_, err = f.Write(b)
 	if err != nil {
