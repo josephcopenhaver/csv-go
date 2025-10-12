@@ -1,7 +1,7 @@
 {{define "appendRec0"}}{{if .ClearMemoryAfterUse}}w.appendRec({{else}}w.recordBuf = append(w.recordBuf, {{end}}{{end}}
 {{define "appendRec1"}}{{if .ClearMemoryAfterUse}}){{else}}...){{end}}{{end}}
 {{if .ForceQuoteCommentStart -}}
-func (w *Writer) writeRowAfterHeader_escapeO{{if .Escape}}n{{else}}ff{{end}}_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}(comment rune) (func([]FieldWriter) (int, error)) {
+func (w *Writer) writeRowAfterHeader_escapeO{{if .Escape}}n{{else}}ff{{end}}_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}(comment rune) (func([]FieldWriter) (int, error)) {
 return func(fields []FieldWriter) (int, error) {
 {{- else -}}
 func (w *Writer) writeRow_escapeO{{if .Escape}}n{{else}}ff{{end}}_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
@@ -63,9 +63,10 @@ func (w *Writer) writeRow_escapeO{{if .Escape}}n{{else}}ff{{end}}_memclearO{{if 
 
 	// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
 	// scan operation also validates that the field contents are valid utf8 sequences.
-	srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
+	srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) {{if .CheckUTF8}}error {{end}}{
 		for {
 			r, n := utf8.DecodeRune(src[scanIdx:])
+			{{if .CheckUTF8 -}}
 			if n == 0 {
 				// all good and no overlap issues, so just directly copy src
 				{{template "appendRec0" .}}src[loadIdx:]{{template "appendRec1" .}}
@@ -74,6 +75,20 @@ func (w *Writer) writeRow_escapeO{{if .Escape}}n{{else}}ff{{end}}_memclearO{{if 
 			if r == utf8.RuneError {
 				return ErrNonUTF8InRecord
 			}
+			{{- else -}}
+			switch n {
+			case 0:
+				// all good and no overlap issues, so just directly copy src
+				{{template "appendRec0" .}}src[loadIdx:]{{template "appendRec1" .}}
+				return
+			case 1:
+				if r == utf8.RuneError {
+					scanIdx += 1
+					continue
+				}
+			default:
+			}
+			{{- end}}
 
 			if {{if .Escape}}!strings.ContainsRune(w.escapeControlRunes, r){{else}}r != w.quote{{end}} {
 				scanIdx += n
