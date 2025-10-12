@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"math"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -57,9 +58,16 @@ const (
 	maxLenSerializedTime    = 35
 	maxLenSerializedBool    = 1
 	maxLenSerializedFloat64 = 24
+	// boundedFieldWritersMaxByteLen describes fieldWriters with fixed lengths (so bytes other than rune, bytes, and string plus their UTF8 variants for the case of bytes and string)
+	boundedFieldWritersMaxByteLen = 35
 
-	invalidRuneUTF8Encoded           = 0xEFBFBD
-	invalidRuneUTF8EncodedWithOffset = ((1 << (8 * 4)) | invalidRuneUTF8Encoded)
+	invalidRuneUTF8Encoded = 0xEFBFBD
+	// note that if a utf8.RuneError rune is supplied the offset is 1 and not 2
+	//
+	// 2 here is completely invalid and obviously so from an encoding perspective,
+	// so we use it to indicate that the rune supplied to the writer is definitely
+	// invalid
+	invalidRuneUTF8EncodedWithOffset = ((2 << (8 * 4)) | invalidRuneUTF8Encoded)
 
 	fieldWriterTypesRuneList = "-:.+0123456789aefInNTZ" // 0-9, float, NaN, Inf, time
 )
@@ -257,6 +265,9 @@ func (FieldWriterFactory) Time(t time.Time) FieldWriter {
 	}
 }
 
+// Rune value must be a valid utf8 rune value otherwise
+// attempting to write the rune will result in an
+// ErrInvalidRune error.
 func (FieldWriterFactory) Rune(r rune) FieldWriter {
 	numBytes := utf8.RuneLen(r)
 	if numBytes == -1 {
@@ -618,11 +629,13 @@ func (cfg *wCfg) validate() error {
 	return nil
 }
 
+type writeRowFunc = func([]FieldWriter) (int, error)
+
 type Writer struct {
 	writeRow                func([]FieldWriter) (int, error)
-	writeRowAfterHeader     func(rune) func([]FieldWriter) (int, error)
+	writeRowAfterHeader     func(rune) writeRowFunc
 	fieldWriters            []FieldWriter
-	fieldWriterBuf          [utf8.UTFMax]byte
+	fieldWriterBuf          [boundedFieldWritersMaxByteLen]byte
 	recordBuf               []byte
 	controlRunes            string
 	escapeControlRunes      string
@@ -636,7 +649,6 @@ type Writer struct {
 	writer                  io.Writer
 	err                     error
 	quote, fieldSep, escape rune
-	recordSep               [2]rune
 	quoteByteLen            int8
 	fieldSepByteLen         int8
 	recordSepRuneLen        int8
@@ -749,7 +761,6 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		recordSepBytes:       recordSepBytes,
 		recordSepByteLen:     recordSepByteLen,
 		quote:                cfg.quote,
-		recordSep:            cfg.recordSep,
 		recordSepRuneLen:     cfg.recordSepRuneLen,
 		fieldSep:             cfg.fieldSeparator,
 		escape:               cfg.escape,
@@ -759,18 +770,38 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 
 	if !cfg.clearMemoryAfterFree {
 		if !cfg.escapeSet {
-			w.writeRow = w.writeRow_escapeOff_memclearOff
-			w.writeRowAfterHeader = w.writeRowAfterHeader_escapeOff_memclearOff
+			if !cfg.errOnNonUTF8 {
+				w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8Off
+				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off
+			} else {
+				w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8On
+				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On
+			}
 		} else {
-			w.writeRow = w.writeRow_escapeOn_memclearOff
-			w.writeRowAfterHeader = w.writeRowAfterHeader_escapeOn_memclearOff
+			if !cfg.errOnNonUTF8 {
+				w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8Off
+				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off
+			} else {
+				w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8On
+				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On
+			}
 		}
 	} else if !cfg.escapeSet {
-		w.writeRow = w.writeRow_escapeOff_memclearOn
-		w.writeRowAfterHeader = w.writeRowAfterHeader_escapeOff_memclearOn
+		if !cfg.errOnNonUTF8 {
+			w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8Off
+			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off
+		} else {
+			w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8On
+			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On
+		}
 	} else {
-		w.writeRow = w.writeRow_escapeOn_memclearOn
-		w.writeRowAfterHeader = w.writeRowAfterHeader_escapeOn_memclearOn
+		if !cfg.errOnNonUTF8 {
+			w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8Off
+			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off
+		} else {
+			w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8On
+			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On
+		}
 	}
 
 	{
@@ -824,25 +855,40 @@ func (w *Writer) Close() error {
 	return nil
 }
 
-func (w *Writer) appendRec(bufs ...[]byte) {
-	for _, v := range bufs {
-		old := w.recordBuf
-
-		w.recordBuf = append(w.recordBuf, v...)
-
-		if cap(old) == 0 {
-			continue
+func (w *Writer) appendRec(bufList ...[]byte) {
+	var old []byte
+	{
+		var addCap int
+		for i := range bufList {
+			addCap += len(bufList[i])
+			if addCap < len(bufList[i]) {
+				panic("int capacity overflow")
+			}
 		}
 
-		old = old[:cap(old)]
-
-		if &old[0] == &(w.recordBuf[:1])[0] {
-			continue
+		if addCap == 0 {
+			return
 		}
 
-		for i := range old {
-			old[i] = 0
-		}
+		old = w.recordBuf
+		w.recordBuf = slices.Grow(w.recordBuf, addCap)
+	}
+
+	for i := range bufList {
+		w.recordBuf = append(w.recordBuf, bufList[i]...)
+	}
+
+	if cap(old) == 0 {
+		return
+	}
+	old = old[:cap(old)]
+
+	if &old[0] == &(w.recordBuf[:1])[0] {
+		return
+	}
+
+	for i := range old {
+		old[i] = 0
 	}
 }
 
@@ -851,20 +897,20 @@ func (w *Writer) appendRec(bufs ...[]byte) {
 //
 // This function will clear the old buffer if it is no longer being utilized.
 func (w *Writer) setRecordBuf(p []byte) {
-	oldBuf := w.recordBuf
+	old := w.recordBuf
 	w.recordBuf = p
 
-	if cap(oldBuf) == 0 {
+	if cap(old) == 0 {
 		return
 	}
-	oldBuf = oldBuf[:cap(oldBuf)]
+	old = old[:cap(old)]
 
-	if (&oldBuf[0]) == (&p[0]) {
+	if (&old[0]) == (&p[0]) {
 		return
 	}
 
-	for i := range oldBuf {
-		oldBuf[i] = 0
+	for i := range old {
+		old[i] = 0
 	}
 }
 

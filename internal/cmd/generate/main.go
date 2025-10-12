@@ -237,7 +237,7 @@ func main() {
 	// comment out the next block if you are trying to debug
 	//
 
-	b, err = format.Source(b) // uses standard "go/format" lib
+	b, err = format.Source(b) // uses standard SDK "go/format" lib
 	if err != nil {
 		panic(err)
 	}

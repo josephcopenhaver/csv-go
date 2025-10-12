@@ -1,24 +1,22 @@
-{{define "appendRec0"}}{{if .ClearMemoryAfterUse}}w.appendRec({{else}}w.recordBuf = append(w.recordBuf, {{end}}{{end}}
-{{define "appendRec1"}}{{if .ClearMemoryAfterUse}}){{else}}...){{end}}{{end}}
-{{if .ForceQuoteCommentStart -}}
-func (w *Writer) writeRowAfterHeader_escapeO{{if .Escape}}n{{else}}ff{{end}}_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}(comment rune) (func([]FieldWriter) (int, error)) {
+{{- define "appendRec0"}}{{if .ClearMemoryAfterUse}}w.appendRec({{else}}w.recordBuf = append(w.recordBuf, {{end}}{{end}}
+{{define "appendRec1"}}{{if .ClearMemoryAfterUse}}){{else}}...){{end}}{{end -}}
+{{define "appendRecJoin"}}{{if .ClearMemoryAfterUse}}, {{else}}...)
+w.recordBuf = append(w.recordBuf, {{end}}{{end -}}
+
+{{- if .ForceQuoteCommentStart -}}
+func (w *Writer) writeRowAfterHeader_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}(comment rune) writeRowFunc {
+commentBytes := []byte(string(comment))
+
 return func(fields []FieldWriter) (int, error) {
 {{- else -}}
-func (w *Writer) writeRow_escapeO{{if .Escape}}n{{else}}ff{{end}}_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
+func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
 {{- end}}
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}(){{if .ForceQuoteCommentStart}}
 
-	w.writeRow = w.writeRow_escapeO{{if .Escape}}n{{else}}ff{{end}}_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}
+	w.writeRow = w.writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}
 	{{end}}
-
-	if len(fields) == 1 && fields[0].isZeroLen() {
-		{{template "appendRec0" .}}w.twoQuotes[:w.twoQuotesByteLen]{{template "appendRec1" .}}
-
-		{{template "appendRec0" .}}w.recordSepBytes[:w.recordSepByteLen]{{template "appendRec1" .}}
-		return w.writer.Write(w.recordBuf)
-	}
 
 	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
 	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
@@ -59,36 +57,21 @@ func (w *Writer) writeRow_escapeO{{if .Escape}}n{{else}}ff{{end}}_memclearO{{if 
 			{{end}}
 			scanIdx = loadIdx
 		}
-	}
+	}{{if .CheckUTF8}}
 
 	// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
 	// scan operation also validates that the field contents are valid utf8 sequences.
-	srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) {{if .CheckUTF8}}error {{end}}{
+	srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
 		for {
 			r, n := utf8.DecodeRune(src[scanIdx:])
-			{{if .CheckUTF8 -}}
 			if n == 0 {
 				// all good and no overlap issues, so just directly copy src
 				{{template "appendRec0" .}}src[loadIdx:]{{template "appendRec1" .}}
 				return nil
 			}
-			if r == utf8.RuneError {
+			if n == 1 && r == utf8.RuneError {
 				return ErrNonUTF8InRecord
 			}
-			{{- else -}}
-			switch n {
-			case 0:
-				// all good and no overlap issues, so just directly copy src
-				{{template "appendRec0" .}}src[loadIdx:]{{template "appendRec1" .}}
-				return
-			case 1:
-				if r == utf8.RuneError {
-					scanIdx += 1
-					continue
-				}
-			default:
-			}
-			{{- end}}
 
 			if {{if .Escape}}!strings.ContainsRune(w.escapeControlRunes, r){{else}}r != w.quote{{end}} {
 				scanIdx += n
@@ -116,33 +99,40 @@ func (w *Writer) writeRow_escapeO{{if .Escape}}n{{else}}ff{{end}}_memclearO{{if 
 			{{template "appendRec0" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
 			{{end}}
 		}
-	}
+	}{{end}}
 
 	// write the first field
-FIRST_FIELD_WRITE:
-	for {
+	{
 		f := &fields[0]
 
-		var scanForNonUTF8 bool
-		var src []byte
+		{{if .CheckUTF8}}var scanForNonUTF8 bool
+		{{end}}var src []byte
 
 		switch f.kind {
 		case wfkBytes:
 			s := f.bytes
 			if len(s) == 0 {
-				break FIRST_FIELD_WRITE
+				if len(fields) == 1 {
+					{{template "appendRec0" .}}w.twoQuotes[:w.twoQuotesByteLen]{{template "appendRecJoin" .}}w.recordSepBytes[:w.recordSepByteLen]{{template "appendRec1" .}}
+					return w.writer.Write(w.recordBuf)
+				}
+				goto FIRST_FIELD_WRITTEN
 			}
 
-			scanForNonUTF8 = (f._64_bits == 0)
-			src = s
+			{{if .CheckUTF8}}scanForNonUTF8 = (f._64_bits == 0)
+			{{end}}src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
-				break FIRST_FIELD_WRITE
+				if len(fields) == 1 {
+					{{template "appendRec0" .}}w.twoQuotes[:w.twoQuotesByteLen]{{template "appendRecJoin" .}}w.recordSepBytes[:w.recordSepByteLen]{{template "appendRec1" .}}
+					return w.writer.Write(w.recordBuf)
+				}
+				goto FIRST_FIELD_WRITTEN
 			}
 
-			scanForNonUTF8 = (f._64_bits == 0)
-			src = unsafe.Slice(unsafe.StringData(s), len(s))
+			{{if .CheckUTF8}}scanForNonUTF8 = (f._64_bits == 0)
+			{{end}}src = unsafe.Slice(unsafe.StringData(s), len(s))
 		case wfkRune:
 			v, err := f.AppendText(w.fieldWriterBuf[:0])
 			if err != nil {
@@ -157,24 +147,24 @@ FIRST_FIELD_WRITE:
 			}
 
 			{{if .ClearMemoryAfterUse}}w.setRecordBuf(v){{else}}w.recordBuf = v{{end}}
-			break FIRST_FIELD_WRITE
+			goto FIRST_FIELD_WRITTEN
 		}
 
 		//
 		// process src buf
 		//
 
-		if !scanForNonUTF8 {
+		{{if .CheckUTF8}}if !scanForNonUTF8 { {{- end}}
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
 			{{if .ForceQuoteCommentStart}}
 			var i int
 
-			if !bytes.HasPrefix(src, []byte(string(comment))) { {{end}}
+			if !bytes.HasPrefix(src, commentBytes) { {{end}}
 			{{if .ForceQuoteCommentStart}}	{{end}}i {{if not .ForceQuoteCommentStart}}:{{end}}= bytes.IndexAny(src, w.controlRunes)
 			{{if .ForceQuoteCommentStart}}	{{end}}if i == -1 {
 			{{if .ForceQuoteCommentStart}}	{{end}}	{{template "appendRec0" .}}src{{template "appendRec1" .}}
-			{{if .ForceQuoteCommentStart}}	{{end}}	break
+			{{if .ForceQuoteCommentStart}}	{{end}}	goto FIRST_FIELD_WRITTEN
 			{{if .ForceQuoteCommentStart}}	{{end}}}
 			{{if .ForceQuoteCommentStart}}}{{end}}
 
@@ -183,12 +173,10 @@ FIRST_FIELD_WRITE:
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-				{{template "appendRec0" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
+				{{template "appendRec0" .}}src[:i]{{template "appendRecJoin" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
 				srcLoad(src, i+n, i+n)
 			case w.escape:
-				{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-				{{template "appendRec0" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
+				{{template "appendRec0" .}}src[:i]{{template "appendRecJoin" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
 				srcLoad(src, i+n, i+n)
 			default:
 				srcLoad(src, 0, i+n)
@@ -196,8 +184,8 @@ FIRST_FIELD_WRITE:
 
 			{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
-			break
-		}
+			goto FIRST_FIELD_WRITTEN
+		{{if .CheckUTF8 -}} }
 
 		// for each decoded rune, check if that rune fails to decode and if so then return an error
 		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
@@ -212,9 +200,9 @@ FIRST_FIELD_WRITE:
 			if n == 0 {
 				// all good and no overlap issues, so just directly copy src
 				{{template "appendRec0" .}}src{{template "appendRec1" .}}
-				break
+				goto FIRST_FIELD_WRITTEN
 			}
-			if r == utf8.RuneError {
+			if n == 1 && r == utf8.RuneError {
 				return 0, ErrNonUTF8InRecord
 			}
 
@@ -233,12 +221,10 @@ FIRST_FIELD_WRITE:
 			var err error
 			switch r {
 			case w.quote:
-				{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-				{{template "appendRec0" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
+				{{template "appendRec0" .}}src[:i]{{template "appendRecJoin" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
 				err = srcLoadWithEncodingCheck(src, i+n, i+n)
 			case w.escape:
-				{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-				{{template "appendRec0" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
+				{{template "appendRec0" .}}src[:i]{{template "appendRecJoin" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
 				err = srcLoadWithEncodingCheck(src, i+n, i+n)
 			default:
 				err = srcLoadWithEncodingCheck(src, 0, i+n)
@@ -249,11 +235,12 @@ FIRST_FIELD_WRITE:
 
 			{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
-			break
+			goto FIRST_FIELD_WRITTEN
 		}
-
-		break
+		{{end}}
 	}
+
+FIRST_FIELD_WRITTEN:
 
 	for i := 1; i < len(fields); i++ {
 		{{template "appendRec0" .}}w.fieldSepBytes[:w.fieldSepByteLen]{{template "appendRec1" .}}
@@ -262,8 +249,8 @@ SUBSEQUENT_FIELD_WRITE:
 		for {
 			f := &fields[i]
 
-			var scanForNonUTF8 bool
-			var src []byte
+			{{if .CheckUTF8}}var scanForNonUTF8 bool
+			{{end}}var src []byte
 
 			switch f.kind {
 			case wfkBytes:
@@ -272,16 +259,16 @@ SUBSEQUENT_FIELD_WRITE:
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
-				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
+				{{if .CheckUTF8}}scanForNonUTF8 = (f._64_bits == 0)
+				{{end}}src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
-				scanForNonUTF8 = (f._64_bits == 0)
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
+				{{if .CheckUTF8}}scanForNonUTF8 = (f._64_bits == 0)
+				{{end}}src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
 				v, err := f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
@@ -303,7 +290,7 @@ SUBSEQUENT_FIELD_WRITE:
 			// process src buf
 			//
 
-			if !scanForNonUTF8 {
+			{{if .CheckUTF8 -}}if !scanForNonUTF8 { {{- end}}
 				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
 				i := bytes.IndexAny(src, w.controlRunes)
@@ -317,12 +304,10 @@ SUBSEQUENT_FIELD_WRITE:
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-					{{template "appendRec0" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
+					{{template "appendRec0" .}}src[:i]{{template "appendRecJoin" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
 					srcLoad(src, i+n, i+n)
 				case w.escape:
-					{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-					{{template "appendRec0" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
+					{{template "appendRec0" .}}src[:i]{{template "appendRecJoin" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
 					srcLoad(src, i+n, i+n)
 				default:
 					srcLoad(src, 0, i+n)
@@ -331,7 +316,7 @@ SUBSEQUENT_FIELD_WRITE:
 				{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
 				break
-			}
+			{{if .CheckUTF8 -}} }
 
 			// for each decoded rune, check if that rune fails to decode and if so then return an error
 			// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
@@ -345,7 +330,7 @@ SUBSEQUENT_FIELD_WRITE:
 					{{template "appendRec0" .}}src{{template "appendRec1" .}}
 					break
 				}
-				if r == utf8.RuneError {
+				if n == 1 && r == utf8.RuneError {
 					return 0, ErrNonUTF8InRecord
 				}
 
@@ -363,12 +348,10 @@ SUBSEQUENT_FIELD_WRITE:
 				var err error
 				switch r {
 				case w.quote:
-					{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-					{{template "appendRec0" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
+					{{template "appendRec0" .}}src[:i]{{template "appendRecJoin" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
 					err = srcLoadWithEncodingCheck(src, i+n, i+n)
 				case w.escape:
-					{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-					{{template "appendRec0" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
+					{{template "appendRec0" .}}src[:i]{{template "appendRecJoin" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
 					err = srcLoadWithEncodingCheck(src, i+n, i+n)
 				default:
 					err = srcLoadWithEncodingCheck(src, 0, i+n)
@@ -382,7 +365,7 @@ SUBSEQUENT_FIELD_WRITE:
 				break
 			}
 
-			break
+			break{{end}}
 		}
 	}
 
