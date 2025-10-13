@@ -353,6 +353,7 @@ type wCfg struct {
 	escapeSet                  bool
 	recordSepRuneLen           int8
 	clearMemoryAfterFree       bool
+	fwOverlapsControlRunes     bool
 }
 
 type WriterOption func(*wCfg)
@@ -598,20 +599,12 @@ func (cfg *wCfg) validate() error {
 		return errors.New("invalid field separator and quote combination")
 	}
 
-	if strings.ContainsRune(fieldWriterTypesRuneList, cfg.quote) {
-		return errors.New("quote rune value not allowed: overlaps with fieldWriter runes list")
-	}
-
 	if cfg.escapeSet && cfg.fieldSeparator == cfg.escape {
 		return errors.New("invalid field separator and escape combination")
 	}
 
-	if cfg.escapeSet && strings.ContainsRune(fieldWriterTypesRuneList, cfg.escape) {
-		return errors.New("escape rune value not allowed: overlaps with fieldWriter runes list")
-	}
-
-	if strings.ContainsRune(fieldWriterTypesRuneList, cfg.fieldSeparator) {
-		return errors.New("field separator rune value not allowed: overlaps with fieldWriter runes list")
+	if strings.ContainsRune(fieldWriterTypesRuneList, cfg.quote) || (cfg.escapeSet && strings.ContainsRune(fieldWriterTypesRuneList, cfg.escape)) || strings.ContainsRune(fieldWriterTypesRuneList, cfg.fieldSeparator) {
+		cfg.fwOverlapsControlRunes = true
 	}
 
 	if cfg.recordBufSet && cfg.initialRecordBufferSizeSet {
@@ -657,6 +650,7 @@ type Writer struct {
 	escapedEscapeByteLen    int8
 	recordSepByteLen        int8
 	bitFlags                wFlag
+	setWriteRowStrategy     func(fwOverlapsControlRunesUpdatesToTrue bool)
 }
 
 // NewWriter creates a new instance of a CSV writer which is not safe for concurrent reads.
@@ -768,52 +762,103 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		bitFlags:             bitFlags,
 	}
 
-	if !cfg.clearMemoryAfterFree {
-		if !cfg.escapeSet {
-			if !cfg.errOnNonUTF8 {
-				w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8Off
-				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off
-			} else {
-				w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8On
-				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On
-			}
-		} else {
-			if !cfg.errOnNonUTF8 {
-				w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8Off
-				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off
-			} else {
-				w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8On
-				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On
-			}
-		}
-	} else if !cfg.escapeSet {
-		if !cfg.errOnNonUTF8 {
-			w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8Off
-			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off
-		} else {
-			w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8On
-			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On
-		}
-	} else {
-		if !cfg.errOnNonUTF8 {
-			w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8Off
-			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off
-		} else {
-			w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8On
-			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On
-		}
-	}
+	// TODO: can clear w.setWriteRowStrategy at the same time as the first record is written
+	w.setWriteRowStrategy = w.newSetWriteRowStrategyFunc(cfg.clearMemoryAfterFree, cfg.escapeSet, cfg.errOnNonUTF8, cfg.fwOverlapsControlRunes)
 
-	{
-		f := w.writeRow
+	w.setWriteRowStrategy(false)
+
+	return w, nil
+}
+
+func (w *Writer) newSetWriteRowStrategyFunc(clearMemoryAfterFree, escapeSet, errOnNonUTF8, fwOverlapsControlRunes bool) func(bool) {
+	crOverlaps := fwOverlapsControlRunes
+	var f func([]FieldWriter) (int, error)
+	return func(fwOverlapsControlRunes bool) {
+		if fwOverlapsControlRunes {
+			if crOverlaps {
+				// would not be any change
+				return
+			}
+
+			crOverlaps = true
+		}
+
+		if !clearMemoryAfterFree {
+			if !escapeSet {
+				if !errOnNonUTF8 {
+					if !crOverlaps {
+						f = w.writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOff
+						w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOff
+					} else {
+						f = w.writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOn
+						w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOn
+					}
+				} else if !crOverlaps {
+					f = w.writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOff
+					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOff
+				} else {
+					f = w.writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
+					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
+				}
+			} else {
+				if !errOnNonUTF8 {
+					if !crOverlaps {
+						f = w.writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOff
+						w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOff
+					} else {
+						f = w.writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn
+						w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn
+					}
+				} else if !crOverlaps {
+					f = w.writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
+					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
+				} else {
+					f = w.writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn
+					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn
+				}
+			}
+		} else if !escapeSet {
+			if !errOnNonUTF8 {
+				if !crOverlaps {
+					f = w.writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOff
+					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOff
+				} else {
+					f = w.writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn
+					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn
+				}
+			} else if !crOverlaps {
+				f = w.writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
+				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
+			} else {
+				f = w.writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn
+				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn
+			}
+		} else if !errOnNonUTF8 {
+			if !crOverlaps {
+				f = w.writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
+				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
+			} else {
+				f = w.writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn
+				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn
+			}
+		} else if !crOverlaps {
+			f = w.writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff
+			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff
+		} else {
+			f = w.writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn
+			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn
+		}
+
+		if w.writeRow != nil {
+			return
+		}
+
 		w.writeRow = func(row []FieldWriter) (int, error) {
 			w.writeRow = f
 			w.bitFlags |= wFlagHeaderWritten
 			return w.writeRow(row)
 		}
 	}
-
-	return w, nil
 }
 
 // Close should be called after writing all rows
@@ -1008,10 +1053,6 @@ func (cfg *whCfg) validate(w *Writer) error {
 		if (w.bitFlags&wFlagEscapeSet) != 0 && w.escape == cfg.commentRune {
 			return errors.New("invalid escape and comment rune combination")
 		}
-
-		if strings.ContainsRune(fieldWriterTypesRuneList, cfg.commentRune) {
-			return errors.New("comment rune value not allowed: overlaps with fieldWriter runes list")
-		}
 	} else if cfg.commentLinesSet {
 		return errors.New("comment lines require a comment rune")
 	}
@@ -1063,7 +1104,9 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 	}
 
 	if cfg.commentLinesSet {
-
+		if strings.ContainsRune(fieldWriterTypesRuneList, cfg.commentRune) {
+			w.setWriteRowStrategy(true)
+		}
 		w.writeRow = w.writeRowAfterHeader(cfg.commentRune)
 
 		var buf bytes.Buffer

@@ -4,18 +4,18 @@
 w.recordBuf = append(w.recordBuf, {{end}}{{end -}}
 
 {{- if .ForceQuoteCommentStart -}}
-func (w *Writer) writeRowAfterHeader_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}(comment rune) writeRowFunc {
+func (w *Writer) writeRowAfterHeader_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}_controlRuneOverlapO{{if .ControlRuneOverlap}}n{{else}}ff{{end}}(comment rune) writeRowFunc {
 commentBytes := []byte(string(comment))
 
 return func(fields []FieldWriter) (int, error) {
 {{- else -}}
-func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
+func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}_controlRuneOverlapO{{if .ControlRuneOverlap}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
 {{- end}}
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}(){{if .ForceQuoteCommentStart}}
 
-	w.writeRow = w.writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}
+	w.writeRow = w.writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}_controlRuneOverlapO{{if .ControlRuneOverlap}}n{{else}}ff{{end}}
 	{{end}}
 
 	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -133,6 +133,15 @@ func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}
 
 			{{if .CheckUTF8}}scanForNonUTF8 = (f._64_bits == 0)
 			{{end}}src = unsafe.Slice(unsafe.StringData(s), len(s))
+		{{if .ControlRuneOverlap -}}
+		default:
+			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			if err != nil {
+				return 0, err
+			}
+
+			src = v
+		{{- else -}}
 		case wfkRune:
 			v, err := f.AppendText(w.fieldWriterBuf[:0])
 			if err != nil {
@@ -148,6 +157,7 @@ func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}
 
 			{{if .ClearMemoryAfterUse}}w.setRecordBuf(v){{else}}w.recordBuf = v{{end}}
 			goto FIRST_FIELD_WRITTEN
+		{{- end}}
 		}
 
 		//
@@ -269,6 +279,15 @@ SUBSEQUENT_FIELD_WRITE:
 
 				{{if .CheckUTF8}}scanForNonUTF8 = (f._64_bits == 0)
 				{{end}}src = unsafe.Slice(unsafe.StringData(s), len(s))
+			{{if .ControlRuneOverlap -}}
+			default:
+				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				if err != nil {
+					return 0, err
+				}
+
+				src = v
+			{{- else -}}
 			case wfkRune:
 				v, err := f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
@@ -284,6 +303,7 @@ SUBSEQUENT_FIELD_WRITE:
 
 				{{if .ClearMemoryAfterUse}}w.setRecordBuf(v){{else}}w.recordBuf = v{{end}}
 				break SUBSEQUENT_FIELD_WRITE
+			{{- end}}
 			}
 
 			//

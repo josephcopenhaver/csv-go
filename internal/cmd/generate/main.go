@@ -207,27 +207,44 @@ func main() {
 			Escape                 bool
 			ClearMemoryAfterUse    bool
 			CheckUTF8              bool
+			ControlRuneOverlap     bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: false},
-			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: true},
-			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: false},
-			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: true},
-			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: false},
-			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: true},
-			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: false},
-			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: true},
-			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: false},
-			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: true},
-			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: false},
-			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: true},
-			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: false},
-			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: true},
-			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: false},
-			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: true},
+			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: false, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: false, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: true, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: true, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: false, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: false, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: true, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: false, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: true, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: false, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: false, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: true, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: true, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: false, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: false, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: true, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: false, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: true, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: false, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: false, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: true, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: false, CheckUTF8: true, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: false, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: false, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: true, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: true, Escape: false, ClearMemoryAfterUse: true, CheckUTF8: true, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: false, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: false, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: true, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: false, CheckUTF8: true, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: false, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: false, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: true, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: true, Escape: true, ClearMemoryAfterUse: true, CheckUTF8: true, ControlRuneOverlap: true},
 		})
 	}
 
