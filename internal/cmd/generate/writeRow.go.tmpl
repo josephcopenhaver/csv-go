@@ -13,7 +13,8 @@ func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}
 {{- end}}
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
-	}(){{if .ForceQuoteCommentStart}}
+	}()
+	{{if .ForceQuoteCommentStart -}}
 
 	w.writeRow = w.writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}_controlRuneOverlapO{{if .ControlRuneOverlap}}n{{else}}ff{{end}}
 	{{end}}

@@ -884,32 +884,26 @@ func (w *Writer) Close() error {
 	w.setErr(ErrWriterClosed)
 
 	if (w.bitFlags & wFlagClearMemoryAfterFree) != 0 {
-		{
-			v := w.recordBuf[:cap(w.recordBuf)]
-			for i := range v {
-				v[i] = 0
-			}
-		}
-
-		for i := range w.fieldWriters {
-			w.fieldWriters[i] = FieldWriter{}
-		}
-
-		for i := range w.fieldWriterBuf {
-			w.fieldWriterBuf[i] = 0
-		}
+		clear(w.recordBuf[:cap(w.recordBuf)])
+		clear(w.fieldWriters)
+		clear(w.fieldWriterBuf[:])
 	}
 
 	return nil
 }
 
 func (w *Writer) appendRec(bufList ...[]byte) {
+	if len(bufList) == 0 {
+		return
+	}
+
 	var old []byte
 	{
 		var addCap int
 		for i := range bufList {
-			addCap += len(bufList[i])
-			if addCap < len(bufList[i]) {
+			n := len(bufList[i])
+			addCap += n
+			if addCap < n {
 				panic("int capacity overflow")
 			}
 		}
@@ -919,11 +913,15 @@ func (w *Writer) appendRec(bufList ...[]byte) {
 		}
 
 		old = w.recordBuf
-		w.recordBuf = slices.Grow(w.recordBuf, addCap)
-	}
+		newDst := slices.Grow(w.recordBuf, addCap)
+		wIdx := len(newDst)
+		newDst = newDst[:wIdx+addCap]
 
-	for i := range bufList {
-		w.recordBuf = append(w.recordBuf, bufList[i]...)
+		for i := range bufList {
+			wIdx += copy(newDst[wIdx:], bufList[i])
+		}
+
+		w.recordBuf = newDst
 	}
 
 	if cap(old) == 0 {
@@ -931,13 +929,11 @@ func (w *Writer) appendRec(bufList ...[]byte) {
 	}
 	old = old[:cap(old)]
 
-	if &old[0] == &(w.recordBuf[:1])[0] {
+	if &old[0] == &w.recordBuf[0] {
 		return
 	}
 
-	for i := range old {
-		old[i] = 0
-	}
+	clear(old)
 }
 
 // setRecordBuf should only be called when the record buf has been appended to
@@ -953,13 +949,11 @@ func (w *Writer) setRecordBuf(p []byte) {
 	}
 	old = old[:cap(old)]
 
-	if (&old[0]) == (&p[0]) {
+	if &old[0] == &p[0] {
 		return
 	}
 
-	for i := range old {
-		old[i] = 0
-	}
+	clear(old)
 }
 
 type whCfg struct {
@@ -1117,10 +1111,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 			defer func() {
 				buf.Reset()
 				b := buf.Bytes()
-				b = b[:cap(b)]
-				for i := range b {
-					b[i] = 0
-				}
+				clear(b[:cap(b)])
 			}()
 		}
 

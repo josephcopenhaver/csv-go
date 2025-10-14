@@ -6339,7 +6339,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOff
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -6548,7 +6547,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOn
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -6741,7 +6739,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOff
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -7095,7 +7092,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -7433,7 +7429,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOff
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -7636,7 +7631,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -7823,7 +7817,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -8167,7 +8160,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -8495,7 +8487,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOff
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -8710,7 +8701,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -8909,7 +8899,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -9275,7 +9264,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -9625,7 +9613,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -9834,7 +9821,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -10027,7 +10013,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
@@ -10383,7 +10368,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-
 		w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn
 
 		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.

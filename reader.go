@@ -1591,33 +1591,11 @@ func (r *secOpReader) closeWithMemClear() error {
 }
 
 func (r *secOpReader) zeroRecordBuffers() {
-	{
-		v := r.rawBuf[:cap(r.rawBuf)]
-		for i := range v {
-			v[i] = 0
-		}
-	}
 
-	{
-		v := r.fieldLengths[:cap(r.fieldLengths)]
-		for i := range v {
-			v[i] = 0
-		}
-	}
-
-	{
-		v := r.recordBuf[:cap(r.recordBuf)]
-		for i := range v {
-			v[i] = 0
-		}
-	}
-
-	{
-		v := r.rowBuf[:cap(r.rowBuf)]
-		for i := range v {
-			v[i] = ""
-		}
-	}
+	clear(r.rawBuf[:cap(r.rawBuf)])
+	clear(r.fieldLengths[:cap(r.fieldLengths)])
+	clear(r.recordBuf[:cap(r.recordBuf)])
+	clear(r.rowBuf[:cap(r.rowBuf)])
 
 	r.resetRecordBuffers()
 }
@@ -1686,13 +1664,11 @@ func (r *secOpReader) appendRecBufWithMemclear(b ...byte) bool {
 
 	oldRef = oldRef[:cap(oldRef)]
 
-	if &oldRef[0] == &(r.recordBuf[:1])[0] {
+	if &oldRef[0] == &r.recordBuf[0] {
 		return false
 	}
 
-	for i := range oldRef {
-		oldRef[i] = 0
-	}
+	clear(oldRef)
 
 	return false
 }
@@ -1735,13 +1711,11 @@ func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func(...byte) bool {
 
 		oldRef = oldRef[:cap(oldRef)]
 
-		if &oldRef[0] == &(r.recordBuf[:1])[0] {
+		if &oldRef[0] == &r.recordBuf[0] {
 			return false
 		}
 
-		for i := range oldRef {
-			oldRef[i] = 0
-		}
+		clear(oldRef)
 
 		return false
 	}
