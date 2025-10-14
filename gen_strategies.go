@@ -2164,7 +2164,11 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapO
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -2176,7 +2180,11 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapO
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -2312,7 +2320,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -2364,7 +2377,11 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapO
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -2376,7 +2393,11 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapO
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -2496,7 +2517,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -2582,7 +2608,11 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOf
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -2595,7 +2625,11 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOf
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -2838,7 +2872,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -2924,7 +2963,11 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -2937,7 +2980,11 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -3164,7 +3211,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -3215,7 +3267,11 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOf
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -3226,7 +3282,11 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOf
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -3358,7 +3418,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -3409,7 +3474,11 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -3420,7 +3489,11 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -3536,7 +3609,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -3621,7 +3699,11 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -3633,7 +3715,11 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -3868,7 +3954,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -3953,7 +4044,11 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn(
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -3965,7 +4060,11 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn(
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -4184,7 +4283,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -4242,7 +4346,11 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOf
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -4254,7 +4362,11 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOf
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -4390,7 +4502,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -4448,7 +4565,11 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -4460,7 +4581,11 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -4580,7 +4705,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -4678,7 +4808,11 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -4691,7 +4825,11 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -4934,7 +5072,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -5032,7 +5175,11 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -5045,7 +5192,11 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -5272,7 +5423,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -5329,7 +5485,11 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -5340,7 +5500,11 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -5472,7 +5636,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -5529,7 +5698,11 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn(
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -5540,7 +5713,11 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn(
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -5656,7 +5833,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -5753,7 +5935,11 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -5765,7 +5951,11 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -6000,7 +6190,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -6097,7 +6292,11 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(f
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -6109,7 +6308,11 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(f
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -6328,7 +6531,12 @@ FIRST_FIELD_WRITTEN:
 	}
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 
 }
 
@@ -6384,7 +6592,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -6396,7 +6608,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -6536,7 +6752,12 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 		}
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -6592,7 +6813,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -6604,7 +6829,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -6728,7 +6957,12 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 		}
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -6818,7 +7052,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -6831,7 +7069,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -7081,7 +7323,12 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 		}
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -7171,7 +7418,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -7184,7 +7435,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -7418,7 +7673,12 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 		}
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -7473,7 +7733,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -7484,7 +7748,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -7620,7 +7888,12 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 		}
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -7675,7 +7948,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -7686,7 +7963,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -7806,7 +8087,12 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 		}
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -7895,7 +8181,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -7907,7 +8197,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -8149,7 +8443,12 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 		}
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -8238,7 +8537,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -8250,7 +8553,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -8476,7 +8783,12 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 		}
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -8538,7 +8850,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -8550,7 +8866,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -8690,7 +9010,12 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 		}
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -8752,7 +9077,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -8764,7 +9093,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -8888,7 +9221,12 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 		}
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -8990,7 +9328,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -9003,7 +9345,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -9253,7 +9599,12 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 		}
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -9355,7 +9706,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -9368,7 +9723,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -9602,7 +9961,12 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 		}
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -9663,7 +10027,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -9674,7 +10042,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -9810,7 +10182,12 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 		}
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -9871,7 +10248,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -9882,7 +10263,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -10002,7 +10387,12 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 		}
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -10103,7 +10493,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -10115,7 +10509,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -10357,7 +10755,12 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 		}
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }
 
@@ -10458,7 +10861,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -10470,7 +10877,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						return w.writer.Write(w.recordBuf)
+						if n, err := w.writer.Write(w.recordBuf); err != nil {
+							return n, writeIOErr{err}
+						} else {
+							return n, nil
+						}
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -10696,6 +11107,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 		}
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-		return w.writer.Write(w.recordBuf)
+
+		if n, err := w.writer.Write(w.recordBuf); err != nil {
+			return n, writeIOErr{err}
+		} else {
+			return n, nil
+		}
 	}
 }

@@ -1654,6 +1654,10 @@ func (r *secOpReader) defaultAppendRecBuf(b ...byte) bool {
 }
 
 func (r *secOpReader) appendRecBufWithMemclear(b ...byte) bool {
+	if len(b) == 0 {
+		return false
+	}
+
 	oldRef := r.recordBuf
 
 	r.recordBuf = append(r.recordBuf, b...)
@@ -1675,6 +1679,10 @@ func (r *secOpReader) appendRecBufWithMemclear(b ...byte) bool {
 
 func (r *secOpReader) appendRecBufMaxCheck(max int) func(...byte) bool {
 	return func(b ...byte) bool {
+		if len(b) == 0 {
+			return false
+		}
+
 		// check if addition exceeds max or overflows
 		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
 			// simulate adding bytes up to the max
@@ -1692,6 +1700,10 @@ func (r *secOpReader) appendRecBufMaxCheck(max int) func(...byte) bool {
 
 func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func(...byte) bool {
 	return func(b ...byte) bool {
+		if len(b) == 0 {
+			return false
+		}
+
 		// check if addition exceeds max or overflows
 		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
 			// simulate adding bytes up to the max

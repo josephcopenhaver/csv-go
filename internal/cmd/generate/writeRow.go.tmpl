@@ -115,7 +115,11 @@ func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					{{template "appendRec0" .}}w.twoQuotes[:w.twoQuotesByteLen]{{template "appendRecJoin" .}}w.recordSepBytes[:w.recordSepByteLen]{{template "appendRec1" .}}
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -127,7 +131,11 @@ func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					{{template "appendRec0" .}}w.twoQuotes[:w.twoQuotesByteLen]{{template "appendRecJoin" .}}w.recordSepBytes[:w.recordSepByteLen]{{template "appendRec1" .}}
-					return w.writer.Write(w.recordBuf)
+					if n, err := w.writer.Write(w.recordBuf); err != nil {
+						return n, writeIOErr{err}
+					} else {
+						return n, nil
+					}
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -391,7 +399,12 @@ SUBSEQUENT_FIELD_WRITE:
 	}
 
 	{{template "appendRec0" .}}w.recordSepBytes[:w.recordSepByteLen]{{template "appendRec1" .}}
-	return w.writer.Write(w.recordBuf)
+
+	if n, err := w.writer.Write(w.recordBuf); err != nil {
+		return n, writeIOErr{err}
+	} else {
+		return n, nil
+	}
 {{if .ForceQuoteCommentStart -}}
 }
 {{- end}}

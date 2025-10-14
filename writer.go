@@ -765,17 +765,17 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		bitFlags:             bitFlags,
 	}
 
-	// TODO: can clear w.setWriteRowStrategy at the same time as the first record is written
 	w.setWriteRowStrategy = w.newSetWriteRowStrategyFunc(cfg.clearMemoryAfterFree, cfg.escapeSet, cfg.errOnNonUTF8, cfg.fwOverlapsControlRunes)
-
 	w.setWriteRowStrategy(false)
 
 	return w, nil
 }
 
 func (w *Writer) newSetWriteRowStrategyFunc(clearMemoryAfterFree, escapeSet, errOnNonUTF8, fwOverlapsControlRunes bool) func(bool) {
+
 	crOverlaps := fwOverlapsControlRunes
 	var f func([]FieldWriter) (int, error)
+
 	return func(fwOverlapsControlRunes bool) {
 		if fwOverlapsControlRunes {
 			if crOverlaps {
@@ -857,6 +857,13 @@ func (w *Writer) newSetWriteRowStrategyFunc(clearMemoryAfterFree, escapeSet, err
 		}
 
 		w.writeRow = func(row []FieldWriter) (int, error) {
+			// freeing no longer useful internal allocations
+			//
+			// note that WriteHEader also performs this operation
+			// since it is not used after headers are written or
+			// the first row has been written
+			w.setWriteRowStrategy = nil
+
 			w.writeRow = f
 			w.bitFlags |= wFlagHeaderWritten
 			return w.writeRow(row)
@@ -1100,9 +1107,17 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 		return result, errors.Join(ErrBadConfig, err)
 	}
 
+	// freeing no longer useful internal allocations
+	//
+	// note that WriteRow also performs this operation
+	// since it is not used after headers are written or
+	// the first row has been written
+	setWriteRowStrategy := w.setWriteRowStrategy
+	w.setWriteRowStrategy = nil
+
 	if cfg.commentLinesSet {
 		if strings.ContainsRune(fieldWriterTypesRuneList, cfg.commentRune) {
-			w.setWriteRowStrategy(true)
+			setWriteRowStrategy(true)
 		}
 		w.writeRow = w.writeRowAfterHeader(cfg.commentRune)
 
