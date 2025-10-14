@@ -58,7 +58,9 @@ const (
 	maxLenSerializedTime    = 35
 	maxLenSerializedBool    = 1
 	maxLenSerializedFloat64 = 24
-	// boundedFieldWritersMaxByteLen describes fieldWriters with fixed lengths (so bytes other than rune, bytes, and string plus their UTF8 variants for the case of bytes and string)
+	// boundedFieldWritersMaxByteLen is the maximum output byte length of the fieldWriter types that serialize to bounded byte sizes (so types other than bytes, and string plus their UTF8 variants for the case of bytes and string)
+	//
+	// it should match the maxLenSerializedTime value
 	boundedFieldWritersMaxByteLen = 35
 
 	invalidRuneUTF8Encoded = 0xEFBFBD
@@ -69,6 +71,7 @@ const (
 	// invalid
 	invalidRuneUTF8EncodedWithOffset = ((2 << (8 * 4)) | invalidRuneUTF8Encoded)
 
+	// fieldWriterTypesRuneList contains all non rune, bytes, and string type output byte values which can permute into various combinations
 	fieldWriterTypesRuneList = "-:.+0123456789aefInNTZ" // 0-9, float, NaN, Inf, time
 )
 
