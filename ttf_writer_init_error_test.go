@@ -169,8 +169,11 @@ func TestFunctionalWriterInitializationErrorPaths(t *testing.T) {
 			newOpts: []csv.WriterOption{
 				csv.WriterOpts().InitialFieldBufferSize(-1),
 			},
-			newWriterErrIs:  []error{csv.ErrBadConfig},
-			newWriterErrStr: csv.ErrBadConfig.Error() + "\ninitial field buffer size must be greater than or equal to zero",
+			//
+			// no error anymore because of deprecation
+			//
+			// newWriterErrIs:  []error{csv.ErrBadConfig},
+			// newWriterErrStr: csv.ErrBadConfig.Error() + "\ninitial field buffer size must be greater than or equal to zero",
 		},
 		{
 			when: "InitialFieldBufferSize and InitialFieldBuffer used",
@@ -178,8 +181,11 @@ func TestFunctionalWriterInitializationErrorPaths(t *testing.T) {
 				csv.WriterOpts().InitialFieldBufferSize(0),
 				csv.WriterOpts().InitialFieldBuffer(nil),
 			},
-			newWriterErrIs:  []error{csv.ErrBadConfig},
-			newWriterErrStr: csv.ErrBadConfig.Error() + "\ninitial field buffer size cannot be specified when also setting the initial field buffer",
+			//
+			// no error anymore because of deprecation
+			//
+			// newWriterErrIs:  []error{csv.ErrBadConfig},
+			// newWriterErrStr: csv.ErrBadConfig.Error() + "\ninitial field buffer size cannot be specified when also setting the initial field buffer",
 		},
 	}
 
