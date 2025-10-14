@@ -109,3 +109,13 @@ func TestUnitWriterInitializationBufferPaths(t *testing.T) {
 		is.Equal(255, cap(cw.recordBuf))
 	}
 }
+
+func Test_isFieldWriterRune(t *testing.T) {
+	is := assert.New(t)
+
+	is.False(isFieldWriterRune('|'))
+
+	for _, r := range fieldWriterTypesRuneList {
+		is.True(isFieldWriterRune(r))
+	}
+}
