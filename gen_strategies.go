@@ -2121,36 +2121,6 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapO
 		w.recordBuf = w.recordBuf[:0]
 	}()
 
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-				return
-			}
-			i += scanIdx
-
-			w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-			loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-			scanIdx = loadIdx
-		}
-	}
-
 	// write the first field
 	{
 		f := &fields[0]
@@ -2219,20 +2189,21 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapO
 			goto FIRST_FIELD_WRITTEN
 		}
 
-		w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 		r, n := utf8.DecodeRune(src[i:])
 		switch r {
 		case w.quote:
+			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 			w.recordBuf = append(w.recordBuf, src[:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-			srcLoad(src, i+n, i+n)
+			w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 		case w.escape:
+			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 			w.recordBuf = append(w.recordBuf, src[:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			srcLoad(src, i+n, i+n)
+			w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 		default:
-			srcLoad(src, 0, i+n)
+			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+			w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 		}
 
 		w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2296,20 +2267,21 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2333,36 +2305,6 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapO
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
-
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-				return
-			}
-			i += scanIdx
-
-			w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-			loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-			scanIdx = loadIdx
-		}
-	}
 
 	// write the first field
 	{
@@ -2424,20 +2366,21 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapO
 			goto FIRST_FIELD_WRITTEN
 		}
 
-		w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 		r, n := utf8.DecodeRune(src[i:])
 		switch r {
 		case w.quote:
+			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 			w.recordBuf = append(w.recordBuf, src[:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-			srcLoad(src, i+n, i+n)
+			w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 		case w.escape:
+			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 			w.recordBuf = append(w.recordBuf, src[:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			srcLoad(src, i+n, i+n)
+			w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 		default:
-			srcLoad(src, 0, i+n)
+			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+			w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 		}
 
 		w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2493,20 +2436,21 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2530,69 +2474,6 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOf
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
-
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-				return
-			}
-			i += scanIdx
-
-			w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-			loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-			scanIdx = loadIdx
-		}
-	}
-
-	// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-	// scan operation also validates that the field contents are valid utf8 sequences.
-	srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-		for {
-			r, n := utf8.DecodeRune(src[scanIdx:])
-			if n == 0 {
-				// all good and no overlap issues, so just directly copy src
-				w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-				return nil
-			}
-			if n == 1 && r == utf8.RuneError {
-				return ErrNonUTF8InRecord
-			}
-
-			if r != w.quote {
-				scanIdx += n
-				continue
-			}
-
-			//
-			// found a quote rune
-			//
-
-			w.recordBuf = append(w.recordBuf, src[loadIdx:scanIdx]...)
-
-			scanIdx += n
-			loadIdx = scanIdx
-
-			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-		}
-	}
 
 	// write the first field
 	{
@@ -2666,20 +2547,21 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOf
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2713,20 +2595,21 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOf
 			// found a control rune of some kind
 			//
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			var err error
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 			default:
-				err = srcLoadWithEncodingCheck(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -2798,20 +2681,21 @@ FIRST_FIELD_WRITTEN:
 					break
 				}
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2844,20 +2728,21 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				var err error
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -2887,69 +2772,6 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
 		w.recordBuf = w.recordBuf[:0]
 	}()
 
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-				return
-			}
-			i += scanIdx
-
-			w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-			loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-			scanIdx = loadIdx
-		}
-	}
-
-	// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-	// scan operation also validates that the field contents are valid utf8 sequences.
-	srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-		for {
-			r, n := utf8.DecodeRune(src[scanIdx:])
-			if n == 0 {
-				// all good and no overlap issues, so just directly copy src
-				w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-				return nil
-			}
-			if n == 1 && r == utf8.RuneError {
-				return ErrNonUTF8InRecord
-			}
-
-			if r != w.quote {
-				scanIdx += n
-				continue
-			}
-
-			//
-			// found a quote rune
-			//
-
-			w.recordBuf = append(w.recordBuf, src[loadIdx:scanIdx]...)
-
-			scanIdx += n
-			loadIdx = scanIdx
-
-			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-		}
-	}
-
 	// write the first field
 	{
 		f := &fields[0]
@@ -3014,20 +2836,21 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -3061,20 +2884,21 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
 			// found a control rune of some kind
 			//
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			var err error
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 			default:
-				err = srcLoadWithEncodingCheck(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -3138,20 +2962,21 @@ FIRST_FIELD_WRITTEN:
 					break
 				}
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -3184,20 +3009,21 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				var err error
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -3227,36 +3053,6 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOf
 		w.recordBuf = w.recordBuf[:0]
 	}()
 
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.appendRec(src[loadIdx:])
-				return
-			}
-			i += scanIdx
-
-			w.appendRec(src[loadIdx:i])
-
-			w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-
-			loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-			scanIdx = loadIdx
-		}
-	}
-
 	// write the first field
 	{
 		f := &fields[0]
@@ -3323,18 +3119,17 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOf
 			goto FIRST_FIELD_WRITTEN
 		}
 
-		w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 		r, n := utf8.DecodeRune(src[i:])
 		switch r {
 		case w.quote:
-			w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-			srcLoad(src, i+n, i+n)
+			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+			w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 		case w.escape:
-			w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-			srcLoad(src, i+n, i+n)
+			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+			w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 		default:
-			srcLoad(src, 0, i+n)
+			w.appendRec(w.quoteBytes[:w.quoteByteLen])
+			w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 		}
 
 		w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -3398,18 +3193,17 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -3433,36 +3227,6 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
-
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.appendRec(src[loadIdx:])
-				return
-			}
-			i += scanIdx
-
-			w.appendRec(src[loadIdx:i])
-
-			w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-
-			loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-			scanIdx = loadIdx
-		}
-	}
 
 	// write the first field
 	{
@@ -3522,18 +3286,17 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn
 			goto FIRST_FIELD_WRITTEN
 		}
 
-		w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 		r, n := utf8.DecodeRune(src[i:])
 		switch r {
 		case w.quote:
-			w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-			srcLoad(src, i+n, i+n)
+			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+			w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 		case w.escape:
-			w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-			srcLoad(src, i+n, i+n)
+			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+			w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 		default:
-			srcLoad(src, 0, i+n)
+			w.appendRec(w.quoteBytes[:w.quoteByteLen])
+			w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 		}
 
 		w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -3589,18 +3352,17 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -3624,69 +3386,6 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
-
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.appendRec(src[loadIdx:])
-				return
-			}
-			i += scanIdx
-
-			w.appendRec(src[loadIdx:i])
-
-			w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-
-			loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-			scanIdx = loadIdx
-		}
-	}
-
-	// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-	// scan operation also validates that the field contents are valid utf8 sequences.
-	srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-		for {
-			r, n := utf8.DecodeRune(src[scanIdx:])
-			if n == 0 {
-				// all good and no overlap issues, so just directly copy src
-				w.appendRec(src[loadIdx:])
-				return nil
-			}
-			if n == 1 && r == utf8.RuneError {
-				return ErrNonUTF8InRecord
-			}
-
-			if r != w.quote {
-				scanIdx += n
-				continue
-			}
-
-			//
-			// found a quote rune
-			//
-
-			w.appendRec(src[loadIdx:scanIdx])
-
-			scanIdx += n
-			loadIdx = scanIdx
-
-			w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-
-		}
-	}
 
 	// write the first field
 	{
@@ -3758,18 +3457,17 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -3803,18 +3501,17 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
 			// found a control rune of some kind
 			//
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			var err error
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 			default:
-				err = srcLoadWithEncodingCheck(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -3886,18 +3583,17 @@ FIRST_FIELD_WRITTEN:
 					break
 				}
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -3930,18 +3626,17 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				var err error
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -3971,69 +3666,6 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn(
 		w.recordBuf = w.recordBuf[:0]
 	}()
 
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.appendRec(src[loadIdx:])
-				return
-			}
-			i += scanIdx
-
-			w.appendRec(src[loadIdx:i])
-
-			w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-
-			loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-			scanIdx = loadIdx
-		}
-	}
-
-	// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-	// scan operation also validates that the field contents are valid utf8 sequences.
-	srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-		for {
-			r, n := utf8.DecodeRune(src[scanIdx:])
-			if n == 0 {
-				// all good and no overlap issues, so just directly copy src
-				w.appendRec(src[loadIdx:])
-				return nil
-			}
-			if n == 1 && r == utf8.RuneError {
-				return ErrNonUTF8InRecord
-			}
-
-			if r != w.quote {
-				scanIdx += n
-				continue
-			}
-
-			//
-			// found a quote rune
-			//
-
-			w.appendRec(src[loadIdx:scanIdx])
-
-			scanIdx += n
-			loadIdx = scanIdx
-
-			w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-
-		}
-	}
-
 	// write the first field
 	{
 		f := &fields[0]
@@ -4096,18 +3728,17 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn(
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -4141,18 +3772,17 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn(
 			// found a control rune of some kind
 			//
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			var err error
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 			default:
-				err = srcLoadWithEncodingCheck(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -4216,18 +3846,17 @@ FIRST_FIELD_WRITTEN:
 					break
 				}
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -4260,18 +3889,17 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				var err error
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -4301,42 +3929,6 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOf
 		w.recordBuf = w.recordBuf[:0]
 	}()
 
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote or escape runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-				return
-			}
-			i += scanIdx
-
-			w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-			default:
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			}
-
-			loadIdx = i + n
-
-			scanIdx = loadIdx
-		}
-	}
-
 	// write the first field
 	{
 		f := &fields[0]
@@ -4405,20 +3997,21 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOf
 			goto FIRST_FIELD_WRITTEN
 		}
 
-		w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 		r, n := utf8.DecodeRune(src[i:])
 		switch r {
 		case w.quote:
+			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 			w.recordBuf = append(w.recordBuf, src[:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-			srcLoad(src, i+n, i+n)
+			w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 		case w.escape:
+			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 			w.recordBuf = append(w.recordBuf, src[:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			srcLoad(src, i+n, i+n)
+			w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 		default:
-			srcLoad(src, 0, i+n)
+			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+			w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 		}
 
 		w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4482,20 +4075,21 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4519,42 +4113,6 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
-
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote or escape runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-				return
-			}
-			i += scanIdx
-
-			w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-			default:
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			}
-
-			loadIdx = i + n
-
-			scanIdx = loadIdx
-		}
-	}
 
 	// write the first field
 	{
@@ -4616,20 +4174,21 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn
 			goto FIRST_FIELD_WRITTEN
 		}
 
-		w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 		r, n := utf8.DecodeRune(src[i:])
 		switch r {
 		case w.quote:
+			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 			w.recordBuf = append(w.recordBuf, src[:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-			srcLoad(src, i+n, i+n)
+			w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 		case w.escape:
+			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 			w.recordBuf = append(w.recordBuf, src[:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			srcLoad(src, i+n, i+n)
+			w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 		default:
-			srcLoad(src, 0, i+n)
+			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+			w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 		}
 
 		w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4685,20 +4244,21 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4722,81 +4282,6 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
-
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote or escape runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-				return
-			}
-			i += scanIdx
-
-			w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-			default:
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			}
-
-			loadIdx = i + n
-
-			scanIdx = loadIdx
-		}
-	}
-
-	// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-	// scan operation also validates that the field contents are valid utf8 sequences.
-	srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-		for {
-			r, n := utf8.DecodeRune(src[scanIdx:])
-			if n == 0 {
-				// all good and no overlap issues, so just directly copy src
-				w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-				return nil
-			}
-			if n == 1 && r == utf8.RuneError {
-				return ErrNonUTF8InRecord
-			}
-
-			if !strings.ContainsRune(w.escapeControlRunes, r) {
-				scanIdx += n
-				continue
-			}
-
-			//
-			// found a control rune of some kind
-			//
-
-			w.recordBuf = append(w.recordBuf, src[loadIdx:scanIdx]...)
-
-			scanIdx += n
-			loadIdx = scanIdx
-
-			if w.quote == r {
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				continue
-			}
-
-			w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			continue
-
-		}
-	}
 
 	// write the first field
 	{
@@ -4870,20 +4355,21 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4917,20 +4403,21 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
 			// found a control rune of some kind
 			//
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			var err error
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 			default:
-				err = srcLoadWithEncodingCheck(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -5002,20 +4489,21 @@ FIRST_FIELD_WRITTEN:
 					break
 				}
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -5048,20 +4536,21 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				var err error
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -5091,81 +4580,6 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(
 		w.recordBuf = w.recordBuf[:0]
 	}()
 
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote or escape runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-				return
-			}
-			i += scanIdx
-
-			w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-			default:
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			}
-
-			loadIdx = i + n
-
-			scanIdx = loadIdx
-		}
-	}
-
-	// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-	// scan operation also validates that the field contents are valid utf8 sequences.
-	srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-		for {
-			r, n := utf8.DecodeRune(src[scanIdx:])
-			if n == 0 {
-				// all good and no overlap issues, so just directly copy src
-				w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-				return nil
-			}
-			if n == 1 && r == utf8.RuneError {
-				return ErrNonUTF8InRecord
-			}
-
-			if !strings.ContainsRune(w.escapeControlRunes, r) {
-				scanIdx += n
-				continue
-			}
-
-			//
-			// found a control rune of some kind
-			//
-
-			w.recordBuf = append(w.recordBuf, src[loadIdx:scanIdx]...)
-
-			scanIdx += n
-			loadIdx = scanIdx
-
-			if w.quote == r {
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				continue
-			}
-
-			w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			continue
-
-		}
-	}
-
 	// write the first field
 	{
 		f := &fields[0]
@@ -5230,20 +4644,21 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -5277,20 +4692,21 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(
 			// found a control rune of some kind
 			//
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			var err error
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 			default:
-				err = srcLoadWithEncodingCheck(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -5354,20 +4770,21 @@ FIRST_FIELD_WRITTEN:
 					break
 				}
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -5400,20 +4817,21 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				var err error
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -5443,42 +4861,6 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
 		w.recordBuf = w.recordBuf[:0]
 	}()
 
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote or escape runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.appendRec(src[loadIdx:])
-				return
-			}
-			i += scanIdx
-
-			w.appendRec(src[loadIdx:i])
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-			default:
-				w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-			}
-
-			loadIdx = i + n
-
-			scanIdx = loadIdx
-		}
-	}
-
 	// write the first field
 	{
 		f := &fields[0]
@@ -5545,18 +4927,17 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
 			goto FIRST_FIELD_WRITTEN
 		}
 
-		w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 		r, n := utf8.DecodeRune(src[i:])
 		switch r {
 		case w.quote:
-			w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-			srcLoad(src, i+n, i+n)
+			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+			w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 		case w.escape:
-			w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-			srcLoad(src, i+n, i+n)
+			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+			w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 		default:
-			srcLoad(src, 0, i+n)
+			w.appendRec(w.quoteBytes[:w.quoteByteLen])
+			w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 		}
 
 		w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -5620,18 +5001,17 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -5655,42 +5035,6 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn(
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
-
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote or escape runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.appendRec(src[loadIdx:])
-				return
-			}
-			i += scanIdx
-
-			w.appendRec(src[loadIdx:i])
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-			default:
-				w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-			}
-
-			loadIdx = i + n
-
-			scanIdx = loadIdx
-		}
-	}
 
 	// write the first field
 	{
@@ -5750,18 +5094,17 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn(
 			goto FIRST_FIELD_WRITTEN
 		}
 
-		w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 		r, n := utf8.DecodeRune(src[i:])
 		switch r {
 		case w.quote:
-			w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-			srcLoad(src, i+n, i+n)
+			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+			w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 		case w.escape:
-			w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-			srcLoad(src, i+n, i+n)
+			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+			w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 		default:
-			srcLoad(src, 0, i+n)
+			w.appendRec(w.quoteBytes[:w.quoteByteLen])
+			w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 		}
 
 		w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -5817,18 +5160,17 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -5852,81 +5194,6 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
-
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote or escape runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.appendRec(src[loadIdx:])
-				return
-			}
-			i += scanIdx
-
-			w.appendRec(src[loadIdx:i])
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-			default:
-				w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-			}
-
-			loadIdx = i + n
-
-			scanIdx = loadIdx
-		}
-	}
-
-	// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-	// scan operation also validates that the field contents are valid utf8 sequences.
-	srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-		for {
-			r, n := utf8.DecodeRune(src[scanIdx:])
-			if n == 0 {
-				// all good and no overlap issues, so just directly copy src
-				w.appendRec(src[loadIdx:])
-				return nil
-			}
-			if n == 1 && r == utf8.RuneError {
-				return ErrNonUTF8InRecord
-			}
-
-			if !strings.ContainsRune(w.escapeControlRunes, r) {
-				scanIdx += n
-				continue
-			}
-
-			//
-			// found a control rune of some kind
-			//
-
-			w.appendRec(src[loadIdx:scanIdx])
-
-			scanIdx += n
-			loadIdx = scanIdx
-
-			if w.quote == r {
-				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-				continue
-			}
-
-			w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-			continue
-
-		}
-	}
 
 	// write the first field
 	{
@@ -5998,18 +5265,17 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -6043,18 +5309,17 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(
 			// found a control rune of some kind
 			//
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			var err error
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 			default:
-				err = srcLoadWithEncodingCheck(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -6126,18 +5391,17 @@ FIRST_FIELD_WRITTEN:
 					break
 				}
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -6170,18 +5434,17 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				var err error
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -6211,81 +5474,6 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(f
 		w.recordBuf = w.recordBuf[:0]
 	}()
 
-	// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-	// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-	// instance of quote or escape if applicable.
-	//
-	// It continues with appending the data up to a potentially additional quote or escape character, then
-	// appends the escaped version of that character and continues repeating that process for the rest of
-	// the field.
-	//
-	// Essentially the function does the same as the parent context except has no intent around overall
-	// quoting the field or detecting runes outside of the quote + escape character.
-	srcLoad := func(src []byte, loadIdx, scanIdx int) {
-		// escape any quote or escape runes found
-		for {
-			i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-			if i == -1 {
-				w.appendRec(src[loadIdx:])
-				return
-			}
-			i += scanIdx
-
-			w.appendRec(src[loadIdx:i])
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-			default:
-				w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-			}
-
-			loadIdx = i + n
-
-			scanIdx = loadIdx
-		}
-	}
-
-	// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-	// scan operation also validates that the field contents are valid utf8 sequences.
-	srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-		for {
-			r, n := utf8.DecodeRune(src[scanIdx:])
-			if n == 0 {
-				// all good and no overlap issues, so just directly copy src
-				w.appendRec(src[loadIdx:])
-				return nil
-			}
-			if n == 1 && r == utf8.RuneError {
-				return ErrNonUTF8InRecord
-			}
-
-			if !strings.ContainsRune(w.escapeControlRunes, r) {
-				scanIdx += n
-				continue
-			}
-
-			//
-			// found a control rune of some kind
-			//
-
-			w.appendRec(src[loadIdx:scanIdx])
-
-			scanIdx += n
-			loadIdx = scanIdx
-
-			if w.quote == r {
-				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-				continue
-			}
-
-			w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-			continue
-
-		}
-	}
-
 	// write the first field
 	{
 		f := &fields[0]
@@ -6348,18 +5536,17 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(f
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -6393,18 +5580,17 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(f
 			// found a control rune of some kind
 			//
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			var err error
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				err = srcLoadWithEncodingCheck(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 			default:
-				err = srcLoadWithEncodingCheck(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -6468,18 +5654,17 @@ FIRST_FIELD_WRITTEN:
 					break
 				}
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -6512,18 +5697,17 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				var err error
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -6557,36 +5741,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 		}()
 		w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOff
 
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-					return
-				}
-				i += scanIdx
-
-				w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-				loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-				scanIdx = loadIdx
-			}
-		}
-
 		// write the first field
 		{
 			f := &fields[0]
@@ -6659,20 +5813,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 				}
 			}
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -6736,20 +5891,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 					break
 				}
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -6777,36 +5933,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 			w.recordBuf = w.recordBuf[:0]
 		}()
 		w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOn
-
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-					return
-				}
-				i += scanIdx
-
-				w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-				loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-				scanIdx = loadIdx
-			}
-		}
 
 		// write the first field
 		{
@@ -6872,20 +5998,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 				}
 			}
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -6941,20 +6068,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 					break
 				}
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -6982,69 +6110,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 			w.recordBuf = w.recordBuf[:0]
 		}()
 		w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOff
-
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-					return
-				}
-				i += scanIdx
-
-				w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-				loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-				scanIdx = loadIdx
-			}
-		}
-
-		// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-		// scan operation also validates that the field contents are valid utf8 sequences.
-		srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-			for {
-				r, n := utf8.DecodeRune(src[scanIdx:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-					return nil
-				}
-				if n == 1 && r == utf8.RuneError {
-					return ErrNonUTF8InRecord
-				}
-
-				if r != w.quote {
-					scanIdx += n
-					continue
-				}
-
-				//
-				// found a quote rune
-				//
-
-				w.recordBuf = append(w.recordBuf, src[loadIdx:scanIdx]...)
-
-				scanIdx += n
-				loadIdx = scanIdx
-
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-			}
-		}
 
 		// write the first field
 		{
@@ -7122,20 +6187,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 					}
 				}
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -7148,7 +6214,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 			// continue loading
 
 			isFirstRune := true
-
 			i := 0
 			for {
 				r, n := utf8.DecodeRune(src[i:])
@@ -7171,20 +6236,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 				// found a control rune of some kind
 				//
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				var err error
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -7256,20 +6322,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 						break
 					}
 
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 					r, n := utf8.DecodeRune(src[i:])
 					switch r {
 					case w.quote:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						srcLoad(src, i+n, i+n)
+						w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 					case w.escape:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						srcLoad(src, i+n, i+n)
+						w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 					default:
-						srcLoad(src, 0, i+n)
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+						w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 					}
 
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -7302,20 +6369,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 					// found a control rune of some kind
 					//
 
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 					var err error
 					switch r {
 					case w.quote:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 					case w.escape:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 					default:
-						err = srcLoadWithEncodingCheck(src, 0, i+n)
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+						err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
 					}
 					if err != nil {
 						return 0, err
@@ -7349,69 +6417,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 		}()
 		w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
 
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-					return
-				}
-				i += scanIdx
-
-				w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-				loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-				scanIdx = loadIdx
-			}
-		}
-
-		// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-		// scan operation also validates that the field contents are valid utf8 sequences.
-		srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-			for {
-				r, n := utf8.DecodeRune(src[scanIdx:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-					return nil
-				}
-				if n == 1 && r == utf8.RuneError {
-					return ErrNonUTF8InRecord
-				}
-
-				if r != w.quote {
-					scanIdx += n
-					continue
-				}
-
-				//
-				// found a quote rune
-				//
-
-				w.recordBuf = append(w.recordBuf, src[loadIdx:scanIdx]...)
-
-				scanIdx += n
-				loadIdx = scanIdx
-
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-			}
-		}
-
 		// write the first field
 		{
 			f := &fields[0]
@@ -7480,20 +6485,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 					}
 				}
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -7506,7 +6512,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 			// continue loading
 
 			isFirstRune := true
-
 			i := 0
 			for {
 				r, n := utf8.DecodeRune(src[i:])
@@ -7529,20 +6534,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 				// found a control rune of some kind
 				//
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				var err error
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -7606,20 +6612,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 						break
 					}
 
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 					r, n := utf8.DecodeRune(src[i:])
 					switch r {
 					case w.quote:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						srcLoad(src, i+n, i+n)
+						w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 					case w.escape:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						srcLoad(src, i+n, i+n)
+						w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
 					default:
-						srcLoad(src, 0, i+n)
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+						w.loadQF_memclearOff_escapeOff(src, 0, i+n)
 					}
 
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -7652,20 +6659,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 					// found a control rune of some kind
 					//
 
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 					var err error
 					switch r {
 					case w.quote:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 					case w.escape:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
 					default:
-						err = srcLoadWithEncodingCheck(src, 0, i+n)
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+						err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
 					}
 					if err != nil {
 						return 0, err
@@ -7699,36 +6707,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 		}()
 		w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOff
 
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.appendRec(src[loadIdx:])
-					return
-				}
-				i += scanIdx
-
-				w.appendRec(src[loadIdx:i])
-
-				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-
-				loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-				scanIdx = loadIdx
-			}
-		}
-
 		// write the first field
 		{
 			f := &fields[0]
@@ -7799,18 +6777,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 				}
 			}
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -7874,18 +6851,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 					break
 				}
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -7913,36 +6889,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 			w.recordBuf = w.recordBuf[:0]
 		}()
 		w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn
-
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.appendRec(src[loadIdx:])
-					return
-				}
-				i += scanIdx
-
-				w.appendRec(src[loadIdx:i])
-
-				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-
-				loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-				scanIdx = loadIdx
-			}
-		}
 
 		// write the first field
 		{
@@ -8006,18 +6952,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 				}
 			}
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -8073,18 +7018,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 					break
 				}
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -8112,69 +7056,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 			w.recordBuf = w.recordBuf[:0]
 		}()
 		w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
-
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.appendRec(src[loadIdx:])
-					return
-				}
-				i += scanIdx
-
-				w.appendRec(src[loadIdx:i])
-
-				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-
-				loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-				scanIdx = loadIdx
-			}
-		}
-
-		// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-		// scan operation also validates that the field contents are valid utf8 sequences.
-		srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-			for {
-				r, n := utf8.DecodeRune(src[scanIdx:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.appendRec(src[loadIdx:])
-					return nil
-				}
-				if n == 1 && r == utf8.RuneError {
-					return ErrNonUTF8InRecord
-				}
-
-				if r != w.quote {
-					scanIdx += n
-					continue
-				}
-
-				//
-				// found a quote rune
-				//
-
-				w.appendRec(src[loadIdx:scanIdx])
-
-				scanIdx += n
-				loadIdx = scanIdx
-
-				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-
-			}
-		}
 
 		// write the first field
 		{
@@ -8250,18 +7131,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 					}
 				}
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -8274,7 +7154,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 			// continue loading
 
 			isFirstRune := true
-
 			i := 0
 			for {
 				r, n := utf8.DecodeRune(src[i:])
@@ -8297,18 +7176,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 				// found a control rune of some kind
 				//
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				var err error
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -8380,18 +7258,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 						break
 					}
 
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 					r, n := utf8.DecodeRune(src[i:])
 					switch r {
 					case w.quote:
-						w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						srcLoad(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+						w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 					case w.escape:
-						w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						srcLoad(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+						w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 					default:
-						srcLoad(src, 0, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen])
+						w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 					}
 
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -8424,18 +7301,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 					// found a control rune of some kind
 					//
 
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 					var err error
 					switch r {
 					case w.quote:
-						w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+						err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 					case w.escape:
-						w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+						err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 					default:
-						err = srcLoadWithEncodingCheck(src, 0, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen])
+						err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
 					}
 					if err != nil {
 						return 0, err
@@ -8469,69 +7345,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 		}()
 		w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn
 
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.appendRec(src[loadIdx:])
-					return
-				}
-				i += scanIdx
-
-				w.appendRec(src[loadIdx:i])
-
-				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-
-				loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-
-				scanIdx = loadIdx
-			}
-		}
-
-		// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-		// scan operation also validates that the field contents are valid utf8 sequences.
-		srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-			for {
-				r, n := utf8.DecodeRune(src[scanIdx:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.appendRec(src[loadIdx:])
-					return nil
-				}
-				if n == 1 && r == utf8.RuneError {
-					return ErrNonUTF8InRecord
-				}
-
-				if r != w.quote {
-					scanIdx += n
-					continue
-				}
-
-				//
-				// found a quote rune
-				//
-
-				w.appendRec(src[loadIdx:scanIdx])
-
-				scanIdx += n
-				loadIdx = scanIdx
-
-				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-
-			}
-		}
-
 		// write the first field
 		{
 			f := &fields[0]
@@ -8598,18 +7411,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 					}
 				}
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -8622,7 +7434,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 			// continue loading
 
 			isFirstRune := true
-
 			i := 0
 			for {
 				r, n := utf8.DecodeRune(src[i:])
@@ -8645,18 +7456,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 				// found a control rune of some kind
 				//
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				var err error
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -8720,18 +7530,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 						break
 					}
 
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 					r, n := utf8.DecodeRune(src[i:])
 					switch r {
 					case w.quote:
-						w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						srcLoad(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+						w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 					case w.escape:
-						w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						srcLoad(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+						w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
 					default:
-						srcLoad(src, 0, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen])
+						w.loadQF_memclearOn_escapeOff(src, 0, i+n)
 					}
 
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -8764,18 +7573,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 					// found a control rune of some kind
 					//
 
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 					var err error
 					switch r {
 					case w.quote:
-						w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+						err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 					case w.escape:
-						w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+						err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
 					default:
-						err = srcLoadWithEncodingCheck(src, 0, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen])
+						err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
 					}
 					if err != nil {
 						return 0, err
@@ -8809,42 +7617,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 		}()
 		w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOff
 
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote or escape runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-					return
-				}
-				i += scanIdx
-
-				w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				default:
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				}
-
-				loadIdx = i + n
-
-				scanIdx = loadIdx
-			}
-		}
-
 		// write the first field
 		{
 			f := &fields[0]
@@ -8917,20 +7689,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 				}
 			}
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -8994,20 +7767,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 					break
 				}
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -9035,42 +7809,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 			w.recordBuf = w.recordBuf[:0]
 		}()
 		w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn
-
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote or escape runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-					return
-				}
-				i += scanIdx
-
-				w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				default:
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				}
-
-				loadIdx = i + n
-
-				scanIdx = loadIdx
-			}
-		}
 
 		// write the first field
 		{
@@ -9136,20 +7874,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 				}
 			}
 
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 			case w.escape:
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				srcLoad(src, i+n, i+n)
+				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+				w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -9205,20 +7944,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 					break
 				}
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -9246,81 +7986,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 			w.recordBuf = w.recordBuf[:0]
 		}()
 		w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
-
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote or escape runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-					return
-				}
-				i += scanIdx
-
-				w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				default:
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				}
-
-				loadIdx = i + n
-
-				scanIdx = loadIdx
-			}
-		}
-
-		// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-		// scan operation also validates that the field contents are valid utf8 sequences.
-		srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-			for {
-				r, n := utf8.DecodeRune(src[scanIdx:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-					return nil
-				}
-				if n == 1 && r == utf8.RuneError {
-					return ErrNonUTF8InRecord
-				}
-
-				if !strings.ContainsRune(w.escapeControlRunes, r) {
-					scanIdx += n
-					continue
-				}
-
-				//
-				// found a control rune of some kind
-				//
-
-				w.recordBuf = append(w.recordBuf, src[loadIdx:scanIdx]...)
-
-				scanIdx += n
-				loadIdx = scanIdx
-
-				if w.quote == r {
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					continue
-				}
-
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				continue
-
-			}
-		}
 
 		// write the first field
 		{
@@ -9398,20 +8063,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					}
 				}
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -9424,7 +8090,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 			// continue loading
 
 			isFirstRune := true
-
 			i := 0
 			for {
 				r, n := utf8.DecodeRune(src[i:])
@@ -9447,20 +8112,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 				// found a control rune of some kind
 				//
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				var err error
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -9532,20 +8198,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 						break
 					}
 
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 					r, n := utf8.DecodeRune(src[i:])
 					switch r {
 					case w.quote:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						srcLoad(src, i+n, i+n)
+						w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 					case w.escape:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						srcLoad(src, i+n, i+n)
+						w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 					default:
-						srcLoad(src, 0, i+n)
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+						w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 					}
 
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -9578,20 +8245,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					// found a control rune of some kind
 					//
 
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 					var err error
 					switch r {
 					case w.quote:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 					case w.escape:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 					default:
-						err = srcLoadWithEncodingCheck(src, 0, i+n)
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+						err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
 					}
 					if err != nil {
 						return 0, err
@@ -9625,81 +8293,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 		}()
 		w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn
 
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote or escape runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-					return
-				}
-				i += scanIdx
-
-				w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				default:
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				}
-
-				loadIdx = i + n
-
-				scanIdx = loadIdx
-			}
-		}
-
-		// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-		// scan operation also validates that the field contents are valid utf8 sequences.
-		srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-			for {
-				r, n := utf8.DecodeRune(src[scanIdx:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-					return nil
-				}
-				if n == 1 && r == utf8.RuneError {
-					return ErrNonUTF8InRecord
-				}
-
-				if !strings.ContainsRune(w.escapeControlRunes, r) {
-					scanIdx += n
-					continue
-				}
-
-				//
-				// found a control rune of some kind
-				//
-
-				w.recordBuf = append(w.recordBuf, src[loadIdx:scanIdx]...)
-
-				scanIdx += n
-				loadIdx = scanIdx
-
-				if w.quote == r {
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					continue
-				}
-
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				continue
-
-			}
-		}
-
 		// write the first field
 		{
 			f := &fields[0]
@@ -9768,20 +8361,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					}
 				}
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					srcLoad(src, i+n, i+n)
+					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -9794,7 +8388,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 			// continue loading
 
 			isFirstRune := true
-
 			i := 0
 			for {
 				r, n := utf8.DecodeRune(src[i:])
@@ -9817,20 +8410,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 				// found a control rune of some kind
 				//
 
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 				var err error
 				switch r {
 				case w.quote:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 				case w.escape:
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -9894,20 +8488,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 						break
 					}
 
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 					r, n := utf8.DecodeRune(src[i:])
 					switch r {
 					case w.quote:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						srcLoad(src, i+n, i+n)
+						w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 					case w.escape:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						srcLoad(src, i+n, i+n)
+						w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
 					default:
-						srcLoad(src, 0, i+n)
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+						w.loadQF_memclearOff_escapeOn(src, 0, i+n)
 					}
 
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -9940,20 +8535,21 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					// found a control rune of some kind
 					//
 
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
 					var err error
 					switch r {
 					case w.quote:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 					case w.escape:
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
 					default:
-						err = srcLoadWithEncodingCheck(src, 0, i+n)
+						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
+						err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
 					}
 					if err != nil {
 						return 0, err
@@ -9987,42 +8583,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 		}()
 		w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
 
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote or escape runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.appendRec(src[loadIdx:])
-					return
-				}
-				i += scanIdx
-
-				w.appendRec(src[loadIdx:i])
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-				default:
-					w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-				}
-
-				loadIdx = i + n
-
-				scanIdx = loadIdx
-			}
-		}
-
 		// write the first field
 		{
 			f := &fields[0]
@@ -10093,18 +8653,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 				}
 			}
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -10168,18 +8727,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 					break
 				}
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -10207,42 +8765,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 			w.recordBuf = w.recordBuf[:0]
 		}()
 		w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn
-
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote or escape runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.appendRec(src[loadIdx:])
-					return
-				}
-				i += scanIdx
-
-				w.appendRec(src[loadIdx:i])
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-				default:
-					w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-				}
-
-				loadIdx = i + n
-
-				scanIdx = loadIdx
-			}
-		}
 
 		// write the first field
 		{
@@ -10306,18 +8828,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 				}
 			}
 
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 			r, n := utf8.DecodeRune(src[i:])
 			switch r {
 			case w.quote:
-				w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 			case w.escape:
-				w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				srcLoad(src, i+n, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 			default:
-				srcLoad(src, 0, i+n)
+				w.appendRec(w.quoteBytes[:w.quoteByteLen])
+				w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -10373,18 +8894,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 					break
 				}
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -10412,81 +8932,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 			w.recordBuf = w.recordBuf[:0]
 		}()
 		w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff
-
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote or escape runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.appendRec(src[loadIdx:])
-					return
-				}
-				i += scanIdx
-
-				w.appendRec(src[loadIdx:i])
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-				default:
-					w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-				}
-
-				loadIdx = i + n
-
-				scanIdx = loadIdx
-			}
-		}
-
-		// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-		// scan operation also validates that the field contents are valid utf8 sequences.
-		srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-			for {
-				r, n := utf8.DecodeRune(src[scanIdx:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.appendRec(src[loadIdx:])
-					return nil
-				}
-				if n == 1 && r == utf8.RuneError {
-					return ErrNonUTF8InRecord
-				}
-
-				if !strings.ContainsRune(w.escapeControlRunes, r) {
-					scanIdx += n
-					continue
-				}
-
-				//
-				// found a control rune of some kind
-				//
-
-				w.appendRec(src[loadIdx:scanIdx])
-
-				scanIdx += n
-				loadIdx = scanIdx
-
-				if w.quote == r {
-					w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-					continue
-				}
-
-				w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-				continue
-
-			}
-		}
 
 		// write the first field
 		{
@@ -10562,18 +9007,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 					}
 				}
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -10586,7 +9030,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 			// continue loading
 
 			isFirstRune := true
-
 			i := 0
 			for {
 				r, n := utf8.DecodeRune(src[i:])
@@ -10609,18 +9052,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				// found a control rune of some kind
 				//
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				var err error
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -10692,18 +9134,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 						break
 					}
 
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 					r, n := utf8.DecodeRune(src[i:])
 					switch r {
 					case w.quote:
-						w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						srcLoad(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+						w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 					case w.escape:
-						w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						srcLoad(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+						w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 					default:
-						srcLoad(src, 0, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen])
+						w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 					}
 
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -10736,18 +9177,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 					// found a control rune of some kind
 					//
 
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 					var err error
 					switch r {
 					case w.quote:
-						w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+						err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 					case w.escape:
-						w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+						err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 					default:
-						err = srcLoadWithEncodingCheck(src, 0, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen])
+						err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
 					}
 					if err != nil {
 						return 0, err
@@ -10781,81 +9221,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 		}()
 		w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn
 
-		// srcLoad is called after a quote, escape, or csv format sensitive character is found in the field data.
-		// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-		// instance of quote or escape if applicable.
-		//
-		// It continues with appending the data up to a potentially additional quote or escape character, then
-		// appends the escaped version of that character and continues repeating that process for the rest of
-		// the field.
-		//
-		// Essentially the function does the same as the parent context except has no intent around overall
-		// quoting the field or detecting runes outside of the quote + escape character.
-		srcLoad := func(src []byte, loadIdx, scanIdx int) {
-			// escape any quote or escape runes found
-			for {
-				i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-				if i == -1 {
-					w.appendRec(src[loadIdx:])
-					return
-				}
-				i += scanIdx
-
-				w.appendRec(src[loadIdx:i])
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-				default:
-					w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-				}
-
-				loadIdx = i + n
-
-				scanIdx = loadIdx
-			}
-		}
-
-		// srcLoadWithEncodingCheck performs the same duties as srcLoad and in a much more expensive
-		// scan operation also validates that the field contents are valid utf8 sequences.
-		srcLoadWithEncodingCheck := func(src []byte, loadIdx, scanIdx int) error {
-			for {
-				r, n := utf8.DecodeRune(src[scanIdx:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.appendRec(src[loadIdx:])
-					return nil
-				}
-				if n == 1 && r == utf8.RuneError {
-					return ErrNonUTF8InRecord
-				}
-
-				if !strings.ContainsRune(w.escapeControlRunes, r) {
-					scanIdx += n
-					continue
-				}
-
-				//
-				// found a control rune of some kind
-				//
-
-				w.appendRec(src[loadIdx:scanIdx])
-
-				scanIdx += n
-				loadIdx = scanIdx
-
-				if w.quote == r {
-					w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-					continue
-				}
-
-				w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-				continue
-
-			}
-		}
-
 		// write the first field
 		{
 			f := &fields[0]
@@ -10922,18 +9287,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 					}
 				}
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				r, n := utf8.DecodeRune(src[i:])
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					srcLoad(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 				default:
-					srcLoad(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -10946,7 +9310,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 			// continue loading
 
 			isFirstRune := true
-
 			i := 0
 			for {
 				r, n := utf8.DecodeRune(src[i:])
@@ -10969,18 +9332,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				// found a control rune of some kind
 				//
 
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 				var err error
 				switch r {
 				case w.quote:
-					w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 				case w.escape:
-					w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = srcLoadWithEncodingCheck(src, i+n, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 				default:
-					err = srcLoadWithEncodingCheck(src, 0, i+n)
+					w.appendRec(w.quoteBytes[:w.quoteByteLen])
+					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -11044,18 +9406,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 						break
 					}
 
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 					r, n := utf8.DecodeRune(src[i:])
 					switch r {
 					case w.quote:
-						w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						srcLoad(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+						w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 					case w.escape:
-						w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						srcLoad(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+						w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
 					default:
-						srcLoad(src, 0, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen])
+						w.loadQF_memclearOn_escapeOn(src, 0, i+n)
 					}
 
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -11088,18 +9449,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 					// found a control rune of some kind
 					//
 
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
 					var err error
 					switch r {
 					case w.quote:
-						w.appendRec(src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
+						err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 					case w.escape:
-						w.appendRec(src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						err = srcLoadWithEncodingCheck(src, i+n, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
+						err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
 					default:
-						err = srcLoadWithEncodingCheck(src, 0, i+n)
+						w.appendRec(w.quoteBytes[:w.quoteByteLen])
+						err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
 					}
 					if err != nil {
 						return 0, err
@@ -11121,5 +9481,273 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 		} else {
 			return n, nil
 		}
+	}
+}
+
+// loadQF_memclearOff_escapeOff is called after a quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
+// instance of quote or escape if applicable.
+//
+// It continues with appending the data up to a potentially additional quote or escape character, then
+// appends the escaped version of that character and continues repeating that process for the rest of
+// the field.
+//
+// Essentially the function does the same as the parent context except has no intent around overall
+// quoting the field or detecting runes outside of the quote + escape character.
+func (w *Writer) loadQF_memclearOff_escapeOff(src []byte, loadIdx, scanIdx int) {
+	// escape any quote runes found
+	for {
+		i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
+		if i == -1 {
+			w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
+			return
+		}
+		i += scanIdx
+
+		w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
+		w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
+
+		loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
+		scanIdx = loadIdx
+	}
+}
+
+// loadQF_wCheckUTF8_memclearOff_escapeOff performs the same duties as loadQField_memclearOff_escapeOff and in a much more expensive
+// scan operation also validates that the field contents are valid utf8 sequences.
+func (w *Writer) loadQF_wCheckUTF8_memclearOff_escapeOff(src []byte, loadIdx, scanIdx int) error {
+	for {
+		r, n := utf8.DecodeRune(src[scanIdx:])
+		if n == 0 {
+			// all good and no overlap issues, so just directly copy src
+			w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
+			return nil
+		}
+		if n == 1 && r == utf8.RuneError {
+			return ErrNonUTF8InRecord
+		}
+
+		if r != w.quote {
+			scanIdx += n
+			continue
+		}
+
+		//
+		// found a quote rune
+		//
+
+		w.recordBuf = append(w.recordBuf, src[loadIdx:scanIdx]...)
+		w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
+
+		scanIdx += n
+		loadIdx = scanIdx
+
+	}
+}
+
+// loadQF_memclearOff_escapeOn is called after a quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
+// instance of quote or escape if applicable.
+//
+// It continues with appending the data up to a potentially additional quote or escape character, then
+// appends the escaped version of that character and continues repeating that process for the rest of
+// the field.
+//
+// Essentially the function does the same as the parent context except has no intent around overall
+// quoting the field or detecting runes outside of the quote + escape character.
+func (w *Writer) loadQF_memclearOff_escapeOn(src []byte, loadIdx, scanIdx int) {
+	// escape any quote or escape runes found
+	for {
+		i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
+		if i == -1 {
+			w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
+			return
+		}
+		i += scanIdx
+
+		r, n := utf8.DecodeRune(src[i:])
+		switch r {
+		case w.quote:
+			w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
+			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
+		default:
+			w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
+			w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
+		}
+
+		loadIdx = i + n
+		scanIdx = loadIdx
+	}
+}
+
+// loadQF_wCheckUTF8_memclearOff_escapeOn performs the same duties as loadQField_memclearOff_escapeOn and in a much more expensive
+// scan operation also validates that the field contents are valid utf8 sequences.
+func (w *Writer) loadQF_wCheckUTF8_memclearOff_escapeOn(src []byte, loadIdx, scanIdx int) error {
+	for {
+		r, n := utf8.DecodeRune(src[scanIdx:])
+		if n == 0 {
+			// all good and no overlap issues, so just directly copy src
+			w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
+			return nil
+		}
+		if n == 1 && r == utf8.RuneError {
+			return ErrNonUTF8InRecord
+		}
+
+		if !strings.ContainsRune(w.escapeControlRunes, r) {
+			scanIdx += n
+			continue
+		}
+
+		//
+		// found a control rune of some kind
+		//
+
+		prevScanIdx := scanIdx
+		prevLoadIdx := loadIdx
+		scanIdx += n
+		loadIdx = scanIdx
+
+		if w.quote == r {
+			w.recordBuf = append(w.recordBuf, src[prevLoadIdx:prevScanIdx]...)
+			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
+			continue
+		}
+
+		w.recordBuf = append(w.recordBuf, src[prevLoadIdx:prevScanIdx]...)
+		w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
+
+		continue
+
+	}
+}
+
+// loadQF_memclearOn_escapeOff is called after a quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
+// instance of quote or escape if applicable.
+//
+// It continues with appending the data up to a potentially additional quote or escape character, then
+// appends the escaped version of that character and continues repeating that process for the rest of
+// the field.
+//
+// Essentially the function does the same as the parent context except has no intent around overall
+// quoting the field or detecting runes outside of the quote + escape character.
+func (w *Writer) loadQF_memclearOn_escapeOff(src []byte, loadIdx, scanIdx int) {
+	// escape any quote runes found
+	for {
+		i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
+		if i == -1 {
+			w.appendRec(src[loadIdx:])
+			return
+		}
+		i += scanIdx
+
+		w.appendRec(src[loadIdx:i], w.escapedQuote[:w.escapedQuoteByteLen])
+
+		loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
+		scanIdx = loadIdx
+	}
+}
+
+// loadQF_wCheckUTF8_memclearOn_escapeOff performs the same duties as loadQField_memclearOn_escapeOff and in a much more expensive
+// scan operation also validates that the field contents are valid utf8 sequences.
+func (w *Writer) loadQF_wCheckUTF8_memclearOn_escapeOff(src []byte, loadIdx, scanIdx int) error {
+	for {
+		r, n := utf8.DecodeRune(src[scanIdx:])
+		if n == 0 {
+			// all good and no overlap issues, so just directly copy src
+			w.appendRec(src[loadIdx:])
+			return nil
+		}
+		if n == 1 && r == utf8.RuneError {
+			return ErrNonUTF8InRecord
+		}
+
+		if r != w.quote {
+			scanIdx += n
+			continue
+		}
+
+		//
+		// found a quote rune
+		//
+
+		w.appendRec(src[loadIdx:scanIdx], w.escapedQuote[:w.escapedQuoteByteLen])
+
+		scanIdx += n
+		loadIdx = scanIdx
+
+	}
+}
+
+// loadQF_memclearOn_escapeOn is called after a quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
+// instance of quote or escape if applicable.
+//
+// It continues with appending the data up to a potentially additional quote or escape character, then
+// appends the escaped version of that character and continues repeating that process for the rest of
+// the field.
+//
+// Essentially the function does the same as the parent context except has no intent around overall
+// quoting the field or detecting runes outside of the quote + escape character.
+func (w *Writer) loadQF_memclearOn_escapeOn(src []byte, loadIdx, scanIdx int) {
+	// escape any quote or escape runes found
+	for {
+		i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
+		if i == -1 {
+			w.appendRec(src[loadIdx:])
+			return
+		}
+		i += scanIdx
+
+		r, n := utf8.DecodeRune(src[i:])
+		switch r {
+		case w.quote:
+			w.appendRec(src[loadIdx:i], w.escapedQuote[:w.escapedQuoteByteLen])
+		default:
+			w.appendRec(src[loadIdx:i], w.escapedEscape[:w.escapedEscapeByteLen])
+		}
+
+		loadIdx = i + n
+		scanIdx = loadIdx
+	}
+}
+
+// loadQF_wCheckUTF8_memclearOn_escapeOn performs the same duties as loadQField_memclearOn_escapeOn and in a much more expensive
+// scan operation also validates that the field contents are valid utf8 sequences.
+func (w *Writer) loadQF_wCheckUTF8_memclearOn_escapeOn(src []byte, loadIdx, scanIdx int) error {
+	for {
+		r, n := utf8.DecodeRune(src[scanIdx:])
+		if n == 0 {
+			// all good and no overlap issues, so just directly copy src
+			w.appendRec(src[loadIdx:])
+			return nil
+		}
+		if n == 1 && r == utf8.RuneError {
+			return ErrNonUTF8InRecord
+		}
+
+		if !strings.ContainsRune(w.escapeControlRunes, r) {
+			scanIdx += n
+			continue
+		}
+
+		//
+		// found a control rune of some kind
+		//
+
+		prevScanIdx := scanIdx
+		prevLoadIdx := loadIdx
+		scanIdx += n
+		loadIdx = scanIdx
+
+		if w.quote == r {
+			w.appendRec(src[prevLoadIdx:prevScanIdx], w.escapedQuote[:w.escapedQuoteByteLen])
+			continue
+		}
+
+		w.appendRec(src[prevLoadIdx:prevScanIdx], w.escapedEscape[:w.escapedEscapeByteLen])
+
+		continue
+
 	}
 }
