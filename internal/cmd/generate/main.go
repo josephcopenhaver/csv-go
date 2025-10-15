@@ -16,7 +16,7 @@ var tsImports string
 //go:embed prepare_row.go.tmpl
 var tsPrepareRow string
 
-//go:embed writeRow.go.tmpl
+//go:embed write_row.go.tmpl
 var tsWriteRow string
 
 func parse(s string) *template.Template {

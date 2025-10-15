@@ -2705,6 +2705,7 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOf
 
 			if !strings.ContainsRune(w.controlRunes, r) {
 				i += n
+
 				continue
 			}
 
@@ -3052,6 +3053,7 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
 
 			if !strings.ContainsRune(w.controlRunes, r) {
 				i += n
+
 				continue
 			}
 
@@ -3793,6 +3795,7 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
 
 			if !strings.ContainsRune(w.controlRunes, r) {
 				i += n
+
 				continue
 			}
 
@@ -4130,6 +4133,7 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn(
 
 			if !strings.ContainsRune(w.controlRunes, r) {
 				i += n
+
 				continue
 			}
 
@@ -4905,6 +4909,7 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
 
 			if !strings.ContainsRune(w.controlRunes, r) {
 				i += n
+
 				continue
 			}
 
@@ -5264,6 +5269,7 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(
 
 			if !strings.ContainsRune(w.controlRunes, r) {
 				i += n
+
 				continue
 			}
 
@@ -6029,6 +6035,7 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(
 
 			if !strings.ContainsRune(w.controlRunes, r) {
 				i += n
+
 				continue
 			}
 
@@ -6378,6 +6385,7 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(f
 
 			if !strings.ContainsRune(w.controlRunes, r) {
 				i += n
+
 				continue
 			}
 

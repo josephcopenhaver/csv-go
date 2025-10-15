@@ -173,18 +173,18 @@ func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}
 		// process src buf
 		//
 
-		{{if .CheckUTF8}}if !scanForNonUTF8 { {{- end}}
+		{{if .CheckUTF8 -}}if !scanForNonUTF8 { {{- end}}
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
 			{{if .ForceQuoteCommentStart}}
 			var i int
 
 			if !bytes.HasPrefix(src, commentBytes) { {{end}}
-			{{if .ForceQuoteCommentStart}}	{{end}}i {{if not .ForceQuoteCommentStart}}:{{end}}= bytes.IndexAny(src, w.controlRunes)
-			{{if .ForceQuoteCommentStart}}	{{end}}if i == -1 {
-			{{if .ForceQuoteCommentStart}}	{{end}}	{{template "appendRec0" .}}src{{template "appendRec1" .}}
-			{{if .ForceQuoteCommentStart}}	{{end}}	goto FIRST_FIELD_WRITTEN
-			{{if .ForceQuoteCommentStart}}	{{end}}}
+				i {{if not .ForceQuoteCommentStart}}:{{end}}= bytes.IndexAny(src, w.controlRunes)
+				if i == -1 {
+					{{template "appendRec0" .}}src{{template "appendRec1" .}}
+					goto FIRST_FIELD_WRITTEN
+				}
 			{{if .ForceQuoteCommentStart}}}{{end}}
 
 			{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
@@ -226,8 +226,10 @@ func (w *Writer) writeRow_memclearO{{if .ClearMemoryAfterUse}}n{{else}}ff{{end}}
 			}
 
 			if !strings.ContainsRune(w.controlRunes, r) {{if .ForceQuoteCommentStart}}&& (!isFirstRune || r != comment) {{end}} {
-				i += n{{if .ForceQuoteCommentStart}}
-				isFirstRune = false{{end}}
+				i += n
+				{{if .ForceQuoteCommentStart -}}
+				isFirstRune = false
+				{{- end}}
 				continue
 			}
 
