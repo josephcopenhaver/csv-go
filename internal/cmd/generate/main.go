@@ -141,28 +141,19 @@ func main() {
 			ForceQuoteCommentStart bool // TODO: remove
 			Memclear               bool // leave in
 			CheckUTF8              bool // TODO: (partial) remove
-			ControlRuneOverlap     bool // TODO: remove
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{ForceQuoteCommentStart: false, Memclear: false, CheckUTF8: false, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: false, Memclear: false, CheckUTF8: false, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: false, Memclear: false, CheckUTF8: true, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: false, Memclear: false, CheckUTF8: true, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: false, Memclear: true, CheckUTF8: false, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: false, Memclear: true, CheckUTF8: false, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: false, Memclear: true, CheckUTF8: true, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: false, Memclear: true, CheckUTF8: true, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: true, Memclear: false, CheckUTF8: false, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: true, Memclear: false, CheckUTF8: false, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: true, Memclear: false, CheckUTF8: true, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: true, Memclear: false, CheckUTF8: true, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: true, Memclear: true, CheckUTF8: false, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: true, Memclear: true, CheckUTF8: false, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: true, Memclear: true, CheckUTF8: true, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: true, Memclear: true, CheckUTF8: true, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: false, Memclear: false, CheckUTF8: false},
+			{ForceQuoteCommentStart: false, Memclear: false, CheckUTF8: true},
+			{ForceQuoteCommentStart: false, Memclear: true, CheckUTF8: false},
+			{ForceQuoteCommentStart: false, Memclear: true, CheckUTF8: true},
+			{ForceQuoteCommentStart: true, Memclear: false, CheckUTF8: false},
+			{ForceQuoteCommentStart: true, Memclear: false, CheckUTF8: true},
+			{ForceQuoteCommentStart: true, Memclear: true, CheckUTF8: false},
+			{ForceQuoteCommentStart: true, Memclear: true, CheckUTF8: true},
 		})
 	}
 

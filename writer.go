@@ -51,6 +51,7 @@ const (
 	wFlagEscapeSet
 	wFlagCommentSet
 	wFlagClearMemoryAfterFree
+	wFlagControlRuneOverlap
 )
 
 const (
@@ -675,7 +676,6 @@ type Writer struct {
 	escapedEscapeByteLen    int8
 	recordSepByteLen        int8
 	bitFlags                wFlag
-	setWriteRowStrategy     func(fwOverlapsControlRunesUpdatesToTrue bool)
 }
 
 // NewWriter creates a new instance of a CSV writer which is not safe for concurrent reads.
@@ -763,6 +763,9 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	}
 	if cfg.commentSet {
 		bitFlags |= wFlagCommentSet
+		if strings.ContainsRune(fieldWriterTypesRuneList, cfg.comment) {
+			bitFlags |= wFlagControlRuneOverlap
+		}
 	}
 
 	w := &Writer{
@@ -791,73 +794,34 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		bitFlags:             bitFlags,
 	}
 
-	w.setWriteRowStrategy = w.newSetWriteRowStrategyFunc(cfg.clearMemoryAfterFree, cfg.escapeSet, cfg.errOnNonUTF8, cfg.fwOverlapsControlRunes)
-	w.setWriteRowStrategy(false)
+	w.setWriteRowStrategy(cfg.clearMemoryAfterFree, cfg.escapeSet, cfg.errOnNonUTF8)
 
 	return w, nil
 }
 
-func (w *Writer) newSetWriteRowStrategyFunc(clearMemoryAfterFree, escapeSet, errOnNonUTF8, fwOverlapsControlRunes bool) func(bool) {
-
-	crOverlaps := fwOverlapsControlRunes
+func (w *Writer) setWriteRowStrategy(clearMemoryAfterFree, escapeSet, errOnNonUTF8 bool) {
 	var f func([]FieldWriter) (int, error)
 
-	return func(fwOverlapsControlRunes bool) {
-		if fwOverlapsControlRunes {
-			if crOverlaps {
-				// would not be any change
-				return
-			}
-
-			crOverlaps = true
-		}
-
-		if !clearMemoryAfterFree {
-			if !errOnNonUTF8 {
-				if !crOverlaps {
-					f = w.writeRow_memclearOff_checkUTF8Off_controlRuneOverlapOff
-					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_checkUTF8Off_controlRuneOverlapOff
-				} else {
-					f = w.writeRow_memclearOff_checkUTF8Off_controlRuneOverlapOn
-					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_checkUTF8Off_controlRuneOverlapOn
-				}
-			} else if !crOverlaps {
-				f = w.writeRow_memclearOff_checkUTF8On_controlRuneOverlapOff
-				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_checkUTF8On_controlRuneOverlapOff
-			} else {
-				f = w.writeRow_memclearOff_checkUTF8On_controlRuneOverlapOn
-				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_checkUTF8On_controlRuneOverlapOn
-			}
-		} else if !errOnNonUTF8 {
-			if !crOverlaps {
-				f = w.writeRow_memclearOn_checkUTF8Off_controlRuneOverlapOff
-				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_checkUTF8Off_controlRuneOverlapOff
-			} else {
-				f = w.writeRow_memclearOn_checkUTF8Off_controlRuneOverlapOn
-				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_checkUTF8Off_controlRuneOverlapOn
-			}
-		} else if !crOverlaps {
-			f = w.writeRow_memclearOn_checkUTF8On_controlRuneOverlapOff
-			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_checkUTF8On_controlRuneOverlapOff
+	if !clearMemoryAfterFree {
+		if !errOnNonUTF8 {
+			f = w.writeRow_memclearOff_checkUTF8Off
+			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_checkUTF8Off
 		} else {
-			f = w.writeRow_memclearOn_checkUTF8On_controlRuneOverlapOn
-			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_checkUTF8On_controlRuneOverlapOn
+			f = w.writeRow_memclearOff_checkUTF8On
+			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_checkUTF8On
 		}
+	} else if !errOnNonUTF8 {
+		f = w.writeRow_memclearOn_checkUTF8Off
+		w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_checkUTF8Off
+	} else {
+		f = w.writeRow_memclearOn_checkUTF8On
+		w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_checkUTF8On
+	}
 
-		if w.writeRow == nil {
-			w.writeRow = func(row []FieldWriter) (int, error) {
-				// freeing no longer useful internal allocations
-				//
-				// note that WriteHEader also performs this operation
-				// since it is not used after headers are written or
-				// the first row has been written
-				w.setWriteRowStrategy = nil
-
-				w.writeRow = f
-				w.bitFlags |= wFlagHeaderWritten
-				return w.writeRow(row)
-			}
-		}
+	w.writeRow = func(row []FieldWriter) (int, error) {
+		w.writeRow = f
+		w.bitFlags |= wFlagHeaderWritten
+		return w.writeRow(row)
 	}
 }
 
@@ -1038,6 +1002,8 @@ func (cfg *whCfg) validate(w *Writer) error {
 		return errors.New("comment rune cannot be specified when writing headers when the writer instance already has one specified")
 	} else if err := isValidComment(cfg.comment, w.quote, w.fieldSep, w.escape, (w.bitFlags&wFlagEscapeSet) != 0); err != nil {
 		return err
+	} else if strings.ContainsRune(fieldWriterTypesRuneList, cfg.comment) {
+		w.bitFlags |= wFlagControlRuneOverlap
 	}
 
 	// positive path remaining actions:
@@ -1093,21 +1059,8 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 	// a future reader can still attempt to honor the format
 	// and not get a format collision with possibly the first
 	// field of the first record
-	{
-		// freeing no longer useful internal allocations
-		//
-		// note that WriteRow also performs this operation
-		// since it is not used after headers are written or
-		// the first row has been written
-		setWriteRowStrategy := w.setWriteRowStrategy
-		w.setWriteRowStrategy = nil
-
-		if cfg.commentSet {
-			if strings.ContainsRune(fieldWriterTypesRuneList, cfg.comment) {
-				setWriteRowStrategy(true)
-			}
-			w.writeRow = w.writeRowAfterHeader(cfg.comment)
-		}
+	if cfg.commentSet {
+		w.writeRow = w.writeRowAfterHeader(cfg.comment)
 	}
 
 	if cfg.commentLinesSet {

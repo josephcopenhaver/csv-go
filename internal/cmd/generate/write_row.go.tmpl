@@ -6,19 +6,19 @@ w.recordBuf = append(w.recordBuf, {{end}}{{end -}}
 {{define "loadQFCheckUTF8"}}w.loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}{{end}}
 
 {{- if .ForceQuoteCommentStart -}}
-func (w *Writer) writeRowAfterHeader_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}_controlRuneOverlapO{{if .ControlRuneOverlap}}n{{else}}ff{{end}}(comment rune) writeRowFunc {
+func (w *Writer) writeRowAfterHeader_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}(comment rune) writeRowFunc {
 commentBytes := []byte(string(comment))
 
 return func(fields []FieldWriter) (int, error) {
 {{- else -}}
-func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}_controlRuneOverlapO{{if .ControlRuneOverlap}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
+func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
 {{- end}}
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
 	{{if .ForceQuoteCommentStart -}}
 
-	w.writeRow = w.writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}_controlRuneOverlapO{{if .ControlRuneOverlap}}n{{else}}ff{{end}}
+	w.writeRow = w.writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}
 	{{end}}
 
 	// write the first field
@@ -69,13 +69,6 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O
 			scanForNonUTF8 = (f._64_bits == 0)
 			{{- end}}
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
-		{{if .ControlRuneOverlap -}}
-		default:
-			src, err = f.AppendText(w.fieldWriterBuf[:0])
-			if err != nil {
-				return 0, err
-			}
-		{{- else -}}
 		case wfkRune:
 			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 			if err != nil {
@@ -87,9 +80,10 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O
 				return 0, err
 			}
 
-			{{if .Memclear}}w.setRecordBuf(src){{else}}w.recordBuf = src{{end}}
-			goto FIRST_FIELD_WRITTEN
-		{{- end}}
+			if (w.bitFlags & wFlagControlRuneOverlap) == 0 {
+				{{if .Memclear}}w.setRecordBuf(src){{else}}w.recordBuf = src{{end}}
+				goto FIRST_FIELD_WRITTEN
+			}
 		}
 
 		//
@@ -216,13 +210,6 @@ SUBSEQUENT_FIELD_WRITE:
 				scanForNonUTF8 = (f._64_bits == 0)
 				{{- end}}
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			{{if .ControlRuneOverlap -}}
-			default:
-				src, err = f.AppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			{{- else -}}
 			case wfkRune:
 				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
@@ -234,9 +221,10 @@ SUBSEQUENT_FIELD_WRITE:
 					return 0, err
 				}
 
-				{{if .Memclear}}w.setRecordBuf(src){{else}}w.recordBuf = src{{end}}
-				break SUBSEQUENT_FIELD_WRITE
-			{{- end}}
+				if (w.bitFlags & wFlagControlRuneOverlap) == 0 {
+					{{if .Memclear}}w.setRecordBuf(src){{else}}w.recordBuf = src{{end}}
+					break SUBSEQUENT_FIELD_WRITE
+				}
 			}
 
 			//
