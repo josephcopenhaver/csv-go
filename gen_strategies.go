@@ -2116,7 +2116,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 	}
 }
 
-func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOff(fields []FieldWriter) (int, error) {
+func (w *Writer) writeRow_memclearOff_checkUTF8Off_controlRuneOverlapOff(fields []FieldWriter) (int, error) {
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
@@ -2195,15 +2195,15 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapO
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 			w.recordBuf = append(w.recordBuf, src[:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-			w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+			w.loadQF_memclearOff(src, i+n, i+n)
 		case w.escape:
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 			w.recordBuf = append(w.recordBuf, src[:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+			w.loadQF_memclearOff(src, i+n, i+n)
 		default:
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-			w.loadQF_memclearOff_escapeOff(src, 0, i+n)
+			w.loadQF_memclearOff(src, 0, i+n)
 		}
 
 		w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2271,15 +2271,15 @@ FIRST_FIELD_WRITTEN:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+				w.loadQF_memclearOff(src, i+n, i+n)
 			case w.escape:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+				w.loadQF_memclearOff(src, i+n, i+n)
 			default:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, 0, i+n)
+				w.loadQF_memclearOff(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2299,7 +2299,7 @@ FIRST_FIELD_WRITTEN:
 
 }
 
-func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOn(fields []FieldWriter) (int, error) {
+func (w *Writer) writeRow_memclearOff_checkUTF8Off_controlRuneOverlapOn(fields []FieldWriter) (int, error) {
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
@@ -2370,15 +2370,15 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapO
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 			w.recordBuf = append(w.recordBuf, src[:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-			w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+			w.loadQF_memclearOff(src, i+n, i+n)
 		case w.escape:
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 			w.recordBuf = append(w.recordBuf, src[:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+			w.loadQF_memclearOff(src, i+n, i+n)
 		default:
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-			w.loadQF_memclearOff_escapeOff(src, 0, i+n)
+			w.loadQF_memclearOff(src, 0, i+n)
 		}
 
 		w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2438,15 +2438,15 @@ FIRST_FIELD_WRITTEN:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+				w.loadQF_memclearOff(src, i+n, i+n)
 			case w.escape:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+				w.loadQF_memclearOff(src, i+n, i+n)
 			default:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, 0, i+n)
+				w.loadQF_memclearOff(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2466,1791 +2466,7 @@ FIRST_FIELD_WRITTEN:
 
 }
 
-func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOff(fields []FieldWriter) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
-	// write the first field
-	{
-		f := &fields[0]
-
-		var scanForNonUTF8 bool
-		var src []byte
-		var err error
-
-		switch f.kind {
-		case wfkBytes:
-			src = f.bytes
-			if len(src) == 0 {
-				if len(fields) == 1 {
-					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			scanForNonUTF8 = (f._64_bits == 0)
-		case wfkString:
-			s := f.str
-			if len(s) == 0 {
-				if len(fields) == 1 {
-					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			scanForNonUTF8 = (f._64_bits == 0)
-			src = unsafe.Slice(unsafe.StringData(s), len(s))
-		case wfkRune:
-			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-			if err != nil {
-				return 0, err
-			}
-		default:
-			src, err = f.AppendText(w.recordBuf)
-			if err != nil {
-				return 0, err
-			}
-
-			w.recordBuf = src
-			goto FIRST_FIELD_WRITTEN
-		}
-
-		//
-		// process src buf
-		//
-
-		if !scanForNonUTF8 {
-			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-			i := bytes.IndexAny(src, w.controlRunes)
-			if i == -1 {
-				w.recordBuf = append(w.recordBuf, src...)
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-			case w.escape:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-			default:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, 0, i+n)
-			}
-
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-			goto FIRST_FIELD_WRITTEN
-		}
-
-		// for each decoded rune, check if that rune fails to decode and if so then return an error
-		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-		// continue loading
-
-		i := 0
-		for {
-			r, n := utf8.DecodeRune(src[i:])
-			if n == 0 {
-				// all good and no overlap issues, so just directly copy src
-				w.recordBuf = append(w.recordBuf, src...)
-				goto FIRST_FIELD_WRITTEN
-			}
-			if n == 1 && r == utf8.RuneError {
-				return 0, ErrNonUTF8InRecord
-			}
-
-			if !strings.ContainsRune(w.controlRunes, r) {
-				i += n
-
-				continue
-			}
-
-			//
-			// found a control rune of some kind
-			//
-
-			switch r {
-			case w.quote:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-			case w.escape:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-			default:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
-			}
-			if err != nil {
-				return 0, err
-			}
-
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-			goto FIRST_FIELD_WRITTEN
-		}
-
-	}
-
-FIRST_FIELD_WRITTEN:
-
-	for i := 1; i < len(fields); i++ {
-		w.recordBuf = append(w.recordBuf, w.fieldSepBytes[:w.fieldSepByteLen]...)
-
-	SUBSEQUENT_FIELD_WRITE:
-		for {
-			f := &fields[i]
-
-			var scanForNonUTF8 bool
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			case wfkRune:
-				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			default:
-				src, err = f.AppendText(w.recordBuf)
-				if err != nil {
-					return 0, err
-				}
-
-				w.recordBuf = src
-				break SUBSEQUENT_FIELD_WRITE
-			}
-
-			//
-			// process src buf
-			//
-
-			if !scanForNonUTF8 {
-				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-				i := bytes.IndexAny(src, w.controlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src...)
-					break
-				}
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-				default:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, 0, i+n)
-				}
-
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-				break
-			}
-
-			// for each decoded rune, check if that rune fails to decode and if so then return an error
-			// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-			// continue loading
-
-			i := 0
-			for {
-				r, n := utf8.DecodeRune(src[i:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.recordBuf = append(w.recordBuf, src...)
-					break
-				}
-				if n == 1 && r == utf8.RuneError {
-					return 0, ErrNonUTF8InRecord
-				}
-
-				if !strings.ContainsRune(w.controlRunes, r) {
-					i += n
-					continue
-				}
-
-				//
-				// found a control rune of some kind
-				//
-
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-				default:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
-				}
-				if err != nil {
-					return 0, err
-				}
-
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-				break
-			}
-
-			break
-		}
-	}
-
-	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-	n, err := w.writer.Write(w.recordBuf)
-	if err != nil {
-		err = writeIOErr{err}
-	}
-	return n, err
-
-}
-
-func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn(fields []FieldWriter) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
-	// write the first field
-	{
-		f := &fields[0]
-
-		var scanForNonUTF8 bool
-		var src []byte
-		var err error
-
-		switch f.kind {
-		case wfkBytes:
-			src = f.bytes
-			if len(src) == 0 {
-				if len(fields) == 1 {
-					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			scanForNonUTF8 = (f._64_bits == 0)
-		case wfkString:
-			s := f.str
-			if len(s) == 0 {
-				if len(fields) == 1 {
-					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			scanForNonUTF8 = (f._64_bits == 0)
-			src = unsafe.Slice(unsafe.StringData(s), len(s))
-		default:
-			src, err = f.AppendText(w.fieldWriterBuf[:0])
-			if err != nil {
-				return 0, err
-			}
-		}
-
-		//
-		// process src buf
-		//
-
-		if !scanForNonUTF8 {
-			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-			i := bytes.IndexAny(src, w.controlRunes)
-			if i == -1 {
-				w.recordBuf = append(w.recordBuf, src...)
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-			case w.escape:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-			default:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, 0, i+n)
-			}
-
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-			goto FIRST_FIELD_WRITTEN
-		}
-
-		// for each decoded rune, check if that rune fails to decode and if so then return an error
-		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-		// continue loading
-
-		i := 0
-		for {
-			r, n := utf8.DecodeRune(src[i:])
-			if n == 0 {
-				// all good and no overlap issues, so just directly copy src
-				w.recordBuf = append(w.recordBuf, src...)
-				goto FIRST_FIELD_WRITTEN
-			}
-			if n == 1 && r == utf8.RuneError {
-				return 0, ErrNonUTF8InRecord
-			}
-
-			if !strings.ContainsRune(w.controlRunes, r) {
-				i += n
-
-				continue
-			}
-
-			//
-			// found a control rune of some kind
-			//
-
-			switch r {
-			case w.quote:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-			case w.escape:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-			default:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
-			}
-			if err != nil {
-				return 0, err
-			}
-
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-			goto FIRST_FIELD_WRITTEN
-		}
-
-	}
-
-FIRST_FIELD_WRITTEN:
-
-	for i := 1; i < len(fields); i++ {
-		w.recordBuf = append(w.recordBuf, w.fieldSepBytes[:w.fieldSepByteLen]...)
-
-	SUBSEQUENT_FIELD_WRITE:
-		for {
-			f := &fields[i]
-
-			var scanForNonUTF8 bool
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			default:
-				src, err = f.AppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			}
-
-			//
-			// process src buf
-			//
-
-			if !scanForNonUTF8 {
-				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-				i := bytes.IndexAny(src, w.controlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src...)
-					break
-				}
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-				default:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, 0, i+n)
-				}
-
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-				break
-			}
-
-			// for each decoded rune, check if that rune fails to decode and if so then return an error
-			// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-			// continue loading
-
-			i := 0
-			for {
-				r, n := utf8.DecodeRune(src[i:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.recordBuf = append(w.recordBuf, src...)
-					break
-				}
-				if n == 1 && r == utf8.RuneError {
-					return 0, ErrNonUTF8InRecord
-				}
-
-				if !strings.ContainsRune(w.controlRunes, r) {
-					i += n
-					continue
-				}
-
-				//
-				// found a control rune of some kind
-				//
-
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-				default:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
-				}
-				if err != nil {
-					return 0, err
-				}
-
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-				break
-			}
-
-			break
-		}
-	}
-
-	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-	n, err := w.writer.Write(w.recordBuf)
-	if err != nil {
-		err = writeIOErr{err}
-	}
-	return n, err
-
-}
-
-func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOff(fields []FieldWriter) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
-	// write the first field
-	{
-		f := &fields[0]
-
-		var src []byte
-		var err error
-
-		switch f.kind {
-		case wfkBytes:
-			src = f.bytes
-			if len(src) == 0 {
-				if len(fields) == 1 {
-					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-		case wfkString:
-			s := f.str
-			if len(s) == 0 {
-				if len(fields) == 1 {
-					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			src = unsafe.Slice(unsafe.StringData(s), len(s))
-		case wfkRune:
-			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-			if err != nil {
-				return 0, err
-			}
-		default:
-			src, err = f.AppendText(w.recordBuf)
-			if err != nil {
-				return 0, err
-			}
-
-			w.setRecordBuf(src)
-			goto FIRST_FIELD_WRITTEN
-		}
-
-		//
-		// process src buf
-		//
-
-		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-		i := bytes.IndexAny(src, w.controlRunes)
-		if i == -1 {
-			w.appendRec(src)
-			goto FIRST_FIELD_WRITTEN
-		}
-
-		r, n := utf8.DecodeRune(src[i:])
-		switch r {
-		case w.quote:
-			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-			w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-		case w.escape:
-			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-			w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-		default:
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-			w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-		}
-
-		w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-		goto FIRST_FIELD_WRITTEN
-
-	}
-
-FIRST_FIELD_WRITTEN:
-
-	for i := 1; i < len(fields); i++ {
-		w.appendRec(w.fieldSepBytes[:w.fieldSepByteLen])
-
-	SUBSEQUENT_FIELD_WRITE:
-		for {
-			f := &fields[i]
-
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			case wfkRune:
-				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			default:
-				src, err = f.AppendText(w.recordBuf)
-				if err != nil {
-					return 0, err
-				}
-
-				w.setRecordBuf(src)
-				break SUBSEQUENT_FIELD_WRITE
-			}
-
-			//
-			// process src buf
-			//
-
-			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-			i := bytes.IndexAny(src, w.controlRunes)
-			if i == -1 {
-				w.appendRec(src)
-				break
-			}
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-			case w.escape:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-			default:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-			}
-
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-			break
-
-		}
-	}
-
-	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-
-	n, err := w.writer.Write(w.recordBuf)
-	if err != nil {
-		err = writeIOErr{err}
-	}
-	return n, err
-
-}
-
-func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn(fields []FieldWriter) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
-	// write the first field
-	{
-		f := &fields[0]
-
-		var src []byte
-		var err error
-
-		switch f.kind {
-		case wfkBytes:
-			src = f.bytes
-			if len(src) == 0 {
-				if len(fields) == 1 {
-					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-		case wfkString:
-			s := f.str
-			if len(s) == 0 {
-				if len(fields) == 1 {
-					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			src = unsafe.Slice(unsafe.StringData(s), len(s))
-		default:
-			src, err = f.AppendText(w.fieldWriterBuf[:0])
-			if err != nil {
-				return 0, err
-			}
-		}
-
-		//
-		// process src buf
-		//
-
-		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-		i := bytes.IndexAny(src, w.controlRunes)
-		if i == -1 {
-			w.appendRec(src)
-			goto FIRST_FIELD_WRITTEN
-		}
-
-		r, n := utf8.DecodeRune(src[i:])
-		switch r {
-		case w.quote:
-			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-			w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-		case w.escape:
-			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-			w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-		default:
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-			w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-		}
-
-		w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-		goto FIRST_FIELD_WRITTEN
-
-	}
-
-FIRST_FIELD_WRITTEN:
-
-	for i := 1; i < len(fields); i++ {
-		w.appendRec(w.fieldSepBytes[:w.fieldSepByteLen])
-
-	SUBSEQUENT_FIELD_WRITE:
-		for {
-			f := &fields[i]
-
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			default:
-				src, err = f.AppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			}
-
-			//
-			// process src buf
-			//
-
-			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-			i := bytes.IndexAny(src, w.controlRunes)
-			if i == -1 {
-				w.appendRec(src)
-				break
-			}
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-			case w.escape:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-			default:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-			}
-
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-			break
-
-		}
-	}
-
-	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-
-	n, err := w.writer.Write(w.recordBuf)
-	if err != nil {
-		err = writeIOErr{err}
-	}
-	return n, err
-
-}
-
-func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff(fields []FieldWriter) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
-	// write the first field
-	{
-		f := &fields[0]
-
-		var scanForNonUTF8 bool
-		var src []byte
-		var err error
-
-		switch f.kind {
-		case wfkBytes:
-			src = f.bytes
-			if len(src) == 0 {
-				if len(fields) == 1 {
-					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			scanForNonUTF8 = (f._64_bits == 0)
-		case wfkString:
-			s := f.str
-			if len(s) == 0 {
-				if len(fields) == 1 {
-					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			scanForNonUTF8 = (f._64_bits == 0)
-			src = unsafe.Slice(unsafe.StringData(s), len(s))
-		case wfkRune:
-			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-			if err != nil {
-				return 0, err
-			}
-		default:
-			src, err = f.AppendText(w.recordBuf)
-			if err != nil {
-				return 0, err
-			}
-
-			w.setRecordBuf(src)
-			goto FIRST_FIELD_WRITTEN
-		}
-
-		//
-		// process src buf
-		//
-
-		if !scanForNonUTF8 {
-			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-			i := bytes.IndexAny(src, w.controlRunes)
-			if i == -1 {
-				w.appendRec(src)
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-			case w.escape:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-			default:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-			}
-
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-			goto FIRST_FIELD_WRITTEN
-		}
-
-		// for each decoded rune, check if that rune fails to decode and if so then return an error
-		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-		// continue loading
-
-		i := 0
-		for {
-			r, n := utf8.DecodeRune(src[i:])
-			if n == 0 {
-				// all good and no overlap issues, so just directly copy src
-				w.appendRec(src)
-				goto FIRST_FIELD_WRITTEN
-			}
-			if n == 1 && r == utf8.RuneError {
-				return 0, ErrNonUTF8InRecord
-			}
-
-			if !strings.ContainsRune(w.controlRunes, r) {
-				i += n
-
-				continue
-			}
-
-			//
-			// found a control rune of some kind
-			//
-
-			switch r {
-			case w.quote:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-			case w.escape:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-			default:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
-			}
-			if err != nil {
-				return 0, err
-			}
-
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-			goto FIRST_FIELD_WRITTEN
-		}
-
-	}
-
-FIRST_FIELD_WRITTEN:
-
-	for i := 1; i < len(fields); i++ {
-		w.appendRec(w.fieldSepBytes[:w.fieldSepByteLen])
-
-	SUBSEQUENT_FIELD_WRITE:
-		for {
-			f := &fields[i]
-
-			var scanForNonUTF8 bool
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			case wfkRune:
-				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			default:
-				src, err = f.AppendText(w.recordBuf)
-				if err != nil {
-					return 0, err
-				}
-
-				w.setRecordBuf(src)
-				break SUBSEQUENT_FIELD_WRITE
-			}
-
-			//
-			// process src buf
-			//
-
-			if !scanForNonUTF8 {
-				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-				i := bytes.IndexAny(src, w.controlRunes)
-				if i == -1 {
-					w.appendRec(src)
-					break
-				}
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-				default:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-				}
-
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-				break
-			}
-
-			// for each decoded rune, check if that rune fails to decode and if so then return an error
-			// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-			// continue loading
-
-			i := 0
-			for {
-				r, n := utf8.DecodeRune(src[i:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.appendRec(src)
-					break
-				}
-				if n == 1 && r == utf8.RuneError {
-					return 0, ErrNonUTF8InRecord
-				}
-
-				if !strings.ContainsRune(w.controlRunes, r) {
-					i += n
-					continue
-				}
-
-				//
-				// found a control rune of some kind
-				//
-
-				switch r {
-				case w.quote:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-				default:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
-				}
-				if err != nil {
-					return 0, err
-				}
-
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-				break
-			}
-
-			break
-		}
-	}
-
-	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-
-	n, err := w.writer.Write(w.recordBuf)
-	if err != nil {
-		err = writeIOErr{err}
-	}
-	return n, err
-
-}
-
-func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn(fields []FieldWriter) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
-	// write the first field
-	{
-		f := &fields[0]
-
-		var scanForNonUTF8 bool
-		var src []byte
-		var err error
-
-		switch f.kind {
-		case wfkBytes:
-			src = f.bytes
-			if len(src) == 0 {
-				if len(fields) == 1 {
-					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			scanForNonUTF8 = (f._64_bits == 0)
-		case wfkString:
-			s := f.str
-			if len(s) == 0 {
-				if len(fields) == 1 {
-					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			scanForNonUTF8 = (f._64_bits == 0)
-			src = unsafe.Slice(unsafe.StringData(s), len(s))
-		default:
-			src, err = f.AppendText(w.fieldWriterBuf[:0])
-			if err != nil {
-				return 0, err
-			}
-		}
-
-		//
-		// process src buf
-		//
-
-		if !scanForNonUTF8 {
-			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-			i := bytes.IndexAny(src, w.controlRunes)
-			if i == -1 {
-				w.appendRec(src)
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-			case w.escape:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-			default:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-			}
-
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-			goto FIRST_FIELD_WRITTEN
-		}
-
-		// for each decoded rune, check if that rune fails to decode and if so then return an error
-		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-		// continue loading
-
-		i := 0
-		for {
-			r, n := utf8.DecodeRune(src[i:])
-			if n == 0 {
-				// all good and no overlap issues, so just directly copy src
-				w.appendRec(src)
-				goto FIRST_FIELD_WRITTEN
-			}
-			if n == 1 && r == utf8.RuneError {
-				return 0, ErrNonUTF8InRecord
-			}
-
-			if !strings.ContainsRune(w.controlRunes, r) {
-				i += n
-
-				continue
-			}
-
-			//
-			// found a control rune of some kind
-			//
-
-			switch r {
-			case w.quote:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-			case w.escape:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-			default:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
-			}
-			if err != nil {
-				return 0, err
-			}
-
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-			goto FIRST_FIELD_WRITTEN
-		}
-
-	}
-
-FIRST_FIELD_WRITTEN:
-
-	for i := 1; i < len(fields); i++ {
-		w.appendRec(w.fieldSepBytes[:w.fieldSepByteLen])
-
-	SUBSEQUENT_FIELD_WRITE:
-		for {
-			f := &fields[i]
-
-			var scanForNonUTF8 bool
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			default:
-				src, err = f.AppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			}
-
-			//
-			// process src buf
-			//
-
-			if !scanForNonUTF8 {
-				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-				i := bytes.IndexAny(src, w.controlRunes)
-				if i == -1 {
-					w.appendRec(src)
-					break
-				}
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-				default:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-				}
-
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-				break
-			}
-
-			// for each decoded rune, check if that rune fails to decode and if so then return an error
-			// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-			// continue loading
-
-			i := 0
-			for {
-				r, n := utf8.DecodeRune(src[i:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.appendRec(src)
-					break
-				}
-				if n == 1 && r == utf8.RuneError {
-					return 0, ErrNonUTF8InRecord
-				}
-
-				if !strings.ContainsRune(w.controlRunes, r) {
-					i += n
-					continue
-				}
-
-				//
-				// found a control rune of some kind
-				//
-
-				switch r {
-				case w.quote:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-				default:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
-				}
-				if err != nil {
-					return 0, err
-				}
-
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-				break
-			}
-
-			break
-		}
-	}
-
-	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-
-	n, err := w.writer.Write(w.recordBuf)
-	if err != nil {
-		err = writeIOErr{err}
-	}
-	return n, err
-
-}
-
-func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOff(fields []FieldWriter) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
-	// write the first field
-	{
-		f := &fields[0]
-
-		var src []byte
-		var err error
-
-		switch f.kind {
-		case wfkBytes:
-			src = f.bytes
-			if len(src) == 0 {
-				if len(fields) == 1 {
-					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-		case wfkString:
-			s := f.str
-			if len(s) == 0 {
-				if len(fields) == 1 {
-					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			src = unsafe.Slice(unsafe.StringData(s), len(s))
-		case wfkRune:
-			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-			if err != nil {
-				return 0, err
-			}
-		default:
-			src, err = f.AppendText(w.recordBuf)
-			if err != nil {
-				return 0, err
-			}
-
-			w.recordBuf = src
-			goto FIRST_FIELD_WRITTEN
-		}
-
-		//
-		// process src buf
-		//
-
-		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-		i := bytes.IndexAny(src, w.controlRunes)
-		if i == -1 {
-			w.recordBuf = append(w.recordBuf, src...)
-			goto FIRST_FIELD_WRITTEN
-		}
-
-		r, n := utf8.DecodeRune(src[i:])
-		switch r {
-		case w.quote:
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-			w.recordBuf = append(w.recordBuf, src[:i]...)
-			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-			w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-		case w.escape:
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-			w.recordBuf = append(w.recordBuf, src[:i]...)
-			w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-		default:
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-			w.loadQF_memclearOff_escapeOn(src, 0, i+n)
-		}
-
-		w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-		goto FIRST_FIELD_WRITTEN
-
-	}
-
-FIRST_FIELD_WRITTEN:
-
-	for i := 1; i < len(fields); i++ {
-		w.recordBuf = append(w.recordBuf, w.fieldSepBytes[:w.fieldSepByteLen]...)
-
-	SUBSEQUENT_FIELD_WRITE:
-		for {
-			f := &fields[i]
-
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			case wfkRune:
-				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			default:
-				src, err = f.AppendText(w.recordBuf)
-				if err != nil {
-					return 0, err
-				}
-
-				w.recordBuf = src
-				break SUBSEQUENT_FIELD_WRITE
-			}
-
-			//
-			// process src buf
-			//
-
-			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-			i := bytes.IndexAny(src, w.controlRunes)
-			if i == -1 {
-				w.recordBuf = append(w.recordBuf, src...)
-				break
-			}
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-			case w.escape:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-			default:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, 0, i+n)
-			}
-
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-			break
-
-		}
-	}
-
-	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-	n, err := w.writer.Write(w.recordBuf)
-	if err != nil {
-		err = writeIOErr{err}
-	}
-	return n, err
-
-}
-
-func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn(fields []FieldWriter) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
-	// write the first field
-	{
-		f := &fields[0]
-
-		var src []byte
-		var err error
-
-		switch f.kind {
-		case wfkBytes:
-			src = f.bytes
-			if len(src) == 0 {
-				if len(fields) == 1 {
-					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-		case wfkString:
-			s := f.str
-			if len(s) == 0 {
-				if len(fields) == 1 {
-					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-					n, err := w.writer.Write(w.recordBuf)
-					if err != nil {
-						err = writeIOErr{err}
-					}
-					return n, err
-				}
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			src = unsafe.Slice(unsafe.StringData(s), len(s))
-		default:
-			src, err = f.AppendText(w.fieldWriterBuf[:0])
-			if err != nil {
-				return 0, err
-			}
-		}
-
-		//
-		// process src buf
-		//
-
-		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-		i := bytes.IndexAny(src, w.controlRunes)
-		if i == -1 {
-			w.recordBuf = append(w.recordBuf, src...)
-			goto FIRST_FIELD_WRITTEN
-		}
-
-		r, n := utf8.DecodeRune(src[i:])
-		switch r {
-		case w.quote:
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-			w.recordBuf = append(w.recordBuf, src[:i]...)
-			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-			w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-		case w.escape:
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-			w.recordBuf = append(w.recordBuf, src[:i]...)
-			w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-			w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-		default:
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-			w.loadQF_memclearOff_escapeOn(src, 0, i+n)
-		}
-
-		w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-		goto FIRST_FIELD_WRITTEN
-
-	}
-
-FIRST_FIELD_WRITTEN:
-
-	for i := 1; i < len(fields); i++ {
-		w.recordBuf = append(w.recordBuf, w.fieldSepBytes[:w.fieldSepByteLen]...)
-
-	SUBSEQUENT_FIELD_WRITE:
-		for {
-			f := &fields[i]
-
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			default:
-				src, err = f.AppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			}
-
-			//
-			// process src buf
-			//
-
-			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-			i := bytes.IndexAny(src, w.controlRunes)
-			if i == -1 {
-				w.recordBuf = append(w.recordBuf, src...)
-				break
-			}
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-			case w.escape:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-			default:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, 0, i+n)
-			}
-
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-			break
-
-		}
-	}
-
-	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-	n, err := w.writer.Write(w.recordBuf)
-	if err != nil {
-		err = writeIOErr{err}
-	}
-	return n, err
-
-}
-
-func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff(fields []FieldWriter) (int, error) {
+func (w *Writer) writeRow_memclearOff_checkUTF8On_controlRuneOverlapOff(fields []FieldWriter) (int, error) {
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
@@ -4333,15 +2549,15 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOff(src, i+n, i+n)
 			case w.escape:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOff(src, i+n, i+n)
 			default:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, 0, i+n)
+				w.loadQF_memclearOff(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4380,15 +2596,15 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 			case w.escape:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 			default:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -4464,15 +2680,15 @@ FIRST_FIELD_WRITTEN:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOff(src, i+n, i+n)
 				case w.escape:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOff(src, i+n, i+n)
 				default:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, 0, i+n)
+					w.loadQF_memclearOff(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4510,15 +2726,15 @@ FIRST_FIELD_WRITTEN:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 				case w.escape:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 				default:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -4543,7 +2759,7 @@ FIRST_FIELD_WRITTEN:
 
 }
 
-func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(fields []FieldWriter) (int, error) {
+func (w *Writer) writeRow_memclearOff_checkUTF8On_controlRuneOverlapOn(fields []FieldWriter) (int, error) {
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
@@ -4618,15 +2834,15 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOff(src, i+n, i+n)
 			case w.escape:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOff(src, i+n, i+n)
 			default:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, 0, i+n)
+				w.loadQF_memclearOff(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4665,15 +2881,15 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 			case w.escape:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 			default:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOff(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -4741,15 +2957,15 @@ FIRST_FIELD_WRITTEN:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOff(src, i+n, i+n)
 				case w.escape:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOff(src, i+n, i+n)
 				default:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, 0, i+n)
+					w.loadQF_memclearOff(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4787,15 +3003,15 @@ FIRST_FIELD_WRITTEN:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 				case w.escape:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 				default:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -4820,7 +3036,7 @@ FIRST_FIELD_WRITTEN:
 
 }
 
-func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff(fields []FieldWriter) (int, error) {
+func (w *Writer) writeRow_memclearOn_checkUTF8Off_controlRuneOverlapOff(fields []FieldWriter) (int, error) {
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
@@ -4895,13 +3111,13 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
 		switch r {
 		case w.quote:
 			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-			w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+			w.loadQF_memclearOn(src, i+n, i+n)
 		case w.escape:
 			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-			w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+			w.loadQF_memclearOn(src, i+n, i+n)
 		default:
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-			w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+			w.loadQF_memclearOn(src, 0, i+n)
 		}
 
 		w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -4967,13 +3183,13 @@ FIRST_FIELD_WRITTEN:
 			switch r {
 			case w.quote:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOn(src, i+n, i+n)
 			case w.escape:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOn(src, i+n, i+n)
 			default:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+				w.loadQF_memclearOn(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -4993,7 +3209,7 @@ FIRST_FIELD_WRITTEN:
 
 }
 
-func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn(fields []FieldWriter) (int, error) {
+func (w *Writer) writeRow_memclearOn_checkUTF8Off_controlRuneOverlapOn(fields []FieldWriter) (int, error) {
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
@@ -5060,13 +3276,13 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn(
 		switch r {
 		case w.quote:
 			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-			w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+			w.loadQF_memclearOn(src, i+n, i+n)
 		case w.escape:
 			w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-			w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+			w.loadQF_memclearOn(src, i+n, i+n)
 		default:
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-			w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+			w.loadQF_memclearOn(src, 0, i+n)
 		}
 
 		w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -5124,13 +3340,13 @@ FIRST_FIELD_WRITTEN:
 			switch r {
 			case w.quote:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOn(src, i+n, i+n)
 			case w.escape:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOn(src, i+n, i+n)
 			default:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+				w.loadQF_memclearOn(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -5150,7 +3366,7 @@ FIRST_FIELD_WRITTEN:
 
 }
 
-func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(fields []FieldWriter) (int, error) {
+func (w *Writer) writeRow_memclearOn_checkUTF8On_controlRuneOverlapOff(fields []FieldWriter) (int, error) {
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
@@ -5229,13 +3445,13 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(
 			switch r {
 			case w.quote:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOn(src, i+n, i+n)
 			case w.escape:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOn(src, i+n, i+n)
 			default:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+				w.loadQF_memclearOn(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -5272,13 +3488,13 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(
 			switch r {
 			case w.quote:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 			case w.escape:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 			default:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOn(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -5352,13 +3568,13 @@ FIRST_FIELD_WRITTEN:
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOn(src, i+n, i+n)
 				case w.escape:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOn(src, i+n, i+n)
 				default:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+					w.loadQF_memclearOn(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -5394,13 +3610,13 @@ FIRST_FIELD_WRITTEN:
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 				case w.escape:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 				default:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -5425,7 +3641,7 @@ FIRST_FIELD_WRITTEN:
 
 }
 
-func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(fields []FieldWriter) (int, error) {
+func (w *Writer) writeRow_memclearOn_checkUTF8On_controlRuneOverlapOn(fields []FieldWriter) (int, error) {
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
@@ -5496,13 +3712,13 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(f
 			switch r {
 			case w.quote:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOn(src, i+n, i+n)
 			case w.escape:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOn(src, i+n, i+n)
 			default:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+				w.loadQF_memclearOn(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -5539,13 +3755,13 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(f
 			switch r {
 			case w.quote:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 			case w.escape:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 			default:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
+				err = w.loadQF_wCheckUTF8_memclearOn(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -5611,13 +3827,13 @@ FIRST_FIELD_WRITTEN:
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOn(src, i+n, i+n)
 				case w.escape:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOn(src, i+n, i+n)
 				default:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+					w.loadQF_memclearOn(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -5653,13 +3869,13 @@ FIRST_FIELD_WRITTEN:
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 				case w.escape:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 				default:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -5684,14 +3900,14 @@ FIRST_FIELD_WRITTEN:
 
 }
 
-func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOff(comment rune) writeRowFunc {
+func (w *Writer) writeRowAfterHeader_memclearOff_checkUTF8Off_controlRuneOverlapOff(comment rune) writeRowFunc {
 	commentBytes := []byte(string(comment))
 
 	return func(fields []FieldWriter) (int, error) {
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-		w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOff
+		w.writeRow = w.writeRow_memclearOff_checkUTF8Off_controlRuneOverlapOff
 
 		// write the first field
 		{
@@ -5771,15 +3987,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+				w.loadQF_memclearOff(src, i+n, i+n)
 			case w.escape:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+				w.loadQF_memclearOff(src, i+n, i+n)
 			default:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, 0, i+n)
+				w.loadQF_memclearOff(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -5847,15 +4063,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+					w.loadQF_memclearOff(src, i+n, i+n)
 				case w.escape:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+					w.loadQF_memclearOff(src, i+n, i+n)
 				default:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, 0, i+n)
+					w.loadQF_memclearOff(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -5875,14 +4091,14 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 	}
 }
 
-func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOn(comment rune) writeRowFunc {
+func (w *Writer) writeRowAfterHeader_memclearOff_checkUTF8Off_controlRuneOverlapOn(comment rune) writeRowFunc {
 	commentBytes := []byte(string(comment))
 
 	return func(fields []FieldWriter) (int, error) {
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-		w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOn
+		w.writeRow = w.writeRow_memclearOff_checkUTF8Off_controlRuneOverlapOn
 
 		// write the first field
 		{
@@ -5954,15 +4170,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+				w.loadQF_memclearOff(src, i+n, i+n)
 			case w.escape:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+				w.loadQF_memclearOff(src, i+n, i+n)
 			default:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.loadQF_memclearOff_escapeOff(src, 0, i+n)
+				w.loadQF_memclearOff(src, 0, i+n)
 			}
 
 			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -6022,15 +4238,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+					w.loadQF_memclearOff(src, i+n, i+n)
 				case w.escape:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
+					w.loadQF_memclearOff(src, i+n, i+n)
 				default:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, 0, i+n)
+					w.loadQF_memclearOff(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -6050,1866 +4266,14 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 	}
 }
 
-func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOff(comment rune) writeRowFunc {
+func (w *Writer) writeRowAfterHeader_memclearOff_checkUTF8On_controlRuneOverlapOff(comment rune) writeRowFunc {
 	commentBytes := []byte(string(comment))
 
 	return func(fields []FieldWriter) (int, error) {
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-		w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOff
-
-		// write the first field
-		{
-			f := &fields[0]
-
-			var scanForNonUTF8 bool
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					if len(fields) == 1 {
-						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					if len(fields) == 1 {
-						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			case wfkRune:
-				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			default:
-				src, err = f.AppendText(w.recordBuf)
-				if err != nil {
-					return 0, err
-				}
-
-				w.recordBuf = src
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			//
-			// process src buf
-			//
-
-			if !scanForNonUTF8 {
-				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-				var i int
-
-				if !bytes.HasPrefix(src, commentBytes) {
-					i = bytes.IndexAny(src, w.controlRunes)
-					if i == -1 {
-						w.recordBuf = append(w.recordBuf, src...)
-						goto FIRST_FIELD_WRITTEN
-					}
-				}
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-				default:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, 0, i+n)
-				}
-
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			// for each decoded rune, check if that rune fails to decode and if so then return an error
-			// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-			// continue loading
-
-			isFirstRune := true
-			i := 0
-			for {
-				r, n := utf8.DecodeRune(src[i:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.recordBuf = append(w.recordBuf, src...)
-					goto FIRST_FIELD_WRITTEN
-				}
-				if n == 1 && r == utf8.RuneError {
-					return 0, ErrNonUTF8InRecord
-				}
-
-				if !strings.ContainsRune(w.controlRunes, r) && (!isFirstRune || r != comment) {
-					i += n
-					isFirstRune = false
-					continue
-				}
-
-				//
-				// found a control rune of some kind
-				//
-
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-				default:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
-				}
-				if err != nil {
-					return 0, err
-				}
-
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-				goto FIRST_FIELD_WRITTEN
-			}
-
-		}
-
-	FIRST_FIELD_WRITTEN:
-
-		for i := 1; i < len(fields); i++ {
-			w.recordBuf = append(w.recordBuf, w.fieldSepBytes[:w.fieldSepByteLen]...)
-
-		SUBSEQUENT_FIELD_WRITE:
-			for {
-				f := &fields[i]
-
-				var scanForNonUTF8 bool
-				var src []byte
-				var err error
-
-				switch f.kind {
-				case wfkBytes:
-					src = f.bytes
-					if len(src) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-					scanForNonUTF8 = (f._64_bits == 0)
-				case wfkString:
-					s := f.str
-					if len(s) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-					scanForNonUTF8 = (f._64_bits == 0)
-					src = unsafe.Slice(unsafe.StringData(s), len(s))
-				case wfkRune:
-					src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-					if err != nil {
-						return 0, err
-					}
-				default:
-					src, err = f.AppendText(w.recordBuf)
-					if err != nil {
-						return 0, err
-					}
-
-					w.recordBuf = src
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				//
-				// process src buf
-				//
-
-				if !scanForNonUTF8 {
-					// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-					i := bytes.IndexAny(src, w.controlRunes)
-					if i == -1 {
-						w.recordBuf = append(w.recordBuf, src...)
-						break
-					}
-
-					r, n := utf8.DecodeRune(src[i:])
-					switch r {
-					case w.quote:
-						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						w.recordBuf = append(w.recordBuf, src[:i]...)
-						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-					case w.escape:
-						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						w.recordBuf = append(w.recordBuf, src[:i]...)
-						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-					default:
-						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						w.loadQF_memclearOff_escapeOff(src, 0, i+n)
-					}
-
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-					break
-				}
-
-				// for each decoded rune, check if that rune fails to decode and if so then return an error
-				// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-				// continue loading
-
-				i := 0
-				for {
-					r, n := utf8.DecodeRune(src[i:])
-					if n == 0 {
-						// all good and no overlap issues, so just directly copy src
-						w.recordBuf = append(w.recordBuf, src...)
-						break
-					}
-					if n == 1 && r == utf8.RuneError {
-						return 0, ErrNonUTF8InRecord
-					}
-
-					if !strings.ContainsRune(w.controlRunes, r) {
-						i += n
-						continue
-					}
-
-					//
-					// found a control rune of some kind
-					//
-
-					switch r {
-					case w.quote:
-						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						w.recordBuf = append(w.recordBuf, src[:i]...)
-						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-					case w.escape:
-						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						w.recordBuf = append(w.recordBuf, src[:i]...)
-						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-					default:
-						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
-					}
-					if err != nil {
-						return 0, err
-					}
-
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-					break
-				}
-
-				break
-			}
-		}
-
-		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-		n, err := w.writer.Write(w.recordBuf)
-		if err != nil {
-			err = writeIOErr{err}
-		}
-		return n, err
-	}
-}
-
-func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn(comment rune) writeRowFunc {
-	commentBytes := []byte(string(comment))
-
-	return func(fields []FieldWriter) (int, error) {
-		defer func() {
-			w.recordBuf = w.recordBuf[:0]
-		}()
-		w.writeRow = w.writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
-
-		// write the first field
-		{
-			f := &fields[0]
-
-			var scanForNonUTF8 bool
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					if len(fields) == 1 {
-						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					if len(fields) == 1 {
-						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			default:
-				src, err = f.AppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			}
-
-			//
-			// process src buf
-			//
-
-			if !scanForNonUTF8 {
-				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-				var i int
-
-				if !bytes.HasPrefix(src, commentBytes) {
-					i = bytes.IndexAny(src, w.controlRunes)
-					if i == -1 {
-						w.recordBuf = append(w.recordBuf, src...)
-						goto FIRST_FIELD_WRITTEN
-					}
-				}
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-				default:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.loadQF_memclearOff_escapeOff(src, 0, i+n)
-				}
-
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			// for each decoded rune, check if that rune fails to decode and if so then return an error
-			// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-			// continue loading
-
-			isFirstRune := true
-			i := 0
-			for {
-				r, n := utf8.DecodeRune(src[i:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.recordBuf = append(w.recordBuf, src...)
-					goto FIRST_FIELD_WRITTEN
-				}
-				if n == 1 && r == utf8.RuneError {
-					return 0, ErrNonUTF8InRecord
-				}
-
-				if !strings.ContainsRune(w.controlRunes, r) && (!isFirstRune || r != comment) {
-					i += n
-					isFirstRune = false
-					continue
-				}
-
-				//
-				// found a control rune of some kind
-				//
-
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-				default:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
-				}
-				if err != nil {
-					return 0, err
-				}
-
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-				goto FIRST_FIELD_WRITTEN
-			}
-
-		}
-
-	FIRST_FIELD_WRITTEN:
-
-		for i := 1; i < len(fields); i++ {
-			w.recordBuf = append(w.recordBuf, w.fieldSepBytes[:w.fieldSepByteLen]...)
-
-		SUBSEQUENT_FIELD_WRITE:
-			for {
-				f := &fields[i]
-
-				var scanForNonUTF8 bool
-				var src []byte
-				var err error
-
-				switch f.kind {
-				case wfkBytes:
-					src = f.bytes
-					if len(src) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-					scanForNonUTF8 = (f._64_bits == 0)
-				case wfkString:
-					s := f.str
-					if len(s) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-					scanForNonUTF8 = (f._64_bits == 0)
-					src = unsafe.Slice(unsafe.StringData(s), len(s))
-				default:
-					src, err = f.AppendText(w.fieldWriterBuf[:0])
-					if err != nil {
-						return 0, err
-					}
-				}
-
-				//
-				// process src buf
-				//
-
-				if !scanForNonUTF8 {
-					// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-					i := bytes.IndexAny(src, w.controlRunes)
-					if i == -1 {
-						w.recordBuf = append(w.recordBuf, src...)
-						break
-					}
-
-					r, n := utf8.DecodeRune(src[i:])
-					switch r {
-					case w.quote:
-						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						w.recordBuf = append(w.recordBuf, src[:i]...)
-						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-					case w.escape:
-						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						w.recordBuf = append(w.recordBuf, src[:i]...)
-						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						w.loadQF_memclearOff_escapeOff(src, i+n, i+n)
-					default:
-						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						w.loadQF_memclearOff_escapeOff(src, 0, i+n)
-					}
-
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-					break
-				}
-
-				// for each decoded rune, check if that rune fails to decode and if so then return an error
-				// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-				// continue loading
-
-				i := 0
-				for {
-					r, n := utf8.DecodeRune(src[i:])
-					if n == 0 {
-						// all good and no overlap issues, so just directly copy src
-						w.recordBuf = append(w.recordBuf, src...)
-						break
-					}
-					if n == 1 && r == utf8.RuneError {
-						return 0, ErrNonUTF8InRecord
-					}
-
-					if !strings.ContainsRune(w.controlRunes, r) {
-						i += n
-						continue
-					}
-
-					//
-					// found a control rune of some kind
-					//
-
-					switch r {
-					case w.quote:
-						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						w.recordBuf = append(w.recordBuf, src[:i]...)
-						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-					case w.escape:
-						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						w.recordBuf = append(w.recordBuf, src[:i]...)
-						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, i+n, i+n)
-					default:
-						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						err = w.loadQF_wCheckUTF8_memclearOff_escapeOff(src, 0, i+n)
-					}
-					if err != nil {
-						return 0, err
-					}
-
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-					break
-				}
-
-				break
-			}
-		}
-
-		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-		n, err := w.writer.Write(w.recordBuf)
-		if err != nil {
-			err = writeIOErr{err}
-		}
-		return n, err
-	}
-}
-
-func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOff(comment rune) writeRowFunc {
-	commentBytes := []byte(string(comment))
-
-	return func(fields []FieldWriter) (int, error) {
-		defer func() {
-			w.recordBuf = w.recordBuf[:0]
-		}()
-		w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOff
-
-		// write the first field
-		{
-			f := &fields[0]
-
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					if len(fields) == 1 {
-						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					if len(fields) == 1 {
-						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			case wfkRune:
-				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			default:
-				src, err = f.AppendText(w.recordBuf)
-				if err != nil {
-					return 0, err
-				}
-
-				w.setRecordBuf(src)
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			//
-			// process src buf
-			//
-
-			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-			var i int
-
-			if !bytes.HasPrefix(src, commentBytes) {
-				i = bytes.IndexAny(src, w.controlRunes)
-				if i == -1 {
-					w.appendRec(src)
-					goto FIRST_FIELD_WRITTEN
-				}
-			}
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-			case w.escape:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-			default:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-			}
-
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-			goto FIRST_FIELD_WRITTEN
-
-		}
-
-	FIRST_FIELD_WRITTEN:
-
-		for i := 1; i < len(fields); i++ {
-			w.appendRec(w.fieldSepBytes[:w.fieldSepByteLen])
-
-		SUBSEQUENT_FIELD_WRITE:
-			for {
-				f := &fields[i]
-
-				var src []byte
-				var err error
-
-				switch f.kind {
-				case wfkBytes:
-					src = f.bytes
-					if len(src) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-				case wfkString:
-					s := f.str
-					if len(s) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-					src = unsafe.Slice(unsafe.StringData(s), len(s))
-				case wfkRune:
-					src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-					if err != nil {
-						return 0, err
-					}
-				default:
-					src, err = f.AppendText(w.recordBuf)
-					if err != nil {
-						return 0, err
-					}
-
-					w.setRecordBuf(src)
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				//
-				// process src buf
-				//
-
-				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-				i := bytes.IndexAny(src, w.controlRunes)
-				if i == -1 {
-					w.appendRec(src)
-					break
-				}
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-				default:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-				}
-
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-				break
-
-			}
-		}
-
-		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-
-		n, err := w.writer.Write(w.recordBuf)
-		if err != nil {
-			err = writeIOErr{err}
-		}
-		return n, err
-	}
-}
-
-func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn(comment rune) writeRowFunc {
-	commentBytes := []byte(string(comment))
-
-	return func(fields []FieldWriter) (int, error) {
-		defer func() {
-			w.recordBuf = w.recordBuf[:0]
-		}()
-		w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn
-
-		// write the first field
-		{
-			f := &fields[0]
-
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					if len(fields) == 1 {
-						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					if len(fields) == 1 {
-						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			default:
-				src, err = f.AppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			}
-
-			//
-			// process src buf
-			//
-
-			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-			var i int
-
-			if !bytes.HasPrefix(src, commentBytes) {
-				i = bytes.IndexAny(src, w.controlRunes)
-				if i == -1 {
-					w.appendRec(src)
-					goto FIRST_FIELD_WRITTEN
-				}
-			}
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-			case w.escape:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-			default:
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-			}
-
-			w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-			goto FIRST_FIELD_WRITTEN
-
-		}
-
-	FIRST_FIELD_WRITTEN:
-
-		for i := 1; i < len(fields); i++ {
-			w.appendRec(w.fieldSepBytes[:w.fieldSepByteLen])
-
-		SUBSEQUENT_FIELD_WRITE:
-			for {
-				f := &fields[i]
-
-				var src []byte
-				var err error
-
-				switch f.kind {
-				case wfkBytes:
-					src = f.bytes
-					if len(src) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-				case wfkString:
-					s := f.str
-					if len(s) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-					src = unsafe.Slice(unsafe.StringData(s), len(s))
-				default:
-					src, err = f.AppendText(w.fieldWriterBuf[:0])
-					if err != nil {
-						return 0, err
-					}
-				}
-
-				//
-				// process src buf
-				//
-
-				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-				i := bytes.IndexAny(src, w.controlRunes)
-				if i == -1 {
-					w.appendRec(src)
-					break
-				}
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-				default:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-				}
-
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-				break
-
-			}
-		}
-
-		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-
-		n, err := w.writer.Write(w.recordBuf)
-		if err != nil {
-			err = writeIOErr{err}
-		}
-		return n, err
-	}
-}
-
-func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff(comment rune) writeRowFunc {
-	commentBytes := []byte(string(comment))
-
-	return func(fields []FieldWriter) (int, error) {
-		defer func() {
-			w.recordBuf = w.recordBuf[:0]
-		}()
-		w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
-
-		// write the first field
-		{
-			f := &fields[0]
-
-			var scanForNonUTF8 bool
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					if len(fields) == 1 {
-						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					if len(fields) == 1 {
-						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			case wfkRune:
-				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			default:
-				src, err = f.AppendText(w.recordBuf)
-				if err != nil {
-					return 0, err
-				}
-
-				w.setRecordBuf(src)
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			//
-			// process src buf
-			//
-
-			if !scanForNonUTF8 {
-				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-				var i int
-
-				if !bytes.HasPrefix(src, commentBytes) {
-					i = bytes.IndexAny(src, w.controlRunes)
-					if i == -1 {
-						w.appendRec(src)
-						goto FIRST_FIELD_WRITTEN
-					}
-				}
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-				default:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-				}
-
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			// for each decoded rune, check if that rune fails to decode and if so then return an error
-			// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-			// continue loading
-
-			isFirstRune := true
-			i := 0
-			for {
-				r, n := utf8.DecodeRune(src[i:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.appendRec(src)
-					goto FIRST_FIELD_WRITTEN
-				}
-				if n == 1 && r == utf8.RuneError {
-					return 0, ErrNonUTF8InRecord
-				}
-
-				if !strings.ContainsRune(w.controlRunes, r) && (!isFirstRune || r != comment) {
-					i += n
-					isFirstRune = false
-					continue
-				}
-
-				//
-				// found a control rune of some kind
-				//
-
-				switch r {
-				case w.quote:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-				default:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
-				}
-				if err != nil {
-					return 0, err
-				}
-
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-				goto FIRST_FIELD_WRITTEN
-			}
-
-		}
-
-	FIRST_FIELD_WRITTEN:
-
-		for i := 1; i < len(fields); i++ {
-			w.appendRec(w.fieldSepBytes[:w.fieldSepByteLen])
-
-		SUBSEQUENT_FIELD_WRITE:
-			for {
-				f := &fields[i]
-
-				var scanForNonUTF8 bool
-				var src []byte
-				var err error
-
-				switch f.kind {
-				case wfkBytes:
-					src = f.bytes
-					if len(src) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-					scanForNonUTF8 = (f._64_bits == 0)
-				case wfkString:
-					s := f.str
-					if len(s) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-					scanForNonUTF8 = (f._64_bits == 0)
-					src = unsafe.Slice(unsafe.StringData(s), len(s))
-				case wfkRune:
-					src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-					if err != nil {
-						return 0, err
-					}
-				default:
-					src, err = f.AppendText(w.recordBuf)
-					if err != nil {
-						return 0, err
-					}
-
-					w.setRecordBuf(src)
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				//
-				// process src buf
-				//
-
-				if !scanForNonUTF8 {
-					// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-					i := bytes.IndexAny(src, w.controlRunes)
-					if i == -1 {
-						w.appendRec(src)
-						break
-					}
-
-					r, n := utf8.DecodeRune(src[i:])
-					switch r {
-					case w.quote:
-						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-					case w.escape:
-						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-					default:
-						w.appendRec(w.quoteBytes[:w.quoteByteLen])
-						w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-					}
-
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-					break
-				}
-
-				// for each decoded rune, check if that rune fails to decode and if so then return an error
-				// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-				// continue loading
-
-				i := 0
-				for {
-					r, n := utf8.DecodeRune(src[i:])
-					if n == 0 {
-						// all good and no overlap issues, so just directly copy src
-						w.appendRec(src)
-						break
-					}
-					if n == 1 && r == utf8.RuneError {
-						return 0, ErrNonUTF8InRecord
-					}
-
-					if !strings.ContainsRune(w.controlRunes, r) {
-						i += n
-						continue
-					}
-
-					//
-					// found a control rune of some kind
-					//
-
-					switch r {
-					case w.quote:
-						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-					case w.escape:
-						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-					default:
-						w.appendRec(w.quoteBytes[:w.quoteByteLen])
-						err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
-					}
-					if err != nil {
-						return 0, err
-					}
-
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-					break
-				}
-
-				break
-			}
-		}
-
-		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-
-		n, err := w.writer.Write(w.recordBuf)
-		if err != nil {
-			err = writeIOErr{err}
-		}
-		return n, err
-	}
-}
-
-func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn(comment rune) writeRowFunc {
-	commentBytes := []byte(string(comment))
-
-	return func(fields []FieldWriter) (int, error) {
-		defer func() {
-			w.recordBuf = w.recordBuf[:0]
-		}()
-		w.writeRow = w.writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn
-
-		// write the first field
-		{
-			f := &fields[0]
-
-			var scanForNonUTF8 bool
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					if len(fields) == 1 {
-						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					if len(fields) == 1 {
-						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-				scanForNonUTF8 = (f._64_bits == 0)
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			default:
-				src, err = f.AppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			}
-
-			//
-			// process src buf
-			//
-
-			if !scanForNonUTF8 {
-				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-				var i int
-
-				if !bytes.HasPrefix(src, commentBytes) {
-					i = bytes.IndexAny(src, w.controlRunes)
-					if i == -1 {
-						w.appendRec(src)
-						goto FIRST_FIELD_WRITTEN
-					}
-				}
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-				default:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-				}
-
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			// for each decoded rune, check if that rune fails to decode and if so then return an error
-			// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-			// continue loading
-
-			isFirstRune := true
-			i := 0
-			for {
-				r, n := utf8.DecodeRune(src[i:])
-				if n == 0 {
-					// all good and no overlap issues, so just directly copy src
-					w.appendRec(src)
-					goto FIRST_FIELD_WRITTEN
-				}
-				if n == 1 && r == utf8.RuneError {
-					return 0, ErrNonUTF8InRecord
-				}
-
-				if !strings.ContainsRune(w.controlRunes, r) && (!isFirstRune || r != comment) {
-					i += n
-					isFirstRune = false
-					continue
-				}
-
-				//
-				// found a control rune of some kind
-				//
-
-				switch r {
-				case w.quote:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-				case w.escape:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-				default:
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
-				}
-				if err != nil {
-					return 0, err
-				}
-
-				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-				goto FIRST_FIELD_WRITTEN
-			}
-
-		}
-
-	FIRST_FIELD_WRITTEN:
-
-		for i := 1; i < len(fields); i++ {
-			w.appendRec(w.fieldSepBytes[:w.fieldSepByteLen])
-
-		SUBSEQUENT_FIELD_WRITE:
-			for {
-				f := &fields[i]
-
-				var scanForNonUTF8 bool
-				var src []byte
-				var err error
-
-				switch f.kind {
-				case wfkBytes:
-					src = f.bytes
-					if len(src) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-					scanForNonUTF8 = (f._64_bits == 0)
-				case wfkString:
-					s := f.str
-					if len(s) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-					scanForNonUTF8 = (f._64_bits == 0)
-					src = unsafe.Slice(unsafe.StringData(s), len(s))
-				default:
-					src, err = f.AppendText(w.fieldWriterBuf[:0])
-					if err != nil {
-						return 0, err
-					}
-				}
-
-				//
-				// process src buf
-				//
-
-				if !scanForNonUTF8 {
-					// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-					i := bytes.IndexAny(src, w.controlRunes)
-					if i == -1 {
-						w.appendRec(src)
-						break
-					}
-
-					r, n := utf8.DecodeRune(src[i:])
-					switch r {
-					case w.quote:
-						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-					case w.escape:
-						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						w.loadQF_memclearOn_escapeOff(src, i+n, i+n)
-					default:
-						w.appendRec(w.quoteBytes[:w.quoteByteLen])
-						w.loadQF_memclearOn_escapeOff(src, 0, i+n)
-					}
-
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-					break
-				}
-
-				// for each decoded rune, check if that rune fails to decode and if so then return an error
-				// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
-				// continue loading
-
-				i := 0
-				for {
-					r, n := utf8.DecodeRune(src[i:])
-					if n == 0 {
-						// all good and no overlap issues, so just directly copy src
-						w.appendRec(src)
-						break
-					}
-					if n == 1 && r == utf8.RuneError {
-						return 0, ErrNonUTF8InRecord
-					}
-
-					if !strings.ContainsRune(w.controlRunes, r) {
-						i += n
-						continue
-					}
-
-					//
-					// found a control rune of some kind
-					//
-
-					switch r {
-					case w.quote:
-						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-					case w.escape:
-						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, i+n, i+n)
-					default:
-						w.appendRec(w.quoteBytes[:w.quoteByteLen])
-						err = w.loadQF_wCheckUTF8_memclearOn_escapeOff(src, 0, i+n)
-					}
-					if err != nil {
-						return 0, err
-					}
-
-					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-
-					break
-				}
-
-				break
-			}
-		}
-
-		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
-
-		n, err := w.writer.Write(w.recordBuf)
-		if err != nil {
-			err = writeIOErr{err}
-		}
-		return n, err
-	}
-}
-
-func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOff(comment rune) writeRowFunc {
-	commentBytes := []byte(string(comment))
-
-	return func(fields []FieldWriter) (int, error) {
-		defer func() {
-			w.recordBuf = w.recordBuf[:0]
-		}()
-		w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOff
-
-		// write the first field
-		{
-			f := &fields[0]
-
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					if len(fields) == 1 {
-						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					if len(fields) == 1 {
-						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			case wfkRune:
-				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			default:
-				src, err = f.AppendText(w.recordBuf)
-				if err != nil {
-					return 0, err
-				}
-
-				w.recordBuf = src
-				goto FIRST_FIELD_WRITTEN
-			}
-
-			//
-			// process src buf
-			//
-
-			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-			var i int
-
-			if !bytes.HasPrefix(src, commentBytes) {
-				i = bytes.IndexAny(src, w.controlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src...)
-					goto FIRST_FIELD_WRITTEN
-				}
-			}
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-			case w.escape:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-			default:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, 0, i+n)
-			}
-
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-			goto FIRST_FIELD_WRITTEN
-
-		}
-
-	FIRST_FIELD_WRITTEN:
-
-		for i := 1; i < len(fields); i++ {
-			w.recordBuf = append(w.recordBuf, w.fieldSepBytes[:w.fieldSepByteLen]...)
-
-		SUBSEQUENT_FIELD_WRITE:
-			for {
-				f := &fields[i]
-
-				var src []byte
-				var err error
-
-				switch f.kind {
-				case wfkBytes:
-					src = f.bytes
-					if len(src) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-				case wfkString:
-					s := f.str
-					if len(s) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-					src = unsafe.Slice(unsafe.StringData(s), len(s))
-				case wfkRune:
-					src, err = f.runeAppendText(w.fieldWriterBuf[:0])
-					if err != nil {
-						return 0, err
-					}
-				default:
-					src, err = f.AppendText(w.recordBuf)
-					if err != nil {
-						return 0, err
-					}
-
-					w.recordBuf = src
-					break SUBSEQUENT_FIELD_WRITE
-				}
-
-				//
-				// process src buf
-				//
-
-				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-				i := bytes.IndexAny(src, w.controlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src...)
-					break
-				}
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-				case w.escape:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-				default:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, 0, i+n)
-				}
-
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-				break
-
-			}
-		}
-
-		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-		n, err := w.writer.Write(w.recordBuf)
-		if err != nil {
-			err = writeIOErr{err}
-		}
-		return n, err
-	}
-}
-
-func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn(comment rune) writeRowFunc {
-	commentBytes := []byte(string(comment))
-
-	return func(fields []FieldWriter) (int, error) {
-		defer func() {
-			w.recordBuf = w.recordBuf[:0]
-		}()
-		w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn
-
-		// write the first field
-		{
-			f := &fields[0]
-
-			var src []byte
-			var err error
-
-			switch f.kind {
-			case wfkBytes:
-				src = f.bytes
-				if len(src) == 0 {
-					if len(fields) == 1 {
-						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-			case wfkString:
-				s := f.str
-				if len(s) == 0 {
-					if len(fields) == 1 {
-						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
-						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-						n, err := w.writer.Write(w.recordBuf)
-						if err != nil {
-							err = writeIOErr{err}
-						}
-						return n, err
-					}
-					goto FIRST_FIELD_WRITTEN
-				}
-
-				src = unsafe.Slice(unsafe.StringData(s), len(s))
-			default:
-				src, err = f.AppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					return 0, err
-				}
-			}
-
-			//
-			// process src buf
-			//
-
-			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-			var i int
-
-			if !bytes.HasPrefix(src, commentBytes) {
-				i = bytes.IndexAny(src, w.controlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src...)
-					goto FIRST_FIELD_WRITTEN
-				}
-			}
-
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-			case w.escape:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.recordBuf = append(w.recordBuf, src[:i]...)
-				w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-			default:
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-				w.loadQF_memclearOff_escapeOn(src, 0, i+n)
-			}
-
-			w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-			goto FIRST_FIELD_WRITTEN
-
-		}
-
-	FIRST_FIELD_WRITTEN:
-
-		for i := 1; i < len(fields); i++ {
-			w.recordBuf = append(w.recordBuf, w.fieldSepBytes[:w.fieldSepByteLen]...)
-
-		SUBSEQUENT_FIELD_WRITE:
-			for {
-				f := &fields[i]
-
-				var src []byte
-				var err error
-
-				switch f.kind {
-				case wfkBytes:
-					src = f.bytes
-					if len(src) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-				case wfkString:
-					s := f.str
-					if len(s) == 0 {
-						break SUBSEQUENT_FIELD_WRITE
-					}
-
-					src = unsafe.Slice(unsafe.StringData(s), len(s))
-				default:
-					src, err = f.AppendText(w.fieldWriterBuf[:0])
-					if err != nil {
-						return 0, err
-					}
-				}
-
-				//
-				// process src buf
-				//
-
-				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
-
-				i := bytes.IndexAny(src, w.controlRunes)
-				if i == -1 {
-					w.recordBuf = append(w.recordBuf, src...)
-					break
-				}
-
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-				case w.escape:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.recordBuf = append(w.recordBuf, src[:i]...)
-					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
-				default:
-					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, 0, i+n)
-				}
-
-				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-
-				break
-
-			}
-		}
-
-		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-
-		n, err := w.writer.Write(w.recordBuf)
-		if err != nil {
-			err = writeIOErr{err}
-		}
-		return n, err
-	}
-}
-
-func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff(comment rune) writeRowFunc {
-	commentBytes := []byte(string(comment))
-
-	return func(fields []FieldWriter) (int, error) {
-		defer func() {
-			w.recordBuf = w.recordBuf[:0]
-		}()
-		w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
+		w.writeRow = w.writeRow_memclearOff_checkUTF8On_controlRuneOverlapOff
 
 		// write the first field
 		{
@@ -7993,15 +4357,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOff(src, i+n, i+n)
 				case w.escape:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOff(src, i+n, i+n)
 				default:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, 0, i+n)
+					w.loadQF_memclearOff(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -8041,15 +4405,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 				case w.escape:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 				default:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -8125,15 +4489,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+						w.loadQF_memclearOff(src, i+n, i+n)
 					case w.escape:
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+						w.loadQF_memclearOff(src, i+n, i+n)
 					default:
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						w.loadQF_memclearOff_escapeOn(src, 0, i+n)
+						w.loadQF_memclearOff(src, 0, i+n)
 					}
 
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -8171,15 +4535,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 					case w.escape:
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 					default:
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff(src, 0, i+n)
 					}
 					if err != nil {
 						return 0, err
@@ -8204,14 +4568,14 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 	}
 }
 
-func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(comment rune) writeRowFunc {
+func (w *Writer) writeRowAfterHeader_memclearOff_checkUTF8On_controlRuneOverlapOn(comment rune) writeRowFunc {
 	commentBytes := []byte(string(comment))
 
 	return func(fields []FieldWriter) (int, error) {
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-		w.writeRow = w.writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn
+		w.writeRow = w.writeRow_memclearOff_checkUTF8On_controlRuneOverlapOn
 
 		// write the first field
 		{
@@ -8287,15 +4651,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOff(src, i+n, i+n)
 				case w.escape:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOff(src, i+n, i+n)
 				default:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					w.loadQF_memclearOff_escapeOn(src, 0, i+n)
+					w.loadQF_memclearOff(src, 0, i+n)
 				}
 
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -8335,15 +4699,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 				case w.escape:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 				default:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -8411,15 +4775,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+						w.loadQF_memclearOff(src, i+n, i+n)
 					case w.escape:
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						w.loadQF_memclearOff_escapeOn(src, i+n, i+n)
+						w.loadQF_memclearOff(src, i+n, i+n)
 					default:
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						w.loadQF_memclearOff_escapeOn(src, 0, i+n)
+						w.loadQF_memclearOff(src, 0, i+n)
 					}
 
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -8457,15 +4821,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-						err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 					case w.escape:
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
 						w.recordBuf = append(w.recordBuf, src[:i]...)
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-						err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
 					default:
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
-						err = w.loadQF_wCheckUTF8_memclearOff_escapeOn(src, 0, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOff(src, 0, i+n)
 					}
 					if err != nil {
 						return 0, err
@@ -8490,14 +4854,14 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 	}
 }
 
-func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff(comment rune) writeRowFunc {
+func (w *Writer) writeRowAfterHeader_memclearOn_checkUTF8Off_controlRuneOverlapOff(comment rune) writeRowFunc {
 	commentBytes := []byte(string(comment))
 
 	return func(fields []FieldWriter) (int, error) {
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-		w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
+		w.writeRow = w.writeRow_memclearOn_checkUTF8Off_controlRuneOverlapOff
 
 		// write the first field
 		{
@@ -8573,13 +4937,13 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 			switch r {
 			case w.quote:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOn(src, i+n, i+n)
 			case w.escape:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOn(src, i+n, i+n)
 			default:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+				w.loadQF_memclearOn(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -8645,13 +5009,13 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOn(src, i+n, i+n)
 				case w.escape:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOn(src, i+n, i+n)
 				default:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+					w.loadQF_memclearOn(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -8671,14 +5035,14 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 	}
 }
 
-func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn(comment rune) writeRowFunc {
+func (w *Writer) writeRowAfterHeader_memclearOn_checkUTF8Off_controlRuneOverlapOn(comment rune) writeRowFunc {
 	commentBytes := []byte(string(comment))
 
 	return func(fields []FieldWriter) (int, error) {
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-		w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn
+		w.writeRow = w.writeRow_memclearOn_checkUTF8Off_controlRuneOverlapOn
 
 		// write the first field
 		{
@@ -8746,13 +5110,13 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 			switch r {
 			case w.quote:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOn(src, i+n, i+n)
 			case w.escape:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-				w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+				w.loadQF_memclearOn(src, i+n, i+n)
 			default:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
-				w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+				w.loadQF_memclearOn(src, 0, i+n)
 			}
 
 			w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -8810,13 +5174,13 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOn(src, i+n, i+n)
 				case w.escape:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOn(src, i+n, i+n)
 				default:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+					w.loadQF_memclearOn(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -8836,14 +5200,14 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 	}
 }
 
-func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(comment rune) writeRowFunc {
+func (w *Writer) writeRowAfterHeader_memclearOn_checkUTF8On_controlRuneOverlapOff(comment rune) writeRowFunc {
 	commentBytes := []byte(string(comment))
 
 	return func(fields []FieldWriter) (int, error) {
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-		w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff
+		w.writeRow = w.writeRow_memclearOn_checkUTF8On_controlRuneOverlapOff
 
 		// write the first field
 		{
@@ -8923,13 +5287,13 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOn(src, i+n, i+n)
 				case w.escape:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOn(src, i+n, i+n)
 				default:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+					w.loadQF_memclearOn(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -8967,13 +5331,13 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 				case w.escape:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 				default:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -9047,13 +5411,13 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 					switch r {
 					case w.quote:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+						w.loadQF_memclearOn(src, i+n, i+n)
 					case w.escape:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+						w.loadQF_memclearOn(src, i+n, i+n)
 					default:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen])
-						w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+						w.loadQF_memclearOn(src, 0, i+n)
 					}
 
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -9089,13 +5453,13 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 					switch r {
 					case w.quote:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 					case w.escape:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 					default:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen])
-						err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOn(src, 0, i+n)
 					}
 					if err != nil {
 						return 0, err
@@ -9120,14 +5484,14 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 	}
 }
 
-func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(comment rune) writeRowFunc {
+func (w *Writer) writeRowAfterHeader_memclearOn_checkUTF8On_controlRuneOverlapOn(comment rune) writeRowFunc {
 	commentBytes := []byte(string(comment))
 
 	return func(fields []FieldWriter) (int, error) {
 		defer func() {
 			w.recordBuf = w.recordBuf[:0]
 		}()
-		w.writeRow = w.writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn
+		w.writeRow = w.writeRow_memclearOn_checkUTF8On_controlRuneOverlapOn
 
 		// write the first field
 		{
@@ -9199,13 +5563,13 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOn(src, i+n, i+n)
 				case w.escape:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+					w.loadQF_memclearOn(src, i+n, i+n)
 				default:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+					w.loadQF_memclearOn(src, 0, i+n)
 				}
 
 				w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -9243,13 +5607,13 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 				case w.escape:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 				default:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
+					err = w.loadQF_wCheckUTF8_memclearOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -9315,13 +5679,13 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 					switch r {
 					case w.quote:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+						w.loadQF_memclearOn(src, i+n, i+n)
 					case w.escape:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						w.loadQF_memclearOn_escapeOn(src, i+n, i+n)
+						w.loadQF_memclearOn(src, i+n, i+n)
 					default:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen])
-						w.loadQF_memclearOn_escapeOn(src, 0, i+n)
+						w.loadQF_memclearOn(src, 0, i+n)
 					}
 
 					w.appendRec(w.quoteBytes[:w.quoteByteLen])
@@ -9357,13 +5721,13 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 					switch r {
 					case w.quote:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
-						err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 					case w.escape:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedEscape[:w.escapedEscapeByteLen])
-						err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, i+n, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
 					default:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen])
-						err = w.loadQF_wCheckUTF8_memclearOn_escapeOn(src, 0, i+n)
+						err = w.loadQF_wCheckUTF8_memclearOn(src, 0, i+n)
 					}
 					if err != nil {
 						return 0, err
@@ -9388,7 +5752,7 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 	}
 }
 
-// loadQF_memclearOff_escapeOff is called after a quote, escape, or csv format sensitive character is found in the field data.
+// loadQF_memclearOff is called after a quote, escape, or csv format sensitive character is found in the field data.
 // The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
 // instance of quote or escape if applicable.
 //
@@ -9398,67 +5762,7 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 //
 // Essentially the function does the same as the parent context except has no intent around overall
 // quoting the field or detecting runes outside of the quote + escape character.
-func (w *Writer) loadQF_memclearOff_escapeOff(src []byte, loadIdx, scanIdx int) {
-	// escape any quote runes found
-	for {
-		i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-		if i == -1 {
-			w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-			return
-		}
-		i += scanIdx
-
-		w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-		w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-		loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-		scanIdx = loadIdx
-	}
-}
-
-// loadQF_wCheckUTF8_memclearOff_escapeOff performs the same duties as loadQField_memclearOff_escapeOff and in a much more expensive
-// scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQF_wCheckUTF8_memclearOff_escapeOff(src []byte, loadIdx, scanIdx int) error {
-	for {
-		r, n := utf8.DecodeRune(src[scanIdx:])
-		if n == 0 {
-			// all good and no overlap issues, so just directly copy src
-			w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-			return nil
-		}
-		if n == 1 && r == utf8.RuneError {
-			return ErrNonUTF8InRecord
-		}
-
-		if r != w.quote {
-			scanIdx += n
-			continue
-		}
-
-		//
-		// found a quote rune
-		//
-
-		w.recordBuf = append(w.recordBuf, src[loadIdx:scanIdx]...)
-		w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-
-		scanIdx += n
-		loadIdx = scanIdx
-
-	}
-}
-
-// loadQF_memclearOff_escapeOn is called after a quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-// instance of quote or escape if applicable.
-//
-// It continues with appending the data up to a potentially additional quote or escape character, then
-// appends the escaped version of that character and continues repeating that process for the rest of
-// the field.
-//
-// Essentially the function does the same as the parent context except has no intent around overall
-// quoting the field or detecting runes outside of the quote + escape character.
-func (w *Writer) loadQF_memclearOff_escapeOn(src []byte, loadIdx, scanIdx int) {
+func (w *Writer) loadQF_memclearOff(src []byte, loadIdx, scanIdx int) {
 	// escape any quote or escape runes found
 	for {
 		i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
@@ -9468,24 +5772,26 @@ func (w *Writer) loadQF_memclearOff_escapeOn(src []byte, loadIdx, scanIdx int) {
 		}
 		i += scanIdx
 
+		prevLoadIdx := loadIdx
 		r, n := utf8.DecodeRune(src[i:])
-		switch r {
-		case w.quote:
-			w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
+		scanIdx = i + n
+		loadIdx = scanIdx
+
+		if w.quote == r {
+			w.recordBuf = append(w.recordBuf, src[prevLoadIdx:i]...)
 			w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-		default:
-			w.recordBuf = append(w.recordBuf, src[loadIdx:i]...)
-			w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
+			continue
 		}
 
-		loadIdx = i + n
-		scanIdx = loadIdx
+		w.recordBuf = append(w.recordBuf, src[prevLoadIdx:i]...)
+		w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
+		continue
 	}
 }
 
-// loadQF_wCheckUTF8_memclearOff_escapeOn performs the same duties as loadQField_memclearOff_escapeOn and in a much more expensive
+// loadQF_wCheckUTF8_memclearOff performs the same duties as loadQField_memclearOff and in a much more expensive
 // scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQF_wCheckUTF8_memclearOff_escapeOn(src []byte, loadIdx, scanIdx int) error {
+func (w *Writer) loadQF_wCheckUTF8_memclearOff(src []byte, loadIdx, scanIdx int) error {
 	for {
 		r, n := utf8.DecodeRune(src[scanIdx:])
 		if n == 0 {
@@ -9519,13 +5825,11 @@ func (w *Writer) loadQF_wCheckUTF8_memclearOff_escapeOn(src []byte, loadIdx, sca
 
 		w.recordBuf = append(w.recordBuf, src[prevLoadIdx:prevScanIdx]...)
 		w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-
 		continue
-
 	}
 }
 
-// loadQF_memclearOn_escapeOff is called after a quote, escape, or csv format sensitive character is found in the field data.
+// loadQF_memclearOn is called after a quote, escape, or csv format sensitive character is found in the field data.
 // The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
 // instance of quote or escape if applicable.
 //
@@ -9535,65 +5839,7 @@ func (w *Writer) loadQF_wCheckUTF8_memclearOff_escapeOn(src []byte, loadIdx, sca
 //
 // Essentially the function does the same as the parent context except has no intent around overall
 // quoting the field or detecting runes outside of the quote + escape character.
-func (w *Writer) loadQF_memclearOn_escapeOff(src []byte, loadIdx, scanIdx int) {
-	// escape any quote runes found
-	for {
-		i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-		if i == -1 {
-			w.appendRec(src[loadIdx:])
-			return
-		}
-		i += scanIdx
-
-		w.appendRec(src[loadIdx:i], w.escapedQuote[:w.escapedQuoteByteLen])
-
-		loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-		scanIdx = loadIdx
-	}
-}
-
-// loadQF_wCheckUTF8_memclearOn_escapeOff performs the same duties as loadQField_memclearOn_escapeOff and in a much more expensive
-// scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQF_wCheckUTF8_memclearOn_escapeOff(src []byte, loadIdx, scanIdx int) error {
-	for {
-		r, n := utf8.DecodeRune(src[scanIdx:])
-		if n == 0 {
-			// all good and no overlap issues, so just directly copy src
-			w.appendRec(src[loadIdx:])
-			return nil
-		}
-		if n == 1 && r == utf8.RuneError {
-			return ErrNonUTF8InRecord
-		}
-
-		if r != w.quote {
-			scanIdx += n
-			continue
-		}
-
-		//
-		// found a quote rune
-		//
-
-		w.appendRec(src[loadIdx:scanIdx], w.escapedQuote[:w.escapedQuoteByteLen])
-
-		scanIdx += n
-		loadIdx = scanIdx
-
-	}
-}
-
-// loadQF_memclearOn_escapeOn is called after a quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-// instance of quote or escape if applicable.
-//
-// It continues with appending the data up to a potentially additional quote or escape character, then
-// appends the escaped version of that character and continues repeating that process for the rest of
-// the field.
-//
-// Essentially the function does the same as the parent context except has no intent around overall
-// quoting the field or detecting runes outside of the quote + escape character.
-func (w *Writer) loadQF_memclearOn_escapeOn(src []byte, loadIdx, scanIdx int) {
+func (w *Writer) loadQF_memclearOn(src []byte, loadIdx, scanIdx int) {
 	// escape any quote or escape runes found
 	for {
 		i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
@@ -9603,22 +5849,24 @@ func (w *Writer) loadQF_memclearOn_escapeOn(src []byte, loadIdx, scanIdx int) {
 		}
 		i += scanIdx
 
+		prevLoadIdx := loadIdx
 		r, n := utf8.DecodeRune(src[i:])
-		switch r {
-		case w.quote:
-			w.appendRec(src[loadIdx:i], w.escapedQuote[:w.escapedQuoteByteLen])
-		default:
-			w.appendRec(src[loadIdx:i], w.escapedEscape[:w.escapedEscapeByteLen])
+		scanIdx = i + n
+		loadIdx = scanIdx
+
+		if w.quote == r {
+			w.appendRec(src[prevLoadIdx:i], w.escapedQuote[:w.escapedQuoteByteLen])
+			continue
 		}
 
-		loadIdx = i + n
-		scanIdx = loadIdx
+		w.appendRec(src[prevLoadIdx:i], w.escapedEscape[:w.escapedEscapeByteLen])
+		continue
 	}
 }
 
-// loadQF_wCheckUTF8_memclearOn_escapeOn performs the same duties as loadQField_memclearOn_escapeOn and in a much more expensive
+// loadQF_wCheckUTF8_memclearOn performs the same duties as loadQField_memclearOn and in a much more expensive
 // scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQF_wCheckUTF8_memclearOn_escapeOn(src []byte, loadIdx, scanIdx int) error {
+func (w *Writer) loadQF_wCheckUTF8_memclearOn(src []byte, loadIdx, scanIdx int) error {
 	for {
 		r, n := utf8.DecodeRune(src[scanIdx:])
 		if n == 0 {
@@ -9650,8 +5898,6 @@ func (w *Writer) loadQF_wCheckUTF8_memclearOn_escapeOn(src []byte, loadIdx, scan
 		}
 
 		w.appendRec(src[prevLoadIdx:prevScanIdx], w.escapedEscape[:w.escapedEscapeByteLen])
-
 		continue
-
 	}
 }

@@ -3,7 +3,7 @@
 {{define "appendRecJoin"}}{{if .Memclear}}, {{else}}...)
 w.recordBuf = append(w.recordBuf, {{end}}{{end -}}
 
-// loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}} is called after a quote, escape, or csv format sensitive character is found in the field data.
+// loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}} is called after a quote, escape, or csv format sensitive character is found in the field data.
 // The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
 // instance of quote or escape if applicable.
 //
@@ -13,8 +13,8 @@ w.recordBuf = append(w.recordBuf, {{end}}{{end -}}
 //
 // Essentially the function does the same as the parent context except has no intent around overall
 // quoting the field or detecting runes outside of the quote + escape character.
-func (w *Writer) loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}(src []byte, loadIdx, scanIdx int) {
-	// escape any quote {{if .Escape}}or escape {{end}}runes found
+func (w *Writer) loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src []byte, loadIdx, scanIdx int) {
+	// escape any quote or escape runes found
 	for {
 		i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
 		if i == -1 {
@@ -23,28 +23,24 @@ func (w *Writer) loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}_escapeO{{if 
 		}
 		i += scanIdx
 
-		{{if .Escape}}
+		prevLoadIdx := loadIdx
 		r, n := utf8.DecodeRune(src[i:])
-		switch r {
-		case w.quote:
-			{{template "appendRec0" .}}src[loadIdx:i]{{template "appendRecJoin" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
-		default:
-			{{template "appendRec0" .}}src[loadIdx:i]{{template "appendRecJoin" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
+		scanIdx = i+n
+		loadIdx = scanIdx
+
+		if w.quote == r {
+			{{template "appendRec0" .}}src[prevLoadIdx:i]{{template "appendRecJoin" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
+			continue
 		}
 
-		loadIdx = i+n
-		{{- else}}
-		{{template "appendRec0" .}}src[loadIdx:i]{{template "appendRecJoin" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
-
-		loadIdx = i + int(w.quoteByteLen) // TODO: likely should adjust sourcing of offset to a src decode op
-		{{- end}}
-		scanIdx = loadIdx
+		{{template "appendRec0" .}}src[prevLoadIdx:i]{{template "appendRecJoin" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
+		continue
 	}
 }
 
-// loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}} performs the same duties as loadQField_memclearO{{if .Memclear}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}} and in a much more expensive
+// loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}} performs the same duties as loadQField_memclearO{{if .Memclear}}n{{else}}ff{{end}} and in a much more expensive
 // scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}_escapeO{{if .Escape}}n{{else}}ff{{end}}(src []byte, loadIdx, scanIdx int) error {
+func (w *Writer) loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src []byte, loadIdx, scanIdx int) error {
 	for {
 		r, n := utf8.DecodeRune(src[scanIdx:])
 		if n == 0 {
@@ -56,16 +52,15 @@ func (w *Writer) loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}_e
 			return ErrNonUTF8InRecord
 		}
 
-		if {{if .Escape}}!strings.ContainsRune(w.escapeControlRunes, r){{else}}r != w.quote{{end}} {
+		if !strings.ContainsRune(w.escapeControlRunes, r) {
 			scanIdx += n
 			continue
 		}
 
 		//
-		// found a {{if .Escape}}control rune of some kind{{else}}quote rune{{end}}
+		// found a control rune of some kind
 		//
 
-		{{if .Escape}}
 		prevScanIdx := scanIdx
 		prevLoadIdx := loadIdx
 		scanIdx += n
@@ -77,13 +72,6 @@ func (w *Writer) loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}_e
 		}
 
 		{{template "appendRec0" .}}src[prevLoadIdx:prevScanIdx]{{template "appendRecJoin" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
-
 		continue
-		{{else}}
-		{{template "appendRec0" .}}src[loadIdx:scanIdx]{{template "appendRecJoin" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
-
-		scanIdx += n
-		loadIdx = scanIdx
-		{{end}}
 	}
 }

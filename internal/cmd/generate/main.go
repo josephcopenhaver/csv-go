@@ -138,48 +138,31 @@ func main() {
 		t := parse(tsWriteRow)
 
 		type cfg struct {
-			ForceQuoteCommentStart bool
-			Escape                 bool
-			Memclear               bool
-			CheckUTF8              bool
-			ControlRuneOverlap     bool
+			ForceQuoteCommentStart bool // TODO: remove
+			Memclear               bool // leave in
+			CheckUTF8              bool // TODO: (partial) remove
+			ControlRuneOverlap     bool // TODO: remove
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{ForceQuoteCommentStart: false, Escape: false, Memclear: false, CheckUTF8: false, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: false, Escape: false, Memclear: false, CheckUTF8: false, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: false, Escape: false, Memclear: false, CheckUTF8: true, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: false, Escape: false, Memclear: false, CheckUTF8: true, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: false, Escape: false, Memclear: true, CheckUTF8: false, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: false, Escape: false, Memclear: true, CheckUTF8: false, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: false, Escape: false, Memclear: true, CheckUTF8: true, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: false, Escape: false, Memclear: true, CheckUTF8: true, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: false, Escape: true, Memclear: false, CheckUTF8: false, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: false, Escape: true, Memclear: false, CheckUTF8: false, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: false, Escape: true, Memclear: false, CheckUTF8: true, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: false, Escape: true, Memclear: false, CheckUTF8: true, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: false, Escape: true, Memclear: true, CheckUTF8: false, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: false, Escape: true, Memclear: true, CheckUTF8: false, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: false, Escape: true, Memclear: true, CheckUTF8: true, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: false, Escape: true, Memclear: true, CheckUTF8: true, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: true, Escape: false, Memclear: false, CheckUTF8: false, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: true, Escape: false, Memclear: false, CheckUTF8: false, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: true, Escape: false, Memclear: false, CheckUTF8: true, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: true, Escape: false, Memclear: false, CheckUTF8: true, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: true, Escape: false, Memclear: true, CheckUTF8: false, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: true, Escape: false, Memclear: true, CheckUTF8: false, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: true, Escape: false, Memclear: true, CheckUTF8: true, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: true, Escape: false, Memclear: true, CheckUTF8: true, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: true, Escape: true, Memclear: false, CheckUTF8: false, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: true, Escape: true, Memclear: false, CheckUTF8: false, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: true, Escape: true, Memclear: false, CheckUTF8: true, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: true, Escape: true, Memclear: false, CheckUTF8: true, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: true, Escape: true, Memclear: true, CheckUTF8: false, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: true, Escape: true, Memclear: true, CheckUTF8: false, ControlRuneOverlap: true},
-			{ForceQuoteCommentStart: true, Escape: true, Memclear: true, CheckUTF8: true, ControlRuneOverlap: false},
-			{ForceQuoteCommentStart: true, Escape: true, Memclear: true, CheckUTF8: true, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: false, Memclear: false, CheckUTF8: false, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: false, Memclear: false, CheckUTF8: false, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: false, Memclear: false, CheckUTF8: true, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: false, Memclear: false, CheckUTF8: true, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: false, Memclear: true, CheckUTF8: false, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: false, Memclear: true, CheckUTF8: false, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: false, Memclear: true, CheckUTF8: true, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: false, Memclear: true, CheckUTF8: true, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: true, Memclear: false, CheckUTF8: false, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: true, Memclear: false, CheckUTF8: false, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: true, Memclear: false, CheckUTF8: true, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: true, Memclear: false, CheckUTF8: true, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: true, Memclear: true, CheckUTF8: false, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: true, Memclear: true, CheckUTF8: false, ControlRuneOverlap: true},
+			{ForceQuoteCommentStart: true, Memclear: true, CheckUTF8: true, ControlRuneOverlap: false},
+			{ForceQuoteCommentStart: true, Memclear: true, CheckUTF8: true, ControlRuneOverlap: true},
 		})
 	}
 
@@ -189,16 +172,13 @@ func main() {
 
 		type cfg struct {
 			Memclear bool
-			Escape   bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{Memclear: false, Escape: false},
-			{Memclear: false, Escape: true},
-			{Memclear: true, Escape: false},
-			{Memclear: true, Escape: true},
+			{Memclear: false},
+			{Memclear: true},
 		})
 	}
 

@@ -36,7 +36,7 @@ var (
 	ErrInvalidRune               = errors.New("invalid rune")
 )
 
-type wFlag uint8
+type wFlag uint8 // TODO: when adding 2 more flags change to uint16
 
 const (
 	wFlagClosed wFlag = 1 << iota
@@ -813,69 +813,35 @@ func (w *Writer) newSetWriteRowStrategyFunc(clearMemoryAfterFree, escapeSet, err
 		}
 
 		if !clearMemoryAfterFree {
-			if !escapeSet {
-				if !errOnNonUTF8 {
-					if !crOverlaps {
-						f = w.writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOff
-						w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOff
-					} else {
-						f = w.writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOn
-						w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapOn
-					}
-				} else if !crOverlaps {
-					f = w.writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOff
-					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOff
-				} else {
-					f = w.writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
-					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
-				}
-			} else {
-				if !errOnNonUTF8 {
-					if !crOverlaps {
-						f = w.writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOff
-						w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOff
-					} else {
-						f = w.writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn
-						w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn
-					}
-				} else if !crOverlaps {
-					f = w.writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
-					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
-				} else {
-					f = w.writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn
-					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn
-				}
-			}
-		} else if !escapeSet {
 			if !errOnNonUTF8 {
 				if !crOverlaps {
-					f = w.writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOff
-					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOff
+					f = w.writeRow_memclearOff_checkUTF8Off_controlRuneOverlapOff
+					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_checkUTF8Off_controlRuneOverlapOff
 				} else {
-					f = w.writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn
-					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn
+					f = w.writeRow_memclearOff_checkUTF8Off_controlRuneOverlapOn
+					w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_checkUTF8Off_controlRuneOverlapOn
 				}
 			} else if !crOverlaps {
-				f = w.writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
-				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
+				f = w.writeRow_memclearOff_checkUTF8On_controlRuneOverlapOff
+				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_checkUTF8On_controlRuneOverlapOff
 			} else {
-				f = w.writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn
-				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn
+				f = w.writeRow_memclearOff_checkUTF8On_controlRuneOverlapOn
+				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_checkUTF8On_controlRuneOverlapOn
 			}
 		} else if !errOnNonUTF8 {
 			if !crOverlaps {
-				f = w.writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
-				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
+				f = w.writeRow_memclearOn_checkUTF8Off_controlRuneOverlapOff
+				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_checkUTF8Off_controlRuneOverlapOff
 			} else {
-				f = w.writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn
-				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn
+				f = w.writeRow_memclearOn_checkUTF8Off_controlRuneOverlapOn
+				w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_checkUTF8Off_controlRuneOverlapOn
 			}
 		} else if !crOverlaps {
-			f = w.writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff
-			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff
+			f = w.writeRow_memclearOn_checkUTF8On_controlRuneOverlapOff
+			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_checkUTF8On_controlRuneOverlapOff
 		} else {
-			f = w.writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn
-			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn
+			f = w.writeRow_memclearOn_checkUTF8On_controlRuneOverlapOn
+			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_checkUTF8On_controlRuneOverlapOn
 		}
 
 		if w.writeRow == nil {
