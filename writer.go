@@ -13,8 +13,6 @@ import (
 	"unsafe"
 )
 
-// TODO: on writer creation, if the comment rune overlaps with another control rune option value then error
-
 // TODO: some field types are guaranteed to never have overlap with csv encoding characters
 // (quote, escape, record separator, and field separator) such as the types that fit in 64 bits
 // for reasonably most values of csv configuration formats
@@ -635,8 +633,10 @@ func (cfg *wCfg) validate() error {
 		return errors.New("initial record buffer size must be greater than or equal to zero")
 	}
 
-	if cfg.commentSet && (!validUtf8Rune(cfg.comment) || isNewlineRuneForWrite(cfg.comment)) {
-		return errors.New("invalid comment rune specified")
+	if cfg.commentSet {
+		if err := isValidComment(cfg.comment, cfg.quote, cfg.fieldSeparator, cfg.escape, cfg.escapeSet); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -1057,36 +1057,17 @@ func (cfg *whCfg) validate(w *Writer) error {
 
 	if !cfg.commentSet {
 		if (w.bitFlags & wFlagCommentSet) != 0 {
+			// loads the value from the parent writer context and
+			// trusts the validation the writer already performed
 			cfg.commentSet = true
 			cfg.comment = w.comment
+		} else if cfg.commentLinesSet {
+			return errors.New("comment lines require a comment rune")
 		}
 	} else if (w.bitFlags & wFlagCommentSet) != 0 {
 		return errors.New("comment rune cannot be specified when writing headers when the writer instance already has one specified")
-	}
-	if cfg.commentSet {
-
-		// note: not letting comment runes be newline characters is
-		// opinionated but it is a good practice leaning towards simplicity.
-		//
-		// I am open to a PR that makes this more flexible.
-
-		if !validUtf8Rune(cfg.comment) || isNewlineRuneForWrite(cfg.comment) {
-			return errors.New("invalid comment rune")
-		}
-
-		if w.quote == cfg.comment {
-			return errors.New("invalid quote and comment rune combination")
-		}
-
-		if w.fieldSep == cfg.comment {
-			return errors.New("invalid field separator and comment rune combination")
-		}
-
-		if (w.bitFlags&wFlagEscapeSet) != 0 && w.escape == cfg.comment {
-			return errors.New("invalid escape and comment rune combination")
-		}
-	} else if cfg.commentLinesSet {
-		return errors.New("comment lines require a comment rune")
+	} else if err := isValidComment(cfg.comment, w.quote, w.fieldSep, w.escape, (w.bitFlags&wFlagEscapeSet) != 0); err != nil {
+		return err
 	}
 
 	// positive path remaining actions:
@@ -1417,4 +1398,29 @@ func isFieldWriterRune(runeList ...rune) bool {
 	}
 
 	return false
+}
+
+func isValidComment(comment, quote, fieldSep, escape rune, escapeSet bool) error {
+	// note: not letting comment runes be newline characters is
+	// opinionated but it is a good practice leaning towards simplicity.
+	//
+	// I am open to a PR that makes this more flexible.
+
+	if !validUtf8Rune(comment) || isNewlineRuneForWrite(comment) {
+		return errors.New("invalid comment rune")
+	}
+
+	if quote == comment {
+		return errors.New("invalid quote and comment rune combination")
+	}
+
+	if fieldSep == comment {
+		return errors.New("invalid field separator and comment rune combination")
+	}
+
+	if escapeSet && escape == comment {
+		return errors.New("invalid escape and comment rune combination")
+	}
+
+	return nil
 }
