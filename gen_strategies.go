@@ -2126,54 +2126,54 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapO
 		f := &fields[0]
 
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		case wfkRune:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		default:
-			v, err := f.AppendText(w.recordBuf)
+			src, err = f.AppendText(w.recordBuf)
 			if err != nil {
 				return 0, err
 			}
 
-			w.recordBuf = v
+			w.recordBuf = src
 			goto FIRST_FIELD_WRITTEN
 		}
 
@@ -2222,15 +2222,15 @@ FIRST_FIELD_WRITTEN:
 			f := &fields[i]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -2239,19 +2239,17 @@ FIRST_FIELD_WRITTEN:
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.recordBuf = v
+				w.recordBuf = src
 				break SUBSEQUENT_FIELD_WRITE
 			}
 
@@ -2293,11 +2291,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -2311,47 +2309,47 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8Off_controlRuneOverlapO
 		f := &fields[0]
 
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		default:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		}
 
 		//
@@ -2399,15 +2397,15 @@ FIRST_FIELD_WRITTEN:
 			f := &fields[i]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -2416,12 +2414,10 @@ FIRST_FIELD_WRITTEN:
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -2462,11 +2458,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -2481,36 +2477,38 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOf
 
 		var scanForNonUTF8 bool
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			scanForNonUTF8 = (f._64_bits == 0)
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -2518,19 +2516,17 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOf
 			scanForNonUTF8 = (f._64_bits == 0)
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		case wfkRune:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		default:
-			v, err := f.AppendText(w.recordBuf)
+			src, err = f.AppendText(w.recordBuf)
 			if err != nil {
 				return 0, err
 			}
 
-			w.recordBuf = v
+			w.recordBuf = src
 			goto FIRST_FIELD_WRITTEN
 		}
 
@@ -2595,7 +2591,6 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOf
 			// found a control rune of some kind
 			//
 
-			var err error
 			switch r {
 			case w.quote:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2633,16 +2628,16 @@ FIRST_FIELD_WRITTEN:
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -2652,19 +2647,17 @@ FIRST_FIELD_WRITTEN:
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.recordBuf = v
+				w.recordBuf = src
 				break SUBSEQUENT_FIELD_WRITE
 			}
 
@@ -2728,7 +2721,6 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2759,11 +2751,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -2778,36 +2770,38 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
 
 		var scanForNonUTF8 bool
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			scanForNonUTF8 = (f._64_bits == 0)
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -2815,12 +2809,10 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
 			scanForNonUTF8 = (f._64_bits == 0)
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		default:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		}
 
 		//
@@ -2884,7 +2876,6 @@ func (w *Writer) writeRow_memclearOff_escapeOff_checkUTF8On_controlRuneOverlapOn
 			// found a control rune of some kind
 			//
 
-			var err error
 			switch r {
 			case w.quote:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -2922,16 +2913,16 @@ FIRST_FIELD_WRITTEN:
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -2941,12 +2932,10 @@ FIRST_FIELD_WRITTEN:
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -3009,7 +2998,6 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -3040,11 +3028,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -3058,52 +3046,52 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOf
 		f := &fields[0]
 
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		case wfkRune:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		default:
-			v, err := f.AppendText(w.recordBuf)
+			src, err = f.AppendText(w.recordBuf)
 			if err != nil {
 				return 0, err
 			}
 
-			w.setRecordBuf(v)
+			w.setRecordBuf(src)
 			goto FIRST_FIELD_WRITTEN
 		}
 
@@ -3148,15 +3136,15 @@ FIRST_FIELD_WRITTEN:
 			f := &fields[i]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -3165,19 +3153,17 @@ FIRST_FIELD_WRITTEN:
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.setRecordBuf(v)
+				w.setRecordBuf(src)
 				break SUBSEQUENT_FIELD_WRITE
 			}
 
@@ -3215,11 +3201,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -3233,45 +3219,45 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8Off_controlRuneOverlapOn
 		f := &fields[0]
 
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		default:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		}
 
 		//
@@ -3315,15 +3301,15 @@ FIRST_FIELD_WRITTEN:
 			f := &fields[i]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -3332,12 +3318,10 @@ FIRST_FIELD_WRITTEN:
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -3374,11 +3358,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -3393,34 +3377,36 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
 
 		var scanForNonUTF8 bool
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			scanForNonUTF8 = (f._64_bits == 0)
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -3428,19 +3414,17 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
 			scanForNonUTF8 = (f._64_bits == 0)
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		case wfkRune:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		default:
-			v, err := f.AppendText(w.recordBuf)
+			src, err = f.AppendText(w.recordBuf)
 			if err != nil {
 				return 0, err
 			}
 
-			w.setRecordBuf(v)
+			w.setRecordBuf(src)
 			goto FIRST_FIELD_WRITTEN
 		}
 
@@ -3501,7 +3485,6 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOff
 			// found a control rune of some kind
 			//
 
-			var err error
 			switch r {
 			case w.quote:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -3535,16 +3518,16 @@ FIRST_FIELD_WRITTEN:
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -3554,19 +3537,17 @@ FIRST_FIELD_WRITTEN:
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.setRecordBuf(v)
+				w.setRecordBuf(src)
 				break SUBSEQUENT_FIELD_WRITE
 			}
 
@@ -3626,7 +3607,6 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -3653,11 +3633,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -3672,34 +3652,36 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn(
 
 		var scanForNonUTF8 bool
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			scanForNonUTF8 = (f._64_bits == 0)
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -3707,12 +3689,10 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn(
 			scanForNonUTF8 = (f._64_bits == 0)
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		default:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		}
 
 		//
@@ -3772,7 +3752,6 @@ func (w *Writer) writeRow_memclearOn_escapeOff_checkUTF8On_controlRuneOverlapOn(
 			// found a control rune of some kind
 			//
 
-			var err error
 			switch r {
 			case w.quote:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -3806,16 +3785,16 @@ FIRST_FIELD_WRITTEN:
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -3825,12 +3804,10 @@ FIRST_FIELD_WRITTEN:
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -3889,7 +3866,6 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -3916,11 +3892,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -3934,54 +3910,54 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOf
 		f := &fields[0]
 
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		case wfkRune:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		default:
-			v, err := f.AppendText(w.recordBuf)
+			src, err = f.AppendText(w.recordBuf)
 			if err != nil {
 				return 0, err
 			}
 
-			w.recordBuf = v
+			w.recordBuf = src
 			goto FIRST_FIELD_WRITTEN
 		}
 
@@ -4030,15 +4006,15 @@ FIRST_FIELD_WRITTEN:
 			f := &fields[i]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -4047,19 +4023,17 @@ FIRST_FIELD_WRITTEN:
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.recordBuf = v
+				w.recordBuf = src
 				break SUBSEQUENT_FIELD_WRITE
 			}
 
@@ -4101,11 +4075,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -4119,47 +4093,47 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8Off_controlRuneOverlapOn
 		f := &fields[0]
 
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		default:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		}
 
 		//
@@ -4207,15 +4181,15 @@ FIRST_FIELD_WRITTEN:
 			f := &fields[i]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -4224,12 +4198,10 @@ FIRST_FIELD_WRITTEN:
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -4270,11 +4242,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -4289,36 +4261,38 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
 
 		var scanForNonUTF8 bool
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			scanForNonUTF8 = (f._64_bits == 0)
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -4326,19 +4300,17 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
 			scanForNonUTF8 = (f._64_bits == 0)
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		case wfkRune:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		default:
-			v, err := f.AppendText(w.recordBuf)
+			src, err = f.AppendText(w.recordBuf)
 			if err != nil {
 				return 0, err
 			}
 
-			w.recordBuf = v
+			w.recordBuf = src
 			goto FIRST_FIELD_WRITTEN
 		}
 
@@ -4403,7 +4375,6 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOff
 			// found a control rune of some kind
 			//
 
-			var err error
 			switch r {
 			case w.quote:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4441,16 +4412,16 @@ FIRST_FIELD_WRITTEN:
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -4460,19 +4431,17 @@ FIRST_FIELD_WRITTEN:
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.recordBuf = v
+				w.recordBuf = src
 				break SUBSEQUENT_FIELD_WRITE
 			}
 
@@ -4536,7 +4505,6 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4567,11 +4535,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -4586,36 +4554,38 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(
 
 		var scanForNonUTF8 bool
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			scanForNonUTF8 = (f._64_bits == 0)
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 					w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -4623,12 +4593,10 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(
 			scanForNonUTF8 = (f._64_bits == 0)
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		default:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		}
 
 		//
@@ -4692,7 +4660,6 @@ func (w *Writer) writeRow_memclearOff_escapeOn_checkUTF8On_controlRuneOverlapOn(
 			// found a control rune of some kind
 			//
 
-			var err error
 			switch r {
 			case w.quote:
 				w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4730,16 +4697,16 @@ FIRST_FIELD_WRITTEN:
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -4749,12 +4716,10 @@ FIRST_FIELD_WRITTEN:
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -4817,7 +4782,6 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -4848,11 +4812,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -4866,52 +4830,52 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOff
 		f := &fields[0]
 
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		case wfkRune:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		default:
-			v, err := f.AppendText(w.recordBuf)
+			src, err = f.AppendText(w.recordBuf)
 			if err != nil {
 				return 0, err
 			}
 
-			w.setRecordBuf(v)
+			w.setRecordBuf(src)
 			goto FIRST_FIELD_WRITTEN
 		}
 
@@ -4956,15 +4920,15 @@ FIRST_FIELD_WRITTEN:
 			f := &fields[i]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -4973,19 +4937,17 @@ FIRST_FIELD_WRITTEN:
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.setRecordBuf(v)
+				w.setRecordBuf(src)
 				break SUBSEQUENT_FIELD_WRITE
 			}
 
@@ -5023,11 +4985,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -5041,45 +5003,45 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8Off_controlRuneOverlapOn(
 		f := &fields[0]
 
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		default:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		}
 
 		//
@@ -5123,15 +5085,15 @@ FIRST_FIELD_WRITTEN:
 			f := &fields[i]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -5140,12 +5102,10 @@ FIRST_FIELD_WRITTEN:
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -5182,11 +5142,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -5201,34 +5161,36 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(
 
 		var scanForNonUTF8 bool
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			scanForNonUTF8 = (f._64_bits == 0)
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -5236,19 +5198,17 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(
 			scanForNonUTF8 = (f._64_bits == 0)
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		case wfkRune:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		default:
-			v, err := f.AppendText(w.recordBuf)
+			src, err = f.AppendText(w.recordBuf)
 			if err != nil {
 				return 0, err
 			}
 
-			w.setRecordBuf(v)
+			w.setRecordBuf(src)
 			goto FIRST_FIELD_WRITTEN
 		}
 
@@ -5309,7 +5269,6 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOff(
 			// found a control rune of some kind
 			//
 
-			var err error
 			switch r {
 			case w.quote:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -5343,16 +5302,16 @@ FIRST_FIELD_WRITTEN:
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -5362,19 +5321,17 @@ FIRST_FIELD_WRITTEN:
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.setRecordBuf(v)
+				w.setRecordBuf(src)
 				break SUBSEQUENT_FIELD_WRITE
 			}
 
@@ -5434,7 +5391,6 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -5461,11 +5417,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -5480,34 +5436,36 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(f
 
 		var scanForNonUTF8 bool
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
 
 			scanForNonUTF8 = (f._64_bits == 0)
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -5515,12 +5473,10 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(f
 			scanForNonUTF8 = (f._64_bits == 0)
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		default:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		}
 
 		//
@@ -5580,7 +5536,6 @@ func (w *Writer) writeRow_memclearOn_escapeOn_checkUTF8On_controlRuneOverlapOn(f
 			// found a control rune of some kind
 			//
 
-			var err error
 			switch r {
 			case w.quote:
 				w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -5614,16 +5569,16 @@ FIRST_FIELD_WRITTEN:
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -5633,12 +5588,10 @@ FIRST_FIELD_WRITTEN:
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -5697,7 +5650,6 @@ FIRST_FIELD_WRITTEN:
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -5724,11 +5676,11 @@ FIRST_FIELD_WRITTEN:
 
 	w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 
 }
 
@@ -5746,54 +5698,54 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 			f := &fields[0]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.recordBuf = v
+				w.recordBuf = src
 				goto FIRST_FIELD_WRITTEN
 			}
 
@@ -5846,15 +5798,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 				f := &fields[i]
 
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -5863,19 +5815,17 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				case wfkRune:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				default:
-					v, err := f.AppendText(w.recordBuf)
+					src, err = f.AppendText(w.recordBuf)
 					if err != nil {
 						return 0, err
 					}
 
-					w.recordBuf = v
+					w.recordBuf = src
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
@@ -5917,11 +5867,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -5939,47 +5889,47 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 			f := &fields[0]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -6031,15 +5981,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 				f := &fields[i]
 
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -6048,12 +5998,10 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				default:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.AppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				}
 
 				//
@@ -6094,11 +6042,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8Off_controlR
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -6117,36 +6065,38 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -6154,19 +6104,17 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.recordBuf = v
+				w.recordBuf = src
 				goto FIRST_FIELD_WRITTEN
 			}
 
@@ -6236,7 +6184,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -6274,16 +6221,16 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 
 				var scanForNonUTF8 bool
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
 					scanForNonUTF8 = (f._64_bits == 0)
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -6293,19 +6240,17 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 					scanForNonUTF8 = (f._64_bits == 0)
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				case wfkRune:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				default:
-					v, err := f.AppendText(w.recordBuf)
+					src, err = f.AppendText(w.recordBuf)
 					if err != nil {
 						return 0, err
 					}
 
-					w.recordBuf = v
+					w.recordBuf = src
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
@@ -6369,7 +6314,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 					// found a control rune of some kind
 					//
 
-					var err error
 					switch r {
 					case w.quote:
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -6400,11 +6344,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -6423,36 +6367,38 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -6460,12 +6406,10 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -6534,7 +6478,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -6572,16 +6515,16 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 
 				var scanForNonUTF8 bool
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
 					scanForNonUTF8 = (f._64_bits == 0)
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -6591,12 +6534,10 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 					scanForNonUTF8 = (f._64_bits == 0)
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				default:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.AppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				}
 
 				//
@@ -6659,7 +6600,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 					// found a control rune of some kind
 					//
 
-					var err error
 					switch r {
 					case w.quote:
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -6690,11 +6630,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOff_checkUTF8On_controlRu
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -6712,52 +6652,52 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 			f := &fields[0]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.setRecordBuf(v)
+				w.setRecordBuf(src)
 				goto FIRST_FIELD_WRITTEN
 			}
 
@@ -6806,15 +6746,15 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 				f := &fields[i]
 
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -6823,19 +6763,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				case wfkRune:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				default:
-					v, err := f.AppendText(w.recordBuf)
+					src, err = f.AppendText(w.recordBuf)
 					if err != nil {
 						return 0, err
 					}
 
-					w.setRecordBuf(v)
+					w.setRecordBuf(src)
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
@@ -6873,11 +6811,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -6895,45 +6833,45 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 			f := &fields[0]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -6981,15 +6919,15 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 				f := &fields[i]
 
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -6998,12 +6936,10 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				default:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.AppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				}
 
 				//
@@ -7040,11 +6976,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8Off_controlRu
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -7063,34 +6999,36 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -7098,19 +7036,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.setRecordBuf(v)
+				w.setRecordBuf(src)
 				goto FIRST_FIELD_WRITTEN
 			}
 
@@ -7176,7 +7112,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -7210,16 +7145,16 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 
 				var scanForNonUTF8 bool
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
 					scanForNonUTF8 = (f._64_bits == 0)
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -7229,19 +7164,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 					scanForNonUTF8 = (f._64_bits == 0)
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				case wfkRune:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				default:
-					v, err := f.AppendText(w.recordBuf)
+					src, err = f.AppendText(w.recordBuf)
 					if err != nil {
 						return 0, err
 					}
 
-					w.setRecordBuf(v)
+					w.setRecordBuf(src)
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
@@ -7301,7 +7234,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 					// found a control rune of some kind
 					//
 
-					var err error
 					switch r {
 					case w.quote:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -7328,11 +7260,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -7351,34 +7283,36 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -7386,12 +7320,10 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -7456,7 +7388,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -7490,16 +7421,16 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 
 				var scanForNonUTF8 bool
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
 					scanForNonUTF8 = (f._64_bits == 0)
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -7509,12 +7440,10 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 					scanForNonUTF8 = (f._64_bits == 0)
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				default:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.AppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				}
 
 				//
@@ -7573,7 +7502,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 					// found a control rune of some kind
 					//
 
-					var err error
 					switch r {
 					case w.quote:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -7600,11 +7528,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOff_checkUTF8On_controlRun
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -7622,54 +7550,54 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 			f := &fields[0]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.recordBuf = v
+				w.recordBuf = src
 				goto FIRST_FIELD_WRITTEN
 			}
 
@@ -7722,15 +7650,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 				f := &fields[i]
 
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -7739,19 +7667,17 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				case wfkRune:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				default:
-					v, err := f.AppendText(w.recordBuf)
+					src, err = f.AppendText(w.recordBuf)
 					if err != nil {
 						return 0, err
 					}
 
-					w.recordBuf = v
+					w.recordBuf = src
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
@@ -7793,11 +7719,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -7815,47 +7741,47 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 			f := &fields[0]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -7907,15 +7833,15 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 				f := &fields[i]
 
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -7924,12 +7850,10 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				default:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.AppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				}
 
 				//
@@ -7970,11 +7894,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8Off_controlRu
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -7993,36 +7917,38 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -8030,19 +7956,17 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.recordBuf = v
+				w.recordBuf = src
 				goto FIRST_FIELD_WRITTEN
 			}
 
@@ -8112,7 +8036,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -8150,16 +8073,16 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 
 				var scanForNonUTF8 bool
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
 					scanForNonUTF8 = (f._64_bits == 0)
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -8169,19 +8092,17 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					scanForNonUTF8 = (f._64_bits == 0)
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				case wfkRune:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				default:
-					v, err := f.AppendText(w.recordBuf)
+					src, err = f.AppendText(w.recordBuf)
 					if err != nil {
 						return 0, err
 					}
 
-					w.recordBuf = v
+					w.recordBuf = src
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
@@ -8245,7 +8166,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					// found a control rune of some kind
 					//
 
-					var err error
 					switch r {
 					case w.quote:
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -8276,11 +8196,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -8299,36 +8219,38 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.recordBuf = append(w.recordBuf, w.twoQuotes[:w.twoQuotesByteLen]...)
 						w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -8336,12 +8258,10 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -8410,7 +8330,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -8448,16 +8367,16 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 
 				var scanForNonUTF8 bool
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
 					scanForNonUTF8 = (f._64_bits == 0)
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -8467,12 +8386,10 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					scanForNonUTF8 = (f._64_bits == 0)
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				default:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.AppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				}
 
 				//
@@ -8535,7 +8452,6 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 					// found a control rune of some kind
 					//
 
-					var err error
 					switch r {
 					case w.quote:
 						w.recordBuf = append(w.recordBuf, w.quoteBytes[:w.quoteByteLen]...)
@@ -8566,11 +8482,11 @@ func (w *Writer) writeRowAfterHeader_memclearOff_escapeOn_checkUTF8On_controlRun
 
 		w.recordBuf = append(w.recordBuf, w.recordSepBytes[:w.recordSepByteLen]...)
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -8588,52 +8504,52 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 			f := &fields[0]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.setRecordBuf(v)
+				w.setRecordBuf(src)
 				goto FIRST_FIELD_WRITTEN
 			}
 
@@ -8682,15 +8598,15 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 				f := &fields[i]
 
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -8699,19 +8615,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				case wfkRune:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				default:
-					v, err := f.AppendText(w.recordBuf)
+					src, err = f.AppendText(w.recordBuf)
 					if err != nil {
 						return 0, err
 					}
 
-					w.setRecordBuf(v)
+					w.setRecordBuf(src)
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
@@ -8749,11 +8663,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -8771,45 +8685,45 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 			f := &fields[0]
 
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -8857,15 +8771,15 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 				f := &fields[i]
 
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -8874,12 +8788,10 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				default:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.AppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				}
 
 				//
@@ -8916,11 +8828,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8Off_controlRun
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -8939,34 +8851,36 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -8974,19 +8888,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				w.setRecordBuf(v)
+				w.setRecordBuf(src)
 				goto FIRST_FIELD_WRITTEN
 			}
 
@@ -9052,7 +8964,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -9086,16 +8997,16 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 
 				var scanForNonUTF8 bool
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
 					scanForNonUTF8 = (f._64_bits == 0)
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -9105,19 +9016,17 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 					scanForNonUTF8 = (f._64_bits == 0)
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				case wfkRune:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				default:
-					v, err := f.AppendText(w.recordBuf)
+					src, err = f.AppendText(w.recordBuf)
 					if err != nil {
 						return 0, err
 					}
 
-					w.setRecordBuf(v)
+					w.setRecordBuf(src)
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
@@ -9177,7 +9086,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 					// found a control rune of some kind
 					//
 
-					var err error
 					switch r {
 					case w.quote:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -9204,11 +9112,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 
@@ -9227,34 +9135,36 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 
 			var scanForNonUTF8 bool
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
 
 				scanForNonUTF8 = (f._64_bits == 0)
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					if len(fields) == 1 {
 						w.appendRec(w.twoQuotes[:w.twoQuotesByteLen], w.recordSepBytes[:w.recordSepByteLen])
-						if n, err := w.writer.Write(w.recordBuf); err != nil {
-							return n, writeIOErr{err}
-						} else {
-							return n, nil
+
+						n, err := w.writer.Write(w.recordBuf)
+						if err != nil {
+							err = writeIOErr{err}
 						}
+						return n, err
 					}
 					goto FIRST_FIELD_WRITTEN
 				}
@@ -9262,12 +9172,10 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				scanForNonUTF8 = (f._64_bits == 0)
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			}
 
 			//
@@ -9332,7 +9240,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -9366,16 +9273,16 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 
 				var scanForNonUTF8 bool
 				var src []byte
+				var err error
 
 				switch f.kind {
 				case wfkBytes:
-					s := f.bytes
-					if len(s) == 0 {
+					src = f.bytes
+					if len(src) == 0 {
 						break SUBSEQUENT_FIELD_WRITE
 					}
 
 					scanForNonUTF8 = (f._64_bits == 0)
-					src = s
 				case wfkString:
 					s := f.str
 					if len(s) == 0 {
@@ -9385,12 +9292,10 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 					scanForNonUTF8 = (f._64_bits == 0)
 					src = unsafe.Slice(unsafe.StringData(s), len(s))
 				default:
-					v, err := f.AppendText(w.fieldWriterBuf[:0])
+					src, err = f.AppendText(w.fieldWriterBuf[:0])
 					if err != nil {
 						return 0, err
 					}
-
-					src = v
 				}
 
 				//
@@ -9449,7 +9354,6 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 					// found a control rune of some kind
 					//
 
-					var err error
 					switch r {
 					case w.quote:
 						w.appendRec(w.quoteBytes[:w.quoteByteLen], src[:i], w.escapedQuote[:w.escapedQuoteByteLen])
@@ -9476,11 +9380,11 @@ func (w *Writer) writeRowAfterHeader_memclearOn_escapeOn_checkUTF8On_controlRune
 
 		w.appendRec(w.recordSepBytes[:w.recordSepByteLen])
 
-		if n, err := w.writer.Write(w.recordBuf); err != nil {
-			return n, writeIOErr{err}
-		} else {
-			return n, nil
+		n, err := w.writer.Write(w.recordBuf)
+		if err != nil {
+			err = writeIOErr{err}
 		}
+		return n, err
 	}
 }
 

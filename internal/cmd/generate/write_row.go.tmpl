@@ -29,18 +29,20 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_escapeO{{i
 		var scanForNonUTF8 bool
 		{{- end}}
 		var src []byte
+		var err error
 
 		switch f.kind {
 		case wfkBytes:
-			s := f.bytes
-			if len(s) == 0 {
+			src = f.bytes
+			if len(src) == 0 {
 				if len(fields) == 1 {
 					{{template "appendRec0" .}}w.twoQuotes[:w.twoQuotesByteLen]{{template "appendRecJoin" .}}w.recordSepBytes[:w.recordSepByteLen]{{template "appendRec1" .}}
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -48,17 +50,17 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_escapeO{{i
 			{{if .CheckUTF8 -}}
 			scanForNonUTF8 = (f._64_bits == 0)
 			{{- end}}
-			src = s
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
 					{{template "appendRec0" .}}w.twoQuotes[:w.twoQuotesByteLen]{{template "appendRecJoin" .}}w.recordSepBytes[:w.recordSepByteLen]{{template "appendRec1" .}}
-					if n, err := w.writer.Write(w.recordBuf); err != nil {
-						return n, writeIOErr{err}
-					} else {
-						return n, nil
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
 					}
+					return n, err
 				}
 				goto FIRST_FIELD_WRITTEN
 			}
@@ -69,27 +71,23 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_escapeO{{i
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		{{if .ControlRuneOverlap -}}
 		default:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		{{- else -}}
 		case wfkRune:
-			v, err := f.AppendText(w.fieldWriterBuf[:0])
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 			if err != nil {
 				return 0, err
 			}
-
-			src = v
 		default:
-			v, err := f.AppendText(w.recordBuf)
+			src, err = f.AppendText(w.recordBuf)
 			if err != nil {
 				return 0, err
 			}
 
-			{{if .Memclear}}w.setRecordBuf(v){{else}}w.recordBuf = v{{end}}
+			{{if .Memclear}}w.setRecordBuf(src){{else}}w.recordBuf = src{{end}}
 			goto FIRST_FIELD_WRITTEN
 		{{- end}}
 		}
@@ -161,7 +159,6 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_escapeO{{i
 			// found a control rune of some kind
 			//
 
-			var err error
 			switch r {
 			case w.quote:
 				{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRecJoin" .}}src[:i]{{template "appendRecJoin" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
@@ -197,18 +194,18 @@ SUBSEQUENT_FIELD_WRITE:
 			var scanForNonUTF8 bool
 			{{- end}}
 			var src []byte
+			var err error
 
 			switch f.kind {
 			case wfkBytes:
-				s := f.bytes
-				if len(s) == 0 {
+				src = f.bytes
+				if len(src) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
 				{{if .CheckUTF8 -}}
 				scanForNonUTF8 = (f._64_bits == 0)
 				{{- end}}
-				src = s
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
@@ -221,27 +218,23 @@ SUBSEQUENT_FIELD_WRITE:
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			{{if .ControlRuneOverlap -}}
 			default:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.AppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			{{- else -}}
 			case wfkRune:
-				v, err := f.AppendText(w.fieldWriterBuf[:0])
+				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
 				if err != nil {
 					return 0, err
 				}
-
-				src = v
 			default:
-				v, err := f.AppendText(w.recordBuf)
+				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
 				}
 
-				{{if .Memclear}}w.setRecordBuf(v){{else}}w.recordBuf = v{{end}}
+				{{if .Memclear}}w.setRecordBuf(src){{else}}w.recordBuf = src{{end}}
 				break SUBSEQUENT_FIELD_WRITE
 			{{- end}}
 			}
@@ -302,7 +295,6 @@ SUBSEQUENT_FIELD_WRITE:
 				// found a control rune of some kind
 				//
 
-				var err error
 				switch r {
 				case w.quote:
 					{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRecJoin" .}}src[:i]{{template "appendRecJoin" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
@@ -329,11 +321,11 @@ SUBSEQUENT_FIELD_WRITE:
 
 	{{template "appendRec0" .}}w.recordSepBytes[:w.recordSepByteLen]{{template "appendRec1" .}}
 
-	if n, err := w.writer.Write(w.recordBuf); err != nil {
-		return n, writeIOErr{err}
-	} else {
-		return n, nil
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
 	}
+	return n, err
 {{if .ForceQuoteCommentStart -}}
 }
 {{- end}}

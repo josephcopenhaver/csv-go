@@ -116,6 +116,22 @@ func (w *FieldWriter) isZeroLen() bool {
 	}
 }
 
+func (w *FieldWriter) runeAppendText(b []byte) ([]byte, error) {
+	r := w._64_bits
+	if r == invalidRuneUTF8EncodedWithOffset {
+		return nil, ErrInvalidRune
+	}
+
+	var buf [utf8.UTFMax]byte
+	buf[3] = byte(r)
+	buf[2] = byte(r >> (8 * 1))
+	buf[1] = byte(r >> (8 * 2))
+	buf[0] = byte(r >> (8 * 3))
+	offset := uint8(r >> (8 * 4))
+
+	return append(b, buf[offset:]...), nil
+}
+
 func (w *FieldWriter) AppendText(b []byte) ([]byte, error) {
 
 	switch w.kind {
@@ -130,19 +146,7 @@ func (w *FieldWriter) AppendText(b []byte) ([]byte, error) {
 	case wfkTime:
 		return w.time.AppendFormat(b, time.RFC3339Nano), nil
 	case wfkRune:
-		r := w._64_bits
-		if r == invalidRuneUTF8EncodedWithOffset {
-			return nil, ErrInvalidRune
-		}
-
-		var buf [utf8.UTFMax]byte
-		buf[3] = byte(r)
-		buf[2] = byte(r >> (8 * 1))
-		buf[1] = byte(r >> (8 * 2))
-		buf[0] = byte(r >> (8 * 3))
-		offset := uint8(r >> (8 * 4))
-
-		return append(b, buf[offset:]...), nil
+		return w.runeAppendText(b)
 	case wfkBool:
 		boolAsByte := byte('0') + byte(w._64_bits)
 		return append(b, boolAsByte), nil
