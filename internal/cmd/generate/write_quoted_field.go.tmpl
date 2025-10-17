@@ -33,7 +33,6 @@ func (w *Writer) loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src []byte, 
 		}
 
 		{{template "appendRec0" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
-		continue
 	}
 }
 
@@ -71,6 +70,5 @@ func (w *Writer) loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}(s
 		}
 
 		{{template "appendRec0" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
-		continue
 	}
 }

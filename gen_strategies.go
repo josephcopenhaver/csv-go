@@ -2786,7 +2786,6 @@ func (w *Writer) loadQF_memclearOff(src []byte, loadIdx, scanIdx int) {
 		}
 
 		w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-		continue
 	}
 }
 
@@ -2824,7 +2823,6 @@ func (w *Writer) loadQF_wCheckUTF8_memclearOff(src []byte, loadIdx, scanIdx int)
 		}
 
 		w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
-		continue
 	}
 }
 
@@ -2860,7 +2858,6 @@ func (w *Writer) loadQF_memclearOn(src []byte, loadIdx, scanIdx int) {
 		}
 
 		w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-		continue
 	}
 }
 
@@ -2898,6 +2895,5 @@ func (w *Writer) loadQF_wCheckUTF8_memclearOn(src []byte, loadIdx, scanIdx int) 
 		}
 
 		w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
-		continue
 	}
 }

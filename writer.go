@@ -12,6 +12,9 @@ import (
 	"unsafe"
 )
 
+// TODO: make sure it is clear to people that any failure to write a row should indicate to the caller that
+// the writer is in an error state and should really only be closed or allowed to go out of scope.
+
 // TODO: ideally the `func (w *Writer) loadQF_*` functions should be inlined
 
 // TODO: not all runtime flags are mutable through the writer instance lifecycle
