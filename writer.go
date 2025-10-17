@@ -864,9 +864,7 @@ func (w *Writer) appendRec(bufList ...[]byte) {
 		for i := range bufList {
 			n := len(bufList[i])
 			addCap += n
-			if addCap < n {
-				panic("int capacity overflow")
-			}
+			intSumOverflowCheck(addCap, n)
 		}
 
 		if addCap == 0 {
@@ -1346,4 +1344,14 @@ func isValidComment(comment, quote, fieldSep, escape rune, escapeSet bool) error
 	}
 
 	return nil
+}
+
+// intSumOverflowCheck will be kept super small
+// so it can be easily inlined when used
+func intSumOverflowCheck(sum, termAdded int) {
+	if sum >= termAdded {
+		return
+	}
+
+	panic(panicIntOverflow)
 }

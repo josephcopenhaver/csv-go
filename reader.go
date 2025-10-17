@@ -94,6 +94,7 @@ const (
 	panicMissedHandlingMaxRecordIndex        // "missed handling record index at max value"
 	panicMissedHandlingMaxSecOpFieldIndex    // "missed handling field index at max SecOp value"
 	panicMissedHandlingMaxExpectedFieldIndex // "missed handling field index at expected max configured value"
+	panicIntOverflow                         // "int overflow"
 )
 
 func (p panicErr) String() string {
@@ -103,6 +104,7 @@ func (p panicErr) String() string {
 		"missed handling record index at max value",         // panicMissedHandlingMaxRecordIndex
 		"missed handling field index at SecOp max value",    // panicMissedHandlingMaxSecOpFieldIndex
 		"missed handling field index at expected max value", // panicMissedHandlingMaxExpectedFieldIndex
+		"int overflow", // panicIntOverflow
 	}[p-1]
 }
 
