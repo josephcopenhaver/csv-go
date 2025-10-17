@@ -12,6 +12,8 @@ import (
 	"unsafe"
 )
 
+// TODO: consider adjusting internal ` someName ...elem)` vararg funcs to ` someName []elem)` to avoid vararg overhead and unexpected variadic allocations in the future. Variadic is cheap when always using pre-allocated whole slices as the input.
+
 // TODO: make sure it is clear to people that any failure to write a row should indicate to the caller that
 // the writer is in an error state and should really only be closed or allowed to go out of scope.
 
@@ -400,7 +402,6 @@ type wCfg struct {
 	commentSet                 bool
 	recordSepRuneLen           int8
 	clearMemoryAfterFree       bool
-	fwOverlapsControlRunes     bool
 }
 
 type WriterOption func(*wCfg)
@@ -657,17 +658,6 @@ func (cfg *wCfg) validate() error {
 		return errors.New("invalid field separator and escape combination")
 	}
 
-	{
-		listStart := uint8(0)
-		runeArray := [...]rune{cfg.escape, cfg.quote, cfg.fieldSeparator}
-		if !cfg.escapeSet {
-			listStart++
-		}
-		if isFieldWriterRune(runeArray[listStart:]...) {
-			cfg.fwOverlapsControlRunes = true
-		}
-	}
-
 	if cfg.recordBufSet && cfg.initialRecordBufferSizeSet {
 		return errors.New("initial record buffer size cannot be specified when also setting the initial record buffer")
 	}
@@ -798,7 +788,15 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	}
 	if cfg.commentSet {
 		bitFlags |= wFlagCommentSet
-		if strings.ContainsRune(fieldWriterTypesRuneList, cfg.comment) {
+	}
+
+	{
+		listStart := uint8(0)
+		runeArray := [...]rune{cfg.escape, cfg.quote, cfg.fieldSeparator}
+		if !cfg.escapeSet {
+			listStart++
+		}
+		if isFieldWriterRune(runeArray[listStart:]) {
 			bitFlags |= wFlagControlRuneOverlap
 		}
 	}
@@ -1021,15 +1019,6 @@ func (cfg *whCfg) validate(w *Writer) error {
 		// note this block is a positive path state-altering action
 		// anything added after this parent if context should similarly
 		// be a positive path action that should never really fail
-
-		// comment was specified when writing the header
-		// but not in the writer config
-		//
-		// so load the writer with the updated config context
-
-		if strings.ContainsRune(fieldWriterTypesRuneList, cfg.comment) {
-			w.bitFlags |= wFlagControlRuneOverlap
-		}
 
 		w.bitFlags |= wFlagCommentSet
 		w.comment = cfg.comment
@@ -1332,7 +1321,7 @@ func isNewlineRuneForWrite(c rune) bool {
 	return false
 }
 
-func isFieldWriterRune(runeList ...rune) bool {
+func isFieldWriterRune(runeList []rune) bool {
 	for _, r := range runeList {
 		if strings.ContainsRune(fieldWriterTypesRuneList, r) {
 			return true
