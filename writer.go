@@ -682,8 +682,6 @@ func (cfg *wCfg) validate() error {
 	return nil
 }
 
-type writeRowFunc = func([]FieldWriter) (int, error)
-
 type Writer struct {
 	writeRow                func([]FieldWriter) (int, error)
 	fieldWriters            []FieldWriter
