@@ -795,3 +795,127 @@ func TestFieldWriterAppendInvalid(t *testing.T) {
 	is.Equal(ErrInvalidFieldWriter, err)
 	is.Nil(v)
 }
+
+func Test_startsWithRune(t *testing.T) {
+	t.Parallel()
+	is := assert.New(t)
+
+	var startsWithRune func(FieldWriter, rune) bool
+	{
+		var aBuff [boundedFieldWritersMaxByteLen]byte
+		buf := aBuff[:0]
+
+		startsWithRune = func(f FieldWriter, r rune) bool {
+			return f.startsWithRune(buf, r)
+		}
+	}
+
+	// []byte
+	{
+		f := FieldWriters().Bytes([]byte(`hi`))
+
+		is.True(startsWithRune(f, 'h'))
+		is.False(startsWithRune(f, 'i'))
+	}
+
+	// []byte (empty)
+	{
+		f := FieldWriters().Bytes(nil)
+
+		is.False(startsWithRune(f, 0))
+	}
+
+	// string
+	{
+		f := FieldWriters().String(`hi`)
+
+		is.True(startsWithRune(f, 'h'))
+		is.False(startsWithRune(f, 'i'))
+	}
+
+	// string (empty)
+	{
+		f := FieldWriters().String(``)
+
+		is.False(startsWithRune(f, 0))
+	}
+
+	// int
+	{
+		f := FieldWriters().Int(-1)
+
+		is.True(startsWithRune(f, '-'))
+		is.False(startsWithRune(f, '1'))
+	}
+
+	// int64
+	{
+		f := FieldWriters().Int64(-1)
+
+		is.True(startsWithRune(f, '-'))
+		is.False(startsWithRune(f, '1'))
+	}
+
+	// duration
+	{
+		f := FieldWriters().Duration(-time.Microsecond)
+
+		is.True(startsWithRune(f, '-'))
+		is.False(startsWithRune(f, '1'))
+	}
+
+	// uint64
+	{
+		f := FieldWriters().Uint64(9999999999999999999)
+
+		is.True(startsWithRune(f, '9'))
+		is.False(startsWithRune(f, '8'))
+	}
+
+	// time
+	{
+		f := FieldWriters().Time(time.Time{})
+
+		is.True(startsWithRune(f, '0'))
+		is.False(startsWithRune(f, ':'))
+	}
+
+	// rune
+	{
+		f := FieldWriters().Rune('@')
+
+		is.True(startsWithRune(f, '@'))
+		is.False(startsWithRune(f, '#'))
+	}
+
+	// bool=true
+	{
+		f := FieldWriters().Bool(true)
+
+		is.True(startsWithRune(f, '1'))
+		is.False(startsWithRune(f, '0'))
+	}
+
+	// bool=false
+	{
+		f := FieldWriters().Bool(false)
+
+		is.True(startsWithRune(f, '0'))
+		is.False(startsWithRune(f, '1'))
+	}
+
+	// float64
+	{
+		f := FieldWriters().Float64(math.Inf(1))
+
+		is.True(startsWithRune(f, '+'))
+		is.False(startsWithRune(f, '-'))
+	}
+
+	// invalid
+	{
+		f := FieldWriter{}
+
+		is.False(startsWithRune(f, 0))
+	}
+}
