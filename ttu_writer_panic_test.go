@@ -8,6 +8,8 @@ import (
 )
 
 func Test_intSumOverflowCheck(t *testing.T) {
+	t.Parallel()
+
 	is := assert.New(t)
 
 	//
