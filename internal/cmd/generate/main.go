@@ -138,17 +138,14 @@ func main() {
 		t := parse(tsWriteRow)
 
 		type cfg struct {
-			Memclear  bool // leave in
-			CheckUTF8 bool // TODO: (partial) remove
+			Memclear bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{Memclear: false, CheckUTF8: false},
-			{Memclear: false, CheckUTF8: true},
-			{Memclear: true, CheckUTF8: false},
-			{Memclear: true, CheckUTF8: true},
+			{Memclear: false},
+			{Memclear: true},
 		})
 	}
 

@@ -3,7 +3,7 @@
 {{define "loadQF"}}w.loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}{{end}}
 {{define "loadQFCheckUTF8"}}w.loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}{{end}}
 
-func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
+func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
@@ -12,9 +12,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O
 	{
 		f := &fields[0]
 
-		{{if .CheckUTF8 -}}
 		var scanForNonUTF8 bool
-		{{- end}}
 		var src []byte
 		var err error
 
@@ -35,9 +33,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			{{if .CheckUTF8 -}}
 			scanForNonUTF8 = (f._64_bits == 0)
-			{{- end}}
 		case wfkString:
 			s := f.str
 			if len(s) == 0 {
@@ -54,9 +50,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O
 				goto FIRST_FIELD_WRITTEN
 			}
 
-			{{if .CheckUTF8 -}}
 			scanForNonUTF8 = (f._64_bits == 0)
-			{{- end}}
 			src = unsafe.Slice(unsafe.StringData(s), len(s))
 		case wfkRune:
 			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
@@ -84,7 +78,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O
 		// process src buf
 		//
 
-		{{if .CheckUTF8 -}}if !scanForNonUTF8 { {{- end}}
+		if !scanForNonUTF8 || (w.bitFlags & wFlagErrOnNonUTF8) == 0 {
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
 			var i int
@@ -119,7 +113,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O
 			{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
 			goto FIRST_FIELD_WRITTEN
-		{{if .CheckUTF8 -}} }
+		}
 
 		// for each decoded rune, check if that rune fails to decode and if so then return an error
 		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
@@ -172,7 +166,6 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O
 
 			goto FIRST_FIELD_WRITTEN
 		}
-		{{end}}
 	}
 
 FIRST_FIELD_WRITTEN:
@@ -184,9 +177,7 @@ SUBSEQUENT_FIELD_WRITE:
 		for {
 			f := &fields[i]
 
-			{{if .CheckUTF8 -}}
 			var scanForNonUTF8 bool
-			{{- end}}
 			var src []byte
 			var err error
 
@@ -197,18 +188,14 @@ SUBSEQUENT_FIELD_WRITE:
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
-				{{if .CheckUTF8 -}}
 				scanForNonUTF8 = (f._64_bits == 0)
-				{{- end}}
 			case wfkString:
 				s := f.str
 				if len(s) == 0 {
 					break SUBSEQUENT_FIELD_WRITE
 				}
 
-				{{if .CheckUTF8 -}}
 				scanForNonUTF8 = (f._64_bits == 0)
-				{{- end}}
 				src = unsafe.Slice(unsafe.StringData(s), len(s))
 			case wfkRune:
 				src, err = f.runeAppendText(w.fieldWriterBuf[:0])
@@ -236,7 +223,7 @@ SUBSEQUENT_FIELD_WRITE:
 			// process src buf
 			//
 
-			{{if .CheckUTF8 -}}if !scanForNonUTF8 { {{- end}}
+			if !scanForNonUTF8 || (w.bitFlags & wFlagErrOnNonUTF8) == 0 {
 				// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
 				i := bytes.IndexAny(src, w.controlRunes)
@@ -268,7 +255,7 @@ SUBSEQUENT_FIELD_WRITE:
 				{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
 				break
-			{{if .CheckUTF8 -}} }
+			}
 
 			// for each decoded rune, check if that rune fails to decode and if so then return an error
 			// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
@@ -322,7 +309,7 @@ SUBSEQUENT_FIELD_WRITE:
 				break
 			}
 
-			break{{end}}
+			break
 		}
 	}
 

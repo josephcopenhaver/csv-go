@@ -5,13 +5,17 @@ import (
 	"errors"
 	"io"
 	"math"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 	"unsafe"
 )
+
+// TODO: not all runtime flags are mutable through the writer instance lifecycle
+//
+// for those that are immutable they should be expanded into local values which
+// are not on the heap to avoid reloads of stack data and reuse of a register
 
 // TODO: some field types are guaranteed to never have overlap with csv encoding characters
 // (quote, escape, record separator, and field separator) such as the types that fit in 64 bits
@@ -823,24 +827,18 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		bitFlags:             bitFlags,
 	}
 
-	w.setWriteRowStrategy(cfg.clearMemoryAfterFree, cfg.escapeSet, cfg.errOnNonUTF8)
+	w.setWriteRowStrategy(cfg.clearMemoryAfterFree, cfg.escapeSet)
 
 	return w, nil
 }
 
-func (w *Writer) setWriteRowStrategy(clearMemoryAfterFree, escapeSet, errOnNonUTF8 bool) {
+func (w *Writer) setWriteRowStrategy(clearMemoryAfterFree, escapeSet bool) {
 	var f func([]FieldWriter) (int, error)
 
 	if !clearMemoryAfterFree {
-		if !errOnNonUTF8 {
-			f = w.writeRow_memclearOff_checkUTF8Off
-		} else {
-			f = w.writeRow_memclearOff_checkUTF8On
-		}
-	} else if !errOnNonUTF8 {
-		f = w.writeRow_memclearOn_checkUTF8Off
+		f = w.writeRow_memclearOff
 	} else {
-		f = w.writeRow_memclearOn_checkUTF8On
+		f = w.writeRow_memclearOn
 	}
 
 	w.writeRow = func(row []FieldWriter) (int, error) {
@@ -892,35 +890,13 @@ func (w *Writer) Close() error {
 	return nil
 }
 
-func (w *Writer) appendRec(bufList ...[]byte) {
-	if len(bufList) == 0 {
+func (w *Writer) appendRec(buf []byte) {
+	if len(buf) == 0 {
 		return
 	}
 
-	var old []byte
-	{
-		var addCap int
-		for i := range bufList {
-			n := len(bufList[i])
-			addCap += n
-			intSumOverflowCheck(addCap, n)
-		}
-
-		if addCap == 0 {
-			return
-		}
-
-		old = w.recordBuf
-		newDst := slices.Grow(w.recordBuf, addCap)
-		wIdx := len(newDst)
-		newDst = newDst[:wIdx+addCap]
-
-		for i := range bufList {
-			wIdx += copy(newDst[wIdx:], bufList[i])
-		}
-
-		w.recordBuf = newDst
-	}
+	old := w.recordBuf
+	w.recordBuf = append(w.recordBuf, buf...)
 
 	if cap(old) == 0 {
 		return
@@ -1040,6 +1016,10 @@ func (cfg *whCfg) validate(w *Writer) error {
 	} else if err := isValidComment(cfg.comment, w.quote, w.fieldSep, w.escape, (w.bitFlags&wFlagEscapeSet) != 0); err != nil {
 		return err
 	} else {
+		// note this block is a positive path state-altering action
+		// anything added after this parent if context should similarly
+		// be a positive path action that should never really fail
+
 		// comment was specified when writing the header
 		// but not in the writer config
 		//
@@ -1054,6 +1034,7 @@ func (cfg *whCfg) validate(w *Writer) error {
 	}
 
 	// positive path remaining actions:
+	// (note that the first one in the positive path was the else clause above)
 
 	if cfg.headersSet && w.numFields == -1 {
 		w.numFields = len(cfg.headers)
