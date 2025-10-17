@@ -36,7 +36,7 @@ var (
 	ErrInvalidRune               = errors.New("invalid rune")
 )
 
-type wFlag uint8 // TODO: when adding 2 more flags change to uint16
+type wFlag uint16
 
 const (
 	wFlagClosed wFlag = 1 << iota
@@ -50,8 +50,9 @@ const (
 
 	wFlagEscapeSet
 	wFlagCommentSet
-	wFlagClearMemoryAfterFree
 	wFlagControlRuneOverlap
+	wFlagClearMemoryAfterFree
+	wFlagForceQuoteFirstField
 )
 
 const (
@@ -111,6 +112,35 @@ func (w *FieldWriter) isZeroLen() bool {
 		return len(w.str) == 0
 	case wfkInt, wfkInt64, wfkDuration, wfkUint64, wfkTime, wfkRune, wfkBool, wfkFloat64:
 		return false
+	default:
+		// I reserve the right to panic here in the future should I wish to.
+		return false
+	}
+}
+
+func (w *FieldWriter) startsWithRune(buf []byte, r rune) bool {
+	p := []byte(string(r))
+
+	switch w.kind {
+	case wfkBytes:
+		if len(w.bytes) == 0 {
+			return false
+		}
+
+		return bytes.HasPrefix(w.bytes, p)
+	case wfkString:
+		s := w.str
+		if len(s) == 0 {
+			return false
+		}
+
+		b := unsafe.Slice(unsafe.StringData(s), len(s))
+
+		return bytes.HasPrefix(b, p)
+	case wfkInt, wfkInt64, wfkDuration, wfkUint64, wfkTime, wfkRune, wfkBool, wfkFloat64:
+		var err error
+		buf, err = w.AppendText(buf)
+		return (err == nil && bytes.HasPrefix(buf, p))
 	default:
 		// I reserve the right to panic here in the future should I wish to.
 		return false
@@ -651,7 +681,6 @@ type writeRowFunc = func([]FieldWriter) (int, error)
 
 type Writer struct {
 	writeRow                func([]FieldWriter) (int, error)
-	writeRowAfterHeader     func(rune) writeRowFunc
 	fieldWriters            []FieldWriter
 	fieldWriterBuf          [boundedFieldWritersMaxByteLen]byte
 	recordBuf               []byte
@@ -805,22 +834,32 @@ func (w *Writer) setWriteRowStrategy(clearMemoryAfterFree, escapeSet, errOnNonUT
 	if !clearMemoryAfterFree {
 		if !errOnNonUTF8 {
 			f = w.writeRow_memclearOff_checkUTF8Off
-			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_checkUTF8Off
 		} else {
 			f = w.writeRow_memclearOff_checkUTF8On
-			w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOff_checkUTF8On
 		}
 	} else if !errOnNonUTF8 {
 		f = w.writeRow_memclearOn_checkUTF8Off
-		w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_checkUTF8Off
 	} else {
 		f = w.writeRow_memclearOn_checkUTF8On
-		w.writeRowAfterHeader = w.writeRowAfterHeader_memclearOn_checkUTF8On
 	}
 
 	w.writeRow = func(row []FieldWriter) (int, error) {
 		w.writeRow = f
 		w.bitFlags |= wFlagHeaderWritten
+
+		if (w.bitFlags & wFlagCommentSet) != 0 {
+			// detect if the first field begins with a comment sequence
+			// and if so, set that the first field should be quoted
+			// regardless of its type or content
+
+			if row[0].startsWithRune(w.fieldWriterBuf[:0], w.comment) {
+				w.bitFlags |= wFlagForceQuoteFirstField
+				defer func() {
+					w.bitFlags &= ^wFlagForceQuoteFirstField
+				}()
+			}
+		}
+
 		return w.writeRow(row)
 	}
 }
@@ -1000,8 +1039,18 @@ func (cfg *whCfg) validate(w *Writer) error {
 		return errors.New("comment rune cannot be specified when writing headers when the writer instance already has one specified")
 	} else if err := isValidComment(cfg.comment, w.quote, w.fieldSep, w.escape, (w.bitFlags&wFlagEscapeSet) != 0); err != nil {
 		return err
-	} else if strings.ContainsRune(fieldWriterTypesRuneList, cfg.comment) {
-		w.bitFlags |= wFlagControlRuneOverlap
+	} else {
+		// comment was specified when writing the header
+		// but not in the writer config
+		//
+		// so load the writer with the updated config context
+
+		if strings.ContainsRune(fieldWriterTypesRuneList, cfg.comment) {
+			w.bitFlags |= wFlagControlRuneOverlap
+		}
+
+		w.bitFlags |= wFlagCommentSet
+		w.comment = cfg.comment
 	}
 
 	// positive path remaining actions:
@@ -1048,17 +1097,6 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 
 	if err := cfg.validate(w); err != nil {
 		return result, errors.Join(ErrBadConfig, err)
-	}
-
-	// handle if the output needs to be sensitive to a
-	// comment header rune prefix
-	//
-	// this happens even if no header is written so that
-	// a future reader can still attempt to honor the format
-	// and not get a format collision with possibly the first
-	// field of the first record
-	if cfg.commentSet {
-		w.writeRow = w.writeRowAfterHeader(cfg.comment)
 	}
 
 	if cfg.commentLinesSet {

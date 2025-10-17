@@ -138,22 +138,17 @@ func main() {
 		t := parse(tsWriteRow)
 
 		type cfg struct {
-			ForceQuoteCommentStart bool // TODO: remove
-			Memclear               bool // leave in
-			CheckUTF8              bool // TODO: (partial) remove
+			Memclear  bool // leave in
+			CheckUTF8 bool // TODO: (partial) remove
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{ForceQuoteCommentStart: false, Memclear: false, CheckUTF8: false},
-			{ForceQuoteCommentStart: false, Memclear: false, CheckUTF8: true},
-			{ForceQuoteCommentStart: false, Memclear: true, CheckUTF8: false},
-			{ForceQuoteCommentStart: false, Memclear: true, CheckUTF8: true},
-			{ForceQuoteCommentStart: true, Memclear: false, CheckUTF8: false},
-			{ForceQuoteCommentStart: true, Memclear: false, CheckUTF8: true},
-			{ForceQuoteCommentStart: true, Memclear: true, CheckUTF8: false},
-			{ForceQuoteCommentStart: true, Memclear: true, CheckUTF8: true},
+			{Memclear: false, CheckUTF8: false},
+			{Memclear: false, CheckUTF8: true},
+			{Memclear: true, CheckUTF8: false},
+			{Memclear: true, CheckUTF8: true},
 		})
 	}
 

@@ -3,21 +3,10 @@
 {{define "loadQF"}}w.loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}{{end}}
 {{define "loadQFCheckUTF8"}}w.loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}{{end}}
 
-{{- if .ForceQuoteCommentStart -}}
-func (w *Writer) writeRowAfterHeader_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}(comment rune) writeRowFunc {
-commentBytes := []byte(string(comment))
-
-return func(fields []FieldWriter) (int, error) {
-{{- else -}}
 func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
-{{- end}}
 	defer func() {
 		w.recordBuf = w.recordBuf[:0]
 	}()
-	{{if .ForceQuoteCommentStart -}}
-
-	w.writeRow = w.writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O{{if .CheckUTF8}}n{{else}}ff{{end}}
-	{{end}}
 
 	// write the first field
 	{
@@ -75,7 +64,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O
 				return 0, err
 			}
 		default:
-			if (w.bitFlags & wFlagControlRuneOverlap) == 0 {
+			if (w.bitFlags & (wFlagControlRuneOverlap|wFlagForceQuoteFirstField)) == 0 {
 				src, err = f.AppendText(w.recordBuf)
 				if err != nil {
 					return 0, err
@@ -98,16 +87,14 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O
 		{{if .CheckUTF8 -}}if !scanForNonUTF8 { {{- end}}
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
-			{{if .ForceQuoteCommentStart}}
 			var i int
-
-			if !bytes.HasPrefix(src, commentBytes) { {{end}}
-				i {{if not .ForceQuoteCommentStart}}:{{end}}= bytes.IndexAny(src, w.controlRunes)
+			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
+				i = bytes.IndexAny(src, w.controlRunes)
 				if i == -1 {
 					{{template "appendRec0" .}}src{{template "appendRec1" .}}
 					goto FIRST_FIELD_WRITTEN
 				}
-			{{if .ForceQuoteCommentStart}}}{{end}}
+			}
 
 			{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
@@ -138,9 +125,6 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O
 		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
 		// continue loading
 
-		{{if .ForceQuoteCommentStart -}}
-		isFirstRune := true
-		{{- end}}
 		i := 0
 		for {
 			r, n := utf8.DecodeRune(src[i:])
@@ -153,16 +137,13 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}_checkUTF8O
 				return 0, ErrNonUTF8InRecord
 			}
 
-			if !strings.ContainsRune(w.controlRunes, r) {{if .ForceQuoteCommentStart}}&& (!isFirstRune || r != comment) {{end}} {
+			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 && !strings.ContainsRune(w.controlRunes, r) {
 				i += n
-				{{if .ForceQuoteCommentStart -}}
-				isFirstRune = false
-				{{- end}}
 				continue
 			}
 
 			//
-			// found a control rune of some kind
+			// found a control rune of some kind or was forced to quote first field
 			//
 
 			{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
@@ -352,7 +333,4 @@ SUBSEQUENT_FIELD_WRITE:
 		err = writeIOErr{err}
 	}
 	return n, err
-{{if .ForceQuoteCommentStart -}}
-}
-{{- end}}
 }
