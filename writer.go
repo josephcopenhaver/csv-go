@@ -12,6 +12,8 @@ import (
 	"unsafe"
 )
 
+// TODO: ideally the `func (w *Writer) loadQF_*` functions should be inlined
+
 // TODO: not all runtime flags are mutable through the writer instance lifecycle
 //
 // for those that are immutable they should be expanded into local values which
@@ -40,23 +42,22 @@ var (
 	ErrInvalidRune               = errors.New("invalid rune")
 )
 
-type wFlag uint16
+type wFlag uint8
 
 const (
-	wFlagClosed wFlag = 1 << iota
-	wFlagErrOnNonUTF8
-	wFlagHeaderWritten
-	wFlagRecordWritten
-
-	//
-	// low access rate init-time flags
-	//
-
-	wFlagEscapeSet
-	wFlagCommentSet
+	wFlagErrOnNonUTF8 wFlag = 1 << iota
 	wFlagControlRuneOverlap
-	wFlagClearMemoryAfterFree
+	wFlagEscapeSet
 	wFlagForceQuoteFirstField
+
+	//
+	// low access rate flags
+	//
+
+	wFlagCommentSet
+	wFlagHeaderWritten
+	wFlagClosed
+	wFlagClearMemoryAfterFree
 )
 
 const (
