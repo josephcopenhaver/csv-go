@@ -2259,7 +2259,7 @@ func (w *Writer) writeRow_memclearOff(fields []FieldWriter) (int, error) {
 			case w.quote:
 				w.recordBuf = append(w.recordBuf, src[:i]...)
 				w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-				err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
+				err = w.loadQFWithCheckUTF8_memclearOff(src, i+n, i+n)
 			case w.escape:
 				var loadIdx int
 				if (w.bitFlags & wFlagEscapeSet) != 0 {
@@ -2267,9 +2267,9 @@ func (w *Writer) writeRow_memclearOff(fields []FieldWriter) (int, error) {
 					w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
 					loadIdx = i + n
 				}
-				err = w.loadQF_wCheckUTF8_memclearOff(src, loadIdx, i+n)
+				err = w.loadQFWithCheckUTF8_memclearOff(src, loadIdx, i+n)
 			default:
-				err = w.loadQF_wCheckUTF8_memclearOff(src, 0, i+n)
+				err = w.loadQFWithCheckUTF8_memclearOff(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -2401,7 +2401,7 @@ FIRST_FIELD_WRITTEN:
 				case w.quote:
 					w.recordBuf = append(w.recordBuf, src[:i]...)
 					w.recordBuf = append(w.recordBuf, w.escapedQuote[:w.escapedQuoteByteLen]...)
-					err = w.loadQF_wCheckUTF8_memclearOff(src, i+n, i+n)
+					err = w.loadQFWithCheckUTF8_memclearOff(src, i+n, i+n)
 				case w.escape:
 					var loadIdx int
 					if (w.bitFlags & wFlagEscapeSet) != 0 {
@@ -2409,9 +2409,9 @@ FIRST_FIELD_WRITTEN:
 						w.recordBuf = append(w.recordBuf, w.escapedEscape[:w.escapedEscapeByteLen]...)
 						loadIdx = i + n
 					}
-					err = w.loadQF_wCheckUTF8_memclearOff(src, loadIdx, i+n)
+					err = w.loadQFWithCheckUTF8_memclearOff(src, loadIdx, i+n)
 				default:
-					err = w.loadQF_wCheckUTF8_memclearOff(src, 0, i+n)
+					err = w.loadQFWithCheckUTF8_memclearOff(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -2578,7 +2578,7 @@ func (w *Writer) writeRow_memclearOn(fields []FieldWriter) (int, error) {
 			case w.quote:
 				w.appendRec(src[:i])
 				w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-				err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
+				err = w.loadQFWithCheckUTF8_memclearOn(src, i+n, i+n)
 			case w.escape:
 				var loadIdx int
 				if (w.bitFlags & wFlagEscapeSet) != 0 {
@@ -2586,9 +2586,9 @@ func (w *Writer) writeRow_memclearOn(fields []FieldWriter) (int, error) {
 					w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
 					loadIdx = i + n
 				}
-				err = w.loadQF_wCheckUTF8_memclearOn(src, loadIdx, i+n)
+				err = w.loadQFWithCheckUTF8_memclearOn(src, loadIdx, i+n)
 			default:
-				err = w.loadQF_wCheckUTF8_memclearOn(src, 0, i+n)
+				err = w.loadQFWithCheckUTF8_memclearOn(src, 0, i+n)
 			}
 			if err != nil {
 				return 0, err
@@ -2720,7 +2720,7 @@ FIRST_FIELD_WRITTEN:
 				case w.quote:
 					w.appendRec(src[:i])
 					w.appendRec(w.escapedQuote[:w.escapedQuoteByteLen])
-					err = w.loadQF_wCheckUTF8_memclearOn(src, i+n, i+n)
+					err = w.loadQFWithCheckUTF8_memclearOn(src, i+n, i+n)
 				case w.escape:
 					var loadIdx int
 					if (w.bitFlags & wFlagEscapeSet) != 0 {
@@ -2728,9 +2728,9 @@ FIRST_FIELD_WRITTEN:
 						w.appendRec(w.escapedEscape[:w.escapedEscapeByteLen])
 						loadIdx = i + n
 					}
-					err = w.loadQF_wCheckUTF8_memclearOn(src, loadIdx, i+n)
+					err = w.loadQFWithCheckUTF8_memclearOn(src, loadIdx, i+n)
 				default:
-					err = w.loadQF_wCheckUTF8_memclearOn(src, 0, i+n)
+					err = w.loadQFWithCheckUTF8_memclearOn(src, 0, i+n)
 				}
 				if err != nil {
 					return 0, err
@@ -2789,9 +2789,9 @@ func (w *Writer) loadQF_memclearOff(src []byte, loadIdx, scanIdx int) {
 	}
 }
 
-// loadQF_wCheckUTF8_memclearOff performs the same duties as loadQField_memclearOff and in a much more expensive
+// loadQFWithCheckUTF8_memclearOff performs the same duties as loadQField_memclearOff and in a much more expensive
 // scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQF_wCheckUTF8_memclearOff(src []byte, loadIdx, scanIdx int) error {
+func (w *Writer) loadQFWithCheckUTF8_memclearOff(src []byte, loadIdx, scanIdx int) error {
 	for {
 		r, n := utf8.DecodeRune(src[scanIdx:])
 		if n == 0 {
@@ -2861,9 +2861,9 @@ func (w *Writer) loadQF_memclearOn(src []byte, loadIdx, scanIdx int) {
 	}
 }
 
-// loadQF_wCheckUTF8_memclearOn performs the same duties as loadQField_memclearOn and in a much more expensive
+// loadQFWithCheckUTF8_memclearOn performs the same duties as loadQField_memclearOn and in a much more expensive
 // scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQF_wCheckUTF8_memclearOn(src []byte, loadIdx, scanIdx int) error {
+func (w *Writer) loadQFWithCheckUTF8_memclearOn(src []byte, loadIdx, scanIdx int) error {
 	for {
 		r, n := utf8.DecodeRune(src[scanIdx:])
 		if n == 0 {

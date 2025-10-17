@@ -1,7 +1,7 @@
 {{- define "appendRec0"}}{{if .Memclear}}w.appendRec({{else}}w.recordBuf = append(w.recordBuf, {{end}}{{end}}
 {{define "appendRec1"}}{{if .Memclear}}){{else}}...){{end}}{{end -}}
 {{define "loadQF"}}w.loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}{{end}}
-{{define "loadQFCheckUTF8"}}w.loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}{{end}}
+{{define "loadQFCheckUTF8"}}w.loadQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}{{end}}
 
 func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
 	defer func() {

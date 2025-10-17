@@ -36,9 +36,9 @@ func (w *Writer) loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src []byte, 
 	}
 }
 
-// loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}} performs the same duties as loadQField_memclearO{{if .Memclear}}n{{else}}ff{{end}} and in a much more expensive
+// loadQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}} performs the same duties as loadQField_memclearO{{if .Memclear}}n{{else}}ff{{end}} and in a much more expensive
 // scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQF_wCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src []byte, loadIdx, scanIdx int) error {
+func (w *Writer) loadQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src []byte, loadIdx, scanIdx int) error {
 	for {
 		r, n := utf8.DecodeRune(src[scanIdx:])
 		if n == 0 {
