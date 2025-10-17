@@ -125,7 +125,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []F
 			if n == 0 {
 				// all good and no overlap issues, so just directly copy src
 				{{template "appendRec0" .}}src{{template "appendRec1" .}}
-				goto FIRST_FIELD_WRITTEN
+				break // same as `goto FIRST_FIELD_WRITTEN` - using break specifically to increase code coverage
 			}
 			if n == 1 && r == utf8.RuneError {
 				return 0, ErrNonUTF8InRecord
@@ -164,7 +164,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []F
 
 			{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
-			goto FIRST_FIELD_WRITTEN
+			break // same as `goto FIRST_FIELD_WRITTEN` - using break specifically to increase code coverage
 		}
 	}
 
