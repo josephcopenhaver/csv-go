@@ -1579,7 +1579,7 @@ type secOpReader struct {
 	*fastReader
 	close             func() error
 	prepareRow        func() bool
-	appendRecBuf      func(...byte) bool
+	appendRecBuf      func([]byte) bool
 	incRecordIndex    func()
 	outOfCommentBytes func(int) bool
 	outOfCommentLines func() bool
@@ -1649,13 +1649,13 @@ func (r *secOpReader) incRecordIndexWithMax(max uint64) func() {
 	}
 }
 
-func (r *secOpReader) defaultAppendRecBuf(b ...byte) bool {
+func (r *secOpReader) defaultAppendRecBuf(b []byte) bool {
 	r.recordBuf = append(r.recordBuf, b...)
 
 	return false
 }
 
-func (r *secOpReader) appendRecBufWithMemclear(b ...byte) bool {
+func (r *secOpReader) appendRecBufWithMemclear(b []byte) bool {
 	if len(b) == 0 {
 		return false
 	}
@@ -1679,8 +1679,8 @@ func (r *secOpReader) appendRecBufWithMemclear(b ...byte) bool {
 	return false
 }
 
-func (r *secOpReader) appendRecBufMaxCheck(max int) func(...byte) bool {
-	return func(b ...byte) bool {
+func (r *secOpReader) appendRecBufMaxCheck(max int) func([]byte) bool {
+	return func(b []byte) bool {
 		if len(b) == 0 {
 			return false
 		}
@@ -1700,8 +1700,8 @@ func (r *secOpReader) appendRecBufMaxCheck(max int) func(...byte) bool {
 	}
 }
 
-func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func(...byte) bool {
-	return func(b ...byte) bool {
+func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func([]byte) bool {
+	return func(b []byte) bool {
 		if len(b) == 0 {
 			return false
 		}
@@ -1735,7 +1735,7 @@ func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func(...byte) bool {
 	}
 }
 
-func (r *secOpReader) appendRecBufNotAllowed(_ ...byte) bool {
+func (r *secOpReader) appendRecBufNotAllowed(_ []byte) bool {
 	r.secOpStreamParsingErr(ErrSecOpRecordCountAboveMax)
 	return true
 }

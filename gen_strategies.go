@@ -1188,7 +1188,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				case rStateStartOfRecord, rStateStartOfField:
 					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex:]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex:]) {
 						return false
 					}
 
@@ -1196,7 +1196,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				case rStateInQuotedField, rStateInField:
 					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex:]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex:]) {
 						return false
 					}
 
@@ -1268,7 +1268,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				case rStateStartOfRecord:
 					// HANDLING: r.fieldSeparator
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]) {
 						return false
 					}
 					r.byteIndex += uint64(di)
@@ -1289,7 +1289,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 					// TODO: technically "skippable"
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 						return false
 					}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1323,7 +1323,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				case rStateStartOfField:
 					// HANDLING: r.fieldSeparator
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]) {
 						return false
 					}
 					r.byteIndex += uint64(di)
@@ -1341,7 +1341,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				case rStateInField:
 					// HANDLING: r.fieldSeparator
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]) {
 						return false
 					}
 					r.byteIndex += uint64(di)
@@ -1396,7 +1396,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					// an escape at the start of a record or field indicates that it is a literal
 					// and not an escape character after all - it would be an escape indicator
 					// if the state was one that indicated we're in a quoted field
-					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 						return false
 					}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1406,7 +1406,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				case rStateInQuotedField:
 					// HANDLING: r.escape
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]) {
 						return false
 					}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1421,7 +1421,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 						return false
 					}
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 						return false
 					}
 					r.byteIndex += uint64(size)
@@ -1438,7 +1438,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 					// TODO: technically "skippable"
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 						return false
 					}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1496,7 +1496,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 						// quote in unquoted field erroring is disabled
 
-						if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+						if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 							return false
 						}
 						r.byteIndex += uint64(di) + uint64(size)
@@ -1517,7 +1517,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				case rStateInQuotedField:
 					// HANDLING: r.quote
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]) {
 						return false
 					}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1532,7 +1532,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 						return false
 					}
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 						return false
 					}
 					r.byteIndex += uint64(size)
@@ -1552,7 +1552,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 						return false
 					}
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 						return false
 					}
 					r.byteIndex += uint64(size)
@@ -1573,7 +1573,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 						// quote in unquoted field erroring is disabled
 
-						if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+						if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 							return false
 						}
 						r.byteIndex += uint64(di) + uint64(size)
@@ -1603,7 +1603,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 					// quote in unquoted field erroring is disabled
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 						return false
 					}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1656,7 +1656,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 						case rStateStartOfRecord, rStateStartOfField:
 							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
 
-							if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+1]...) {
+							if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+1]) {
 								return false
 							}
 
@@ -1667,7 +1667,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 						case rStateInQuotedField, rStateInField:
 							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
 
-							if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+1]...) {
+							if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+1]) {
 								return false
 							}
 
@@ -1738,7 +1738,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				case rStateStartOfRecord:
 					// HANDLING: record separator
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]) {
 						return false
 					}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1764,7 +1764,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 					// TODO: technically "skippable"
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 						return false
 					}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1804,7 +1804,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				case rStateStartOfField, rStateInField:
 					// HANDLING: record separator
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex:idx]) {
 						return false
 					}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1886,7 +1886,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				case rStateStartOfField:
 					// HANDLING: r.comment
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 						return false
 					}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1896,7 +1896,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				case rStateInQuotedField, rStateInField:
 					// HANDLING: r.comment
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 						return false
 					}
 					r.byteIndex += uint64(di) + uint64(size)
@@ -1982,7 +1982,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					case rStateInQuotedField:
 						// HANDLING: CR or LF as data given it does not match record-sep
 
-						if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+						if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 							return false
 						}
 						r.byteIndex += uint64(di) + uint64(size)
@@ -2094,7 +2094,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 					// TODO: technically "skippable"
 
-					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]...) {
+					if r.appendRecBuf(r.rawBuf[r.rawIndex : idx+int(size)]) {
 						return false
 					}
 					r.byteIndex += uint64(di) + uint64(size)

@@ -3,6 +3,7 @@ package csv_test
 import (
 	std_csv "encoding/csv"
 	"io"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -20,6 +21,7 @@ func BenchmarkSTDReadPostInit256Rows(b *testing.B) {
 
 	strReader := strings.NewReader("")
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -46,6 +48,7 @@ func BenchmarkReadPostInit256Rows(b *testing.B) {
 	strReader := strings.NewReader("")
 	opts := csv.ReaderOpts()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -76,6 +79,7 @@ func BenchmarkSTDReadPostInit256RowsBorrowRow(b *testing.B) {
 
 	strReader := strings.NewReader("")
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -103,6 +107,7 @@ func BenchmarkReadPostInit256RowsBorrowRow(b *testing.B) {
 	strReader := strings.NewReader("")
 	opts := csv.ReaderOpts()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -135,6 +140,7 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFields(b *testing.B) {
 	strReader := strings.NewReader("")
 	opts := csv.ReaderOpts()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -169,6 +175,7 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBuf(b *testing.B) {
 	opts := csv.ReaderOpts()
 	var readerBuf [readBufSize]byte
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -204,6 +211,7 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsRecBuf(b *testing.B) {
 	opts := csv.ReaderOpts()
 	var recBuf [recBufSize]byte
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -240,6 +248,7 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBufRecBuf(b *testing.B
 	var readerBuf [readBufSize]byte
 	var recBuf [recBufSize]byte
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -277,6 +286,7 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBufRecBufNumFields(b *
 	var readerBuf [readBufSize]byte
 	var recBuf [recBufSize]byte
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()
@@ -314,6 +324,7 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsRecBufNumFields(b *testing
 	opts := csv.ReaderOpts()
 	var recBuf [recBufSize]byte
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		b.StopTimer()

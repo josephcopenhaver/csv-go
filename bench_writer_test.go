@@ -3,6 +3,7 @@ package csv_test
 import (
 	"io"
 	"math"
+	"runtime"
 	"strconv"
 	"testing"
 	"time"
@@ -17,6 +18,7 @@ func BenchmarkSTDWrite(b *testing.B) {
 
 	cw := std_csv.NewWriter(io.Discard)
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		err := cw.Write([]string{strconv.Itoa(-1), strconv.Itoa(-1)})
@@ -39,6 +41,7 @@ func BenchmarkWrite(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err = cw.WriteFieldRow(
@@ -75,6 +78,7 @@ func BenchmarkWriteWithSliceExpansion(b *testing.B) {
 		fw.Int(-1),
 	}
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err = cw.WriteFieldRow(row...)
@@ -103,6 +107,7 @@ func BenchmarkWriteWithSliceBorrowed(b *testing.B) {
 		fw.Int(-1),
 	}
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err = cw.WriteFieldRowBorrowed(row)
@@ -128,6 +133,7 @@ func BenchmarkWriteWithQuotes(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err = cw.WriteFieldRow(
@@ -148,6 +154,7 @@ func BenchmarkFieldWriterAppendMinInt(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Int(math.MinInt)
@@ -161,6 +168,7 @@ func BenchmarkFieldWriterAppendMaxInt(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Int(math.MaxInt)
@@ -174,6 +182,7 @@ func BenchmarkFieldWriterAppendMinInt64(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Int64(math.MinInt64)
@@ -187,6 +196,7 @@ func BenchmarkFieldWriterAppendMaxInt64(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Int64(math.MaxInt64)
@@ -200,6 +210,7 @@ func BenchmarkFieldWriterAppendMaxUInt(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Uint64(math.MaxUint64)
@@ -213,6 +224,7 @@ func BenchmarkFieldWriterAppendMinUInt(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Uint64(0)
@@ -226,6 +238,7 @@ func BenchmarkFieldWriterAppendBytes(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Bytes([]byte(`12345`))
@@ -239,6 +252,7 @@ func BenchmarkFieldWriterAppendString(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.String(`12345`)
@@ -253,6 +267,7 @@ func BenchmarkFieldWriterAppendTime(b *testing.B) {
 	fw := csv.FieldWriters()
 	longestFormTime := time.Time{}.Add(1).In(time.FixedZone("unused", int(time.Hour/time.Second)))
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Time(longestFormTime)
@@ -266,6 +281,7 @@ func BenchmarkFieldWriterAppendRune(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Rune('T')
@@ -279,6 +295,7 @@ func BenchmarkFieldWriterAppendBoolTrue(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Bool(true)
@@ -292,6 +309,7 @@ func BenchmarkFieldWriterAppendBoolFalse(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Bool(false)
@@ -305,6 +323,7 @@ func BenchmarkFieldWriterAppendDurationMax(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Duration(math.MaxInt64)
@@ -318,6 +337,7 @@ func BenchmarkFieldWriterAppendDurationMin(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Duration(math.MinInt64)
@@ -331,6 +351,7 @@ func BenchmarkFieldWriterAppendFloat64Min(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Float64(-math.MaxFloat64)
@@ -344,6 +365,7 @@ func BenchmarkFieldWriterAppendFloat64Max(b *testing.B) {
 
 	fw := csv.FieldWriters()
 
+	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		f := fw.Float64(math.MaxFloat64)

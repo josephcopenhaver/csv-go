@@ -12,8 +12,6 @@ import (
 	"unsafe"
 )
 
-// TODO: consider adjusting internal ` someName ...elem)` vararg funcs to ` someName []elem)` to avoid vararg overhead and unexpected variadic allocations in the future. Variadic is cheap when always using pre-allocated whole slices as the input.
-
 // TODO: make sure it is clear to people that any failure to write a row should indicate to the caller that
 // the writer is in an error state and should really only be closed or allowed to go out of scope.
 

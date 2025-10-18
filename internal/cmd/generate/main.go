@@ -116,7 +116,7 @@ func main() {
 			{
 				Struct:         "fastReader",
 				RecBufAppend0:  "r.recordBuf = append(r.recordBuf, ",
-				RecBufAppend1:  ")",
+				RecBufAppend1:  "...)",
 				IncRecordIndex: "r.recordIndex++",
 				SetFieldStart:  quoteOnSetFieldStart,
 			},
