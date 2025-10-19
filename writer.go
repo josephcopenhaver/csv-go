@@ -286,6 +286,12 @@ func (WriterOptions) InitialFieldBuffer(v []byte) WriterOption {
 	}
 }
 
+// CommentRune ensures that even if the WriterHeader function is not called
+// that the output doc is still parsable with the comment header enabled.
+//
+// If you need comment parsing consistency and do not always call WriteHeader
+// then use this option at this level instead of the WriteHeader option also
+// named CommentRune.
 func (WriterOptions) CommentRune(r rune) WriterOption {
 	return func(cfg *wCfg) {
 		cfg.comment = r
@@ -655,6 +661,16 @@ func (WriteHeaderOptions) Headers(h ...string) WriteHeaderOption {
 	}
 }
 
+// CommentRune specifies that each comment line begins with this specific rune
+// followed by a space when writing a csv document Header.
+//
+// If you need comment parsing consistency and do not always call WriteHeader
+// then instead use the CommentRune option when creating the writer instance
+// and avoid using this option.
+//
+// In general you should avoid using this option and instead specify
+// CommentRune when calling NewWriter unless you understand and accept the
+// indeterminism risks.
 func (WriteHeaderOptions) CommentRune(r rune) WriteHeaderOption {
 	return func(cfg *whCfg) {
 		cfg.comment = r

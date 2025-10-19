@@ -33,6 +33,7 @@ func BenchmarkWrite(b *testing.B) {
 
 	cw, err := csv.NewWriter(
 		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().ErrorOnNonUTF8(false),
 	)
 	if err != nil {
 		panic(err)
@@ -45,8 +46,8 @@ func BenchmarkWrite(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err = cw.WriteFieldRow(
-			fw.Int(-1),
-			fw.Int(-1),
+			fw.String("-1"),
+			fw.String("-1"),
 		)
 		if err != nil {
 			panic(err)

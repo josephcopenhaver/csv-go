@@ -215,6 +215,12 @@ func (FieldWriterFactory) Bytes(p []byte) FieldWriter {
 	}
 }
 
+// UncheckedUTF8Bytes serializes the same way as Bytes except that
+// the content is not validated for utf8 compliance in any way.
+//
+// Please consider this to be a micro optimization and prefer Bytes
+// instead should there be any uncertainty in the encoding of the
+// byte contents.
 func (FieldWriterFactory) UncheckedUTF8Bytes(p []byte) FieldWriter {
 	return FieldWriter{
 		kind:     wfkBytes,
@@ -230,6 +236,12 @@ func (FieldWriterFactory) String(s string) FieldWriter {
 	}
 }
 
+// UncheckedUTF8String serializes the same way as String except that
+// the content is not validated for utf8 compliance in any way.
+//
+// Please consider this to be a micro optimization and prefer String
+// instead should there be any uncertainty in the encoding of the
+// byte contents.
 func (FieldWriterFactory) UncheckedUTF8String(s string) FieldWriter {
 	return FieldWriter{
 		kind:     wfkString,
