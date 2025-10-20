@@ -14,29 +14,27 @@ func TestUnitWriterInitializationBufferPaths(t *testing.T) {
 
 	mockBuf := &bytes.Buffer{}
 
-	// InitialFieldBufferSize(254)
+	// InitialFieldBufferSize(254) // DEPRECATED
 	{
 		cw, err := NewWriter(
 			WriterOpts().Writer(mockBuf),
 			WriterOpts().InitialFieldBufferSize(254),
 		)
 		is.Nil(err)
-		is.Equal(0, len(cw.fieldBuf))
-		is.Equal(254, cap(cw.fieldBuf))
+		is.NotNil(cw)
 	}
 
-	// InitialFieldBufferSize(255)
+	// InitialFieldBufferSize(255) // DEPRECATED
 	{
 		cw, err := NewWriter(
 			WriterOpts().Writer(mockBuf),
 			WriterOpts().InitialFieldBufferSize(255),
 		)
 		is.Nil(err)
-		is.Equal(0, len(cw.fieldBuf))
-		is.Equal(255, cap(cw.fieldBuf))
+		is.NotNil(cw)
 	}
 
-	// InitialFieldBuffer(254)
+	// InitialFieldBuffer(254) // DEPRECATED
 	{
 		buf := [254]byte{}
 
@@ -45,11 +43,10 @@ func TestUnitWriterInitializationBufferPaths(t *testing.T) {
 			WriterOpts().InitialFieldBuffer(buf[:]),
 		)
 		is.Nil(err)
-		is.Equal(0, len(cw.fieldBuf))
-		is.Equal(254, cap(cw.fieldBuf))
+		is.NotNil(cw)
 	}
 
-	// InitialFieldBuffer(255)
+	// InitialFieldBuffer(255) // DEPRECATED
 	{
 		buf := [255]byte{}
 
@@ -58,8 +55,7 @@ func TestUnitWriterInitializationBufferPaths(t *testing.T) {
 			WriterOpts().InitialFieldBuffer(buf[:]),
 		)
 		is.Nil(err)
-		is.Equal(0, len(cw.fieldBuf))
-		is.Equal(255, cap(cw.fieldBuf))
+		is.NotNil(cw)
 	}
 	//
 	//
@@ -111,5 +107,15 @@ func TestUnitWriterInitializationBufferPaths(t *testing.T) {
 		is.Nil(err)
 		is.Equal(0, len(cw.recordBuf))
 		is.Equal(255, cap(cw.recordBuf))
+	}
+}
+
+func Test_isFieldWriterRune(t *testing.T) {
+	is := assert.New(t)
+
+	is.False(isFieldWriterRune([]rune{'|'}))
+
+	for _, r := range fieldWriterTypesRuneList {
+		is.True(isFieldWriterRune([]rune{r}))
 	}
 }

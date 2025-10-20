@@ -9,7 +9,7 @@ csv-go
 
 This package is a highly flexible and performant single threaded csv stream reader and writer. It opts for strictness with nearly all options off by default. Using the option functions pattern on Reader and Writer creation ensures extreme flexibility can be offered while configuration can be validated up-front in cold paths. This creates an immutable, clear execution of the csv file/stream parsing strategy. It has been battle tested thoroughly in production contexts for both correctness and speed so feel free to use in any way you like.
 
-The reader is also [more performant than the standard go csv package](docs/BENCHMARKS.md) when compared in an apples-to-apples configuration between the two. I expect mileage here to vary over time. My primary goal with this lib was to solve my own edge case problems like suspect-encodings/loose-rules and offer something back more aligned with others that think like myself with regard to reducing allocations, GC pause, and increasing efficiency.
+The reader and writer is also [more performant than the standard go csv package](docs/BENCHMARKS.md) when compared in an apples-to-apples configuration between the two. I expect mileage here to vary over time. My primary goal with this lib was to solve my own edge case problems like suspect-encodings/loose-rules and offer something back more aligned with others that think like myself with regard to reducing allocations, GC pause, and increasing efficiency.
 
 ```go
 package main
@@ -85,9 +85,9 @@ See the [Reader](internal/examples/reader/main.go) and [Writer](internal/example
 
 | Name | option(s) |
 | - | - |
-| Zero allocations | InitialRecordBufferSize + InitialRecordBuffer + InitialFieldBufferSize + InitialFieldBuffer |
+| Zero allocations | InitialRecordBufferSize + InitialRecordBuffer |
 | Header and Comment Specification | CommentRune + CommentLines + IncludeByteOrderMarker + Headers + TrimHeaders|
-| Format Specification | Escape + FieldSeparator + Quote + RecordSeparator + NumFields |
+| Format Specification | CommentRune + Escape + FieldSeparator + Quote + RecordSeparator + NumFields |
 | Data Loss Prevention | ClearFreedDataMemory |
 | Encoding Validation | ErrorOnNonUTF8 |
 | Security Limits | *planned* |

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/josephcopenhaver/csv-go/v3"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFunctionalWriterHeaderOKPaths(t *testing.T) {
@@ -111,6 +112,42 @@ func TestFunctionalWriterHeaderOKPaths(t *testing.T) {
 				csv.WriteHeaderOpts().CommentLines(""),
 			},
 			res: "# \n",
+		},
+		{
+			when: "writer has comment rune specified and WriteHeader is called without a comment rune specified",
+			then: "document should just have the comment rune line sequence",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().CommentRune('#'),
+			},
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().CommentLines(""),
+			},
+			res: "# \n",
+		},
+		{
+			when: "record buffer is initialized to a small value and Memclear=true",
+			then: "document should still be created properly with old mem being cleared",
+			selfInit: func(tc *functionalWriterTestCase) {
+				aBuf := [...]byte{1}
+				buf := aBuf[:]
+				tc.newOpts = append(tc.newOpts,
+					csv.WriterOpts().InitialRecordBuffer(buf),
+				)
+				tc.afterTest = func(t *testing.T) {
+					is := assert.New(t)
+
+					is.Zero(buf[0])
+				}
+			},
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().ClearFreedDataMemory(true),
+			},
+			wrs: []wr{
+				{fwr: []csv.FieldWriter{csv.FieldWriters().Int(10), csv.FieldWriters().Int(10)}, n: 6},
+				{r: strings.Split("a,b", ","), n: 4},
+				{r: strings.Split("1,2", ","), n: 4},
+			},
+			res: "10,10\na,b\n1,2\n",
 		},
 	}
 

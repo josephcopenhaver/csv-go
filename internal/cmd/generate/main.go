@@ -16,14 +16,11 @@ var tsImports string
 //go:embed prepare_row.go.tmpl
 var tsPrepareRow string
 
-//go:embed process_field.go.tmpl
-var tsProcessField string
+//go:embed write_row.go.tmpl
+var tsWriteRow string
 
-//go:embed escape_chars.go.tmpl
-var tsEscapeChars string
-
-//go:embed write.go.tmpl
-var tsWrite string
+//go:embed write_quoted_field.go.tmpl
+var tsWriteQF string
 
 func parse(s string) *template.Template {
 	t, err := template.New("").Option("missingkey=error").Parse(s)
@@ -119,7 +116,7 @@ func main() {
 			{
 				Struct:         "fastReader",
 				RecBufAppend0:  "r.recordBuf = append(r.recordBuf, ",
-				RecBufAppend1:  ")",
+				RecBufAppend1:  "...)",
 				IncRecordIndex: "r.recordIndex++",
 				SetFieldStart:  quoteOnSetFieldStart,
 			},
@@ -136,74 +133,45 @@ func main() {
 		})
 	}
 
-	// render processField strategies
+	// render writeRow strategies
 	{
-		t := parse(tsProcessField)
+		t := parse(tsWriteRow)
 
 		type cfg struct {
-			Escape              bool
-			ForceQuote          bool
-			ClearMemoryAfterUse bool
+			Memclear bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{Escape: false, ForceQuote: false, ClearMemoryAfterUse: false},
-			{Escape: true, ForceQuote: false, ClearMemoryAfterUse: false},
-			{Escape: false, ForceQuote: true, ClearMemoryAfterUse: false},
-			{Escape: true, ForceQuote: true, ClearMemoryAfterUse: false},
-			{Escape: false, ForceQuote: false, ClearMemoryAfterUse: true},
-			{Escape: true, ForceQuote: false, ClearMemoryAfterUse: true},
-			{Escape: false, ForceQuote: true, ClearMemoryAfterUse: true},
-			{Escape: true, ForceQuote: true, ClearMemoryAfterUse: true},
+			{Memclear: false},
+			{Memclear: true},
 		})
 	}
 
-	// render EscapeChars strategies
+	// render write quoted field strategies
 	{
-		t := parse(tsEscapeChars)
+		t := parse(tsWriteQF)
 
 		type cfg struct {
-			Escape              bool
-			ClearMemoryAfterUse bool
+			Memclear bool
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{Escape: false, ClearMemoryAfterUse: false},
-			{Escape: true, ClearMemoryAfterUse: false},
-			{Escape: false, ClearMemoryAfterUse: true},
-			{Escape: true, ClearMemoryAfterUse: true},
+			{Memclear: false},
+			{Memclear: true},
 		})
 	}
 
-	// render writing strategies
-	{
-		t := parse(tsWrite)
+	b := buf.Bytes()
 
-		type cfg struct {
-			ClearMemoryAfterUse bool
-		}
+	//
+	// comment out the next block if you are trying to debug
+	//
 
-		render := renderer[cfg](&buf)
-
-		render(t, []cfg{
-			{ClearMemoryAfterUse: false},
-			{ClearMemoryAfterUse: true},
-		})
-	}
-
-	// // for debugging
-	// _, err = f.Write(buf.Bytes())
-	// if err != nil {
-	// 	panic(err)
-	// } else {
-	// 	return
-	// }
-
-	b, err := format.Source(buf.Bytes())
+	b, err = format.Source(b) // uses standard SDK "go/format" lib
 	if err != nil {
 		panic(err)
 	}

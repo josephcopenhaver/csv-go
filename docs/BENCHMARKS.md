@@ -25,6 +25,7 @@
 |---|:---|---:|---:|---:|---:|
 | [SOURCE](../bench_reader_test.go) | BenchmarkSTDReadPostInit256Rows | 26,518 | 16,208 | 522 | 45,469 |
 | [SOURCE](../bench_reader_test.go) | BenchmarkSTDReadPostInit256RowsBorrowRow | 21,104 | 3,920 | 266 | 57,159 |
+| [SOURCE](../bench_writer_test.go) | BenchmarkSTDWrite | 49.93 | 4 | 2 | 20,662,668 |
 
 ### 🚀 This lib's Post-Init Benchmarks
 
@@ -38,3 +39,4 @@
 | [SOURCE](../bench_reader_test.go) | BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBufRecBuf | 14,396 | 144 | 6 | 83,990 |
 | [SOURCE](../bench_reader_test.go) | BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsRecBufNumFields | 14,084 | 0 | 0 | 85,561 |
 | [SOURCE](../bench_reader_test.go) | BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBufRecBufNumFields | 14,006 | 0 | 0 | 85,872 |
+| [SOURCE](../bench_writer_test.go) | BenchmarkWrite | 44.63 | 0 | 0 | 26,993,563 |

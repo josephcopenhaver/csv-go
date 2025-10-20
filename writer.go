@@ -4,20 +4,13 @@ import (
 	"bytes"
 	"errors"
 	"io"
-	"math"
-	"strconv"
 	"strings"
-	"time"
 	"unicode/utf8"
 	"unsafe"
 )
 
-// TODO: some field types are guaranteed to never have overlap with csv encoding characters
-// (quote, escape, record separator, and field separator) such as the types that fit in 64 bits
-// for reasonably most values of csv configuration formats
-//
-// it is possible to skip the processing of those serialized byte streams for csv encoding
-// that currently happens
+// TODO: make sure it is clear to people that any failure to write a row should indicate to the caller that
+// the writer is in an error state and should really only be closed or allowed to go out of scope.
 
 var (
 	//
@@ -31,268 +24,30 @@ var (
 	ErrWriterClosed              = errors.New("writer closed")
 	ErrHeaderWritten             = errors.New("header already written")
 	ErrInvalidFieldCountInRecord = errors.New("invalid field count in record")
-	ErrInvalidFieldWriter        = errors.New("invalid field writer")
 	ErrInvalidRune               = errors.New("invalid rune")
 )
 
 type wFlag uint8
 
 const (
-	wFlagClosed wFlag = 1 << iota
-	wFlagErrOnNonUTF8
+	wFlagErrOnNonUTF8 wFlag = 1 << iota
+	wFlagControlRuneOverlap
+	wFlagForceQuoteFirstField
+
+	//
+	// low access rate flags
+	//
+
 	wFlagHeaderWritten
-	wFlagRecordWritten
-
-	//
-	// low access rate init-time flags
-	//
-
-	wFlagEscapeSet
+	wFlagClosed
 	wFlagClearMemoryAfterFree
 )
 
 const (
-	u64signBitMask uint64 = 0x8000000000000000
 
-	maxLenSerializedTime    = 35
-	maxLenSerializedBool    = 1
-	maxLenSerializedFloat64 = 24
-
-	invalidRuneUTF8Encoded           = 0xEFBFBD
-	invalidRuneUTF8EncodedWithOffset = ((1 << (8 * 4)) | invalidRuneUTF8Encoded)
+	// newlineRunesForWrite is tightly coupled to the behavior of isNewlineRuneForWrite
+	newlineRunesForWrite = "\x0A\x0B\x0C\x0D\u0085\u2028"
 )
-
-type wFieldKind uint8
-
-const (
-	_ wFieldKind = iota
-	wfkBytes
-	wfkString
-	wfkInt
-	wfkInt64
-	wfkDuration
-	wfkUint64
-	wfkTime
-	wfkRune
-	wfkBool
-	wfkFloat64
-)
-
-type FieldWriter struct {
-	kind  wFieldKind
-	bytes []byte
-	time  time.Time
-	str   string
-	// _64_bits holds data for kinds that can be expressed within the 64 bits of uint64:
-	// int, int64, duration, uint64, rune, bool, and float64
-	_64_bits uint64
-}
-
-func (w *FieldWriter) isZeroLen() bool {
-	switch w.kind {
-	case wfkBytes:
-		return len(w.bytes) == 0
-	case wfkString:
-		return len(w.str) == 0
-	case wfkInt, wfkInt64, wfkDuration, wfkUint64, wfkTime, wfkRune, wfkBool, wfkFloat64:
-		return false
-	default:
-		// I reserve the right to panic here in the future should I wish to.
-		return false
-	}
-}
-
-func (w *FieldWriter) AppendText(b []byte) ([]byte, error) {
-
-	switch w.kind {
-	case wfkBytes:
-		return append(b, w.bytes...), nil
-	case wfkString:
-		return append(b, w.str...), nil
-	case wfkInt, wfkInt64, wfkDuration:
-		return strconv.AppendInt(b, int64(w._64_bits), 10), nil
-	case wfkUint64:
-		return strconv.AppendUint(b, uint64(w._64_bits), 10), nil
-	case wfkTime:
-		return w.time.AppendFormat(b, time.RFC3339Nano), nil
-	case wfkRune:
-		r := w._64_bits
-		if r == invalidRuneUTF8EncodedWithOffset {
-			return nil, ErrInvalidRune
-		}
-
-		var buf [utf8.UTFMax]byte
-		buf[3] = byte(r)
-		buf[2] = byte(r >> (8 * 1))
-		buf[1] = byte(r >> (8 * 2))
-		buf[0] = byte(r >> (8 * 3))
-		offset := uint8(r >> (8 * 4))
-
-		return append(b, buf[offset:]...), nil
-	case wfkBool:
-		boolAsByte := byte('0') + byte(w._64_bits)
-		return append(b, boolAsByte), nil
-	case wfkFloat64:
-		return strconv.AppendFloat(b, math.Float64frombits(w._64_bits), 'g', -1, 64), nil
-	}
-
-	return nil, ErrInvalidFieldWriter
-}
-
-func (w *FieldWriter) MarshalText() (text []byte, err error) {
-	var b []byte
-
-	switch w.kind {
-	case wfkBytes:
-		// Note: don't be tempted to just return the inner buffer here
-		// there is no contract with the calling context to never modify the slice it gets in return
-		n := len(w.bytes)
-		if n == 0 {
-			return nil, nil
-		}
-		b = make([]byte, 0, n)
-	case wfkString:
-		// Note: don't be tempted to just return the inner buffer here
-		// there is no contract with the calling context to never modify the slice it gets in return
-		n := len(w.str)
-		if n == 0 {
-			return nil, nil
-		}
-		b = make([]byte, 0, n)
-	case wfkInt, wfkInt64, wfkDuration:
-		// base10ByteLen at most would be 20 if negative, 19 if positive
-		//
-		// might be better off making a buffer pool of a fixed size
-		// but I leave that for callers of AppendText to implement
-		input := w._64_bits
-		var signAdjustment int
-		if input&u64signBitMask != 0 {
-			input = uint64(-int64(w._64_bits))
-			signAdjustment = 1
-		}
-		base10ByteLen := decLenU64(input) + signAdjustment
-
-		b = make([]byte, 0, base10ByteLen)
-	case wfkUint64:
-		// base10ByteLen at most would be 20 (always positive)
-		//
-		// might be better off making a buffer pool of a fixed size
-		// but I leave that for callers of AppendText to implement
-		base10ByteLen := decLenU64(w._64_bits)
-
-		b = make([]byte, 0, base10ByteLen)
-	case wfkTime:
-		b = make([]byte, 0, maxLenSerializedTime)
-	case wfkRune:
-		// would be at most utf8.UTFMax (4) bytes in length and never empty
-		b = make([]byte, 0, utf8.UTFMax)
-	case wfkBool:
-		b = make([]byte, 0, maxLenSerializedBool)
-	case wfkFloat64:
-		b = make([]byte, 0, maxLenSerializedFloat64)
-	}
-
-	return w.AppendText(b)
-}
-
-type FieldWriterFactory struct{}
-
-func (FieldWriterFactory) Bytes(p []byte) FieldWriter {
-	return FieldWriter{
-		kind:  wfkBytes,
-		bytes: p,
-	}
-}
-
-func (FieldWriterFactory) String(s string) FieldWriter {
-	return FieldWriter{
-		kind: wfkString,
-		str:  s,
-	}
-}
-
-func (FieldWriterFactory) Int(i int) FieldWriter {
-	return FieldWriter{
-		kind:     wfkInt,
-		_64_bits: uint64(i),
-	}
-}
-
-func (FieldWriterFactory) Int64(i int64) FieldWriter {
-	return FieldWriter{
-		kind:     wfkInt64,
-		_64_bits: uint64(i),
-	}
-}
-
-func (FieldWriterFactory) Uint64(i uint64) FieldWriter {
-	return FieldWriter{
-		kind:     wfkUint64,
-		_64_bits: i,
-	}
-}
-
-func (FieldWriterFactory) Time(t time.Time) FieldWriter {
-	return FieldWriter{
-		kind: wfkTime,
-		time: t,
-	}
-}
-
-func (FieldWriterFactory) Rune(r rune) FieldWriter {
-	numBytes := utf8.RuneLen(r)
-	if numBytes == -1 {
-		return FieldWriter{
-			kind:     wfkRune,
-			_64_bits: invalidRuneUTF8EncodedWithOffset,
-		}
-	}
-
-	var buf [utf8.UTFMax]byte
-	offset := uint8(utf8.UTFMax - numBytes)
-	utf8.EncodeRune(buf[offset:], r)
-
-	v := (uint64(offset) << (8 * 4)) |
-		(uint64(buf[0]) << (8 * 3)) |
-		(uint64(buf[1]) << (8 * 2)) |
-		(uint64(buf[2]) << (8 * 1)) |
-		uint64(buf[3])
-
-	return FieldWriter{
-		kind:     wfkRune,
-		_64_bits: v,
-	}
-}
-
-func (FieldWriterFactory) Bool(b bool) FieldWriter {
-	result := FieldWriter{
-		kind: wfkBool,
-	}
-
-	if b {
-		result._64_bits = 1
-	}
-
-	return result
-}
-
-func (FieldWriterFactory) Duration(d time.Duration) FieldWriter {
-	return FieldWriter{
-		kind:     wfkDuration,
-		_64_bits: uint64(d),
-	}
-}
-
-func (FieldWriterFactory) Float64(f float64) FieldWriter {
-	return FieldWriter{
-		kind:     wfkFloat64,
-		_64_bits: math.Float64bits(f),
-	}
-}
-
-func FieldWriters() FieldWriterFactory {
-	return FieldWriterFactory{}
-}
 
 type writeIOErr struct {
 	err error
@@ -310,20 +65,18 @@ type wCfg struct {
 	writer                     io.Writer
 	initialRecordBufferSize    int
 	recordBuf                  []byte
-	initialFieldBufferSize     int
-	fieldBuf                   []byte
 	recordSep                  [2]rune
 	numFields                  int
 	fieldSeparator             rune
 	quote                      rune
 	escape                     rune
+	comment                    rune
 	initialRecordBufferSizeSet bool
 	recordBufSet               bool
-	initialFieldBufferSizeSet  bool
-	fieldBufSet                bool
 	numFieldsSet               bool
 	errOnNonUTF8               bool
 	escapeSet                  bool
+	commentSet                 bool
 	recordSepRuneLen           int8
 	clearMemoryAfterFree       bool
 }
@@ -496,6 +249,10 @@ func (WriterOptions) InitialRecordBuffer(v []byte) WriterOption {
 	}
 }
 
+// InitialFieldBufferSize is deprecated and no longer has any effect.
+//
+// Historically:
+//
 // InitialFieldBufferSize is a hint to pre-allocate field buffer space once
 // and reduce the number of re-allocations when processing fields to write.
 //
@@ -506,11 +263,13 @@ func (WriterOptions) InitialRecordBuffer(v []byte) WriterOption {
 // garbage collection.
 func (WriterOptions) InitialFieldBufferSize(v int) WriterOption {
 	return func(cfg *wCfg) {
-		cfg.initialFieldBufferSize = v
-		cfg.initialFieldBufferSizeSet = true
 	}
 }
 
+// InitialFieldBuffer is deprecated and no longer has any effect.
+//
+// Historically:
+//
 // InitialFieldBuffer is a hint to pre-allocate field buffer space once
 // externally and pipe it in to reduce the number of re-allocations when
 // processing a writer and reuse it at a later time after the writer is closed.
@@ -524,8 +283,19 @@ func (WriterOptions) InitialFieldBufferSize(v int) WriterOption {
 // contract of the csv Reader in ways most would not normally consider.
 func (WriterOptions) InitialFieldBuffer(v []byte) WriterOption {
 	return func(cfg *wCfg) {
-		cfg.fieldBuf = v
-		cfg.fieldBufSet = true
+	}
+}
+
+// CommentRune ensures that even if the WriterHeader function is not called
+// that the output doc is still parsable with the comment header enabled.
+//
+// If you need comment parsing consistency and do not always call WriteHeader
+// then use this option at this level instead of the WriteHeader option also
+// named CommentRune.
+func (WriterOptions) CommentRune(r rune) WriterOption {
+	return func(cfg *wCfg) {
+		cfg.comment = r
+		cfg.commentSet = true
 	}
 }
 
@@ -579,61 +349,41 @@ func (cfg *wCfg) validate() error {
 		return errors.New("initial record buffer size must be greater than or equal to zero")
 	}
 
-	if cfg.fieldBufSet && cfg.initialFieldBufferSizeSet {
-		return errors.New("initial field buffer size cannot be specified when also setting the initial field buffer")
-	}
-
-	if cfg.initialFieldBufferSizeSet && cfg.initialFieldBufferSize < 0 {
-		return errors.New("initial field buffer size must be greater than or equal to zero")
+	if cfg.commentSet {
+		if err := isValidComment(cfg.comment, cfg.quote, cfg.fieldSeparator, cfg.escape, cfg.escapeSet); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 type Writer struct {
-	writeDoubleQuotesForRecord func()
-	writeRow                   func([]FieldWriter) (int, error)
-	// processField will scan the input byte slice
-	//
-	// if the slice contains a quote character then it is escaped
-	// and the writes occur to the w.fieldBuf slice.
-	//
-	// if the slice contains an escape character then it is escaped
-	// and the writes occur to the w.fieldBuf slice.
-	//
-	// returns a value greater than -1 if the contents of w.fieldBuf
-	// or if the original input slice should be wrapped in quotes.
-	//
-	// if it returns -1 then w.fieldBuf has not changed and input
-	// contents do not require escaping.
-	//
-	// to determine if w.fieldBuf or the original input slice should be used
-	// when serializing simply check the size of w.fieldBuf. if it is has a
-	// length greater than zero then w.fieldBuf should be used
-	//
-	// A portion of the input slice may need to still be copied to the record buffer
-	// as well after calling this function. That slice starts at the returned index.
-	processField            func([]byte) (int, error)
-	processFirstField       func([]byte) (int, error)
-	fieldWriters            []FieldWriter
-	fieldWriterBuf          [35]byte
-	fieldBuf                []byte
-	recordBuf               []byte
-	twoQuotes               [utf8.UTFMax * 2]byte
-	escapedQuote            [utf8.UTFMax * 2]byte
-	escapedEscape           [utf8.UTFMax * 2]byte
-	recordSepBytes          [utf8.UTFMax]byte
-	numFields               int
-	writer                  io.Writer
-	err                     error
-	quote, fieldSep, escape rune
-	recordSep               [2]rune
-	recordSepRuneLen        int8
-	twoQuotesByteLen        int8
-	escapedQuoteByteLen     int8
-	escapedEscapeByteLen    int8
-	recordSepByteLen        int8
-	bitFlags                wFlag
+	writeRow             func([]FieldWriter) (int, error)
+	fieldWriters         []FieldWriter
+	fieldWriterBuf       [boundedFieldWritersMaxByteLen]byte
+	recordBuf            []byte
+	controlRunes         string
+	escapeControlRunes   string
+	twoQuotes            [utf8.UTFMax * 2]byte
+	escapedQuote         [utf8.UTFMax * 2]byte
+	escapedEscape        [utf8.UTFMax * 2]byte
+	fieldSepBytes        [utf8.UTFMax]byte
+	recordSepBytes       [utf8.UTFMax]byte
+	quoteBytes           [utf8.UTFMax]byte
+	comment              rune
+	numFields            int
+	writer               io.Writer
+	err                  error
+	quote, escape        rune
+	quoteByteLen         int8
+	fieldSepByteLen      int8
+	recordSepRuneLen     int8
+	twoQuotesByteLen     int8
+	escapedQuoteByteLen  int8
+	escapedEscapeByteLen int8
+	recordSepByteLen     int8
+	bitFlags             wFlag
 }
 
 // NewWriter creates a new instance of a CSV writer which is not safe for concurrent reads.
@@ -656,12 +406,19 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		return nil, errors.Join(ErrBadConfig, err)
 	}
 
+	var controlRunes, escapeControlRunes string
+	var quoteBytes [utf8.UTFMax]byte
 	var twoQuotes [utf8.UTFMax * 2]byte
 	var escapedQuote [utf8.UTFMax * 2]byte
 	var escapedEscape [utf8.UTFMax * 2]byte
-	var recordSepBytes [utf8.UTFMax]byte
+	var fieldSepBytes, recordSepBytes [utf8.UTFMax]byte
 	var escapedQuoteByteLen, escapedEscapeByteLen, recordSepByteLen, twoQuotesByteLen int8
+	quoteByteLen := int8(utf8.EncodeRune(quoteBytes[:], cfg.quote))
+	fieldSepByteLen := int8(utf8.EncodeRune(fieldSepBytes[:], cfg.fieldSeparator))
 	if cfg.escapeSet {
+		controlRunes = string([]rune{cfg.quote, cfg.escape, cfg.fieldSeparator}) + newlineRunesForWrite
+		escapeControlRunes = string([]rune{cfg.quote, cfg.escape})
+
 		n := utf8.EncodeRune(escapedQuote[:], cfg.escape)
 		n += utf8.EncodeRune(escapedQuote[n:], cfg.quote)
 		escapedQuoteByteLen = int8(n)
@@ -671,6 +428,9 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		n *= 2
 		escapedEscapeByteLen = int8(n)
 	} else {
+		controlRunes = string([]rune{cfg.quote, cfg.fieldSeparator}) + newlineRunesForWrite
+		escapeControlRunes = string(cfg.quote)
+
 		n := utf8.EncodeRune(escapedQuote[:], cfg.quote)
 		copy(escapedQuote[n:], escapedQuote[:n])
 		n *= 2
@@ -699,66 +459,95 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		recordBuf = cfg.recordBuf[:0:len(cfg.recordBuf)]
 	}
 
-	var fieldBuf []byte
-	if cfg.initialFieldBufferSizeSet {
-		fieldBuf = make([]byte, 0, cfg.initialFieldBufferSize)
-	} else if cfg.fieldBufSet {
-		fieldBuf = cfg.fieldBuf[:0:len(cfg.fieldBuf)]
-	}
-
 	var bitFlags wFlag
 	if cfg.errOnNonUTF8 {
 		bitFlags |= wFlagErrOnNonUTF8
-	}
-	if cfg.escapeSet {
-		bitFlags |= wFlagEscapeSet
 	}
 	if cfg.clearMemoryAfterFree {
 		bitFlags |= wFlagClearMemoryAfterFree
 	}
 
+	{
+		listStart := uint8(0)
+		runeArray := [...]rune{cfg.escape, cfg.quote, cfg.fieldSeparator}
+		if !cfg.escapeSet {
+			listStart++
+		}
+		if isFieldWriterRune(runeArray[listStart:]) {
+			bitFlags |= wFlagControlRuneOverlap
+		}
+	}
+
+	var escape, comment rune
+	if !cfg.escapeSet {
+		escape = invalidControlRune
+	} else {
+		escape = cfg.escape
+	}
+	if !cfg.commentSet {
+		comment = invalidControlRune
+	} else {
+		comment = cfg.comment
+	}
+
 	w := &Writer{
 		numFields:            cfg.numFields,
 		writer:               cfg.writer,
+		controlRunes:         controlRunes,
+		escapeControlRunes:   escapeControlRunes,
+		quoteBytes:           quoteBytes,
+		quoteByteLen:         quoteByteLen,
 		twoQuotes:            twoQuotes,
 		twoQuotesByteLen:     twoQuotesByteLen,
 		escapedEscape:        escapedEscape,
 		escapedEscapeByteLen: escapedEscapeByteLen,
 		escapedQuote:         escapedQuote,
 		escapedQuoteByteLen:  escapedQuoteByteLen,
+		fieldSepBytes:        fieldSepBytes,
+		fieldSepByteLen:      fieldSepByteLen,
 		recordSepBytes:       recordSepBytes,
 		recordSepByteLen:     recordSepByteLen,
+		comment:              comment,
 		quote:                cfg.quote,
-		recordSep:            cfg.recordSep,
 		recordSepRuneLen:     cfg.recordSepRuneLen,
-		fieldSep:             cfg.fieldSeparator,
-		escape:               cfg.escape,
+		escape:               escape,
 		recordBuf:            recordBuf,
-		fieldBuf:             fieldBuf,
 		bitFlags:             bitFlags,
 	}
 
-	if cfg.clearMemoryAfterFree {
-		w.writeRow = w.writeRow_memclearOn
-		w.writeDoubleQuotesForRecord = w.writeDoubleQuotesForRecord_memclearOn
-	} else {
-		w.writeRow = w.writeRow_memclearOff
-		w.writeDoubleQuotesForRecord = w.writeDoubleQuotesForRecord_memclearOff
-	}
-
-	w.processField = w.processFieldFunc(false)
-	w.processFirstField = w.processField
-
-	{
-		f := w.writeRow
-		w.writeRow = func(row []FieldWriter) (int, error) {
-			w.writeRow = f
-			w.bitFlags |= wFlagHeaderWritten
-			return w.writeRow(row)
-		}
-	}
+	w.setWriteRowStrategy(cfg.clearMemoryAfterFree, cfg.escapeSet)
 
 	return w, nil
+}
+
+func (w *Writer) setWriteRowStrategy(clearMemoryAfterFree, escapeSet bool) {
+	var f func([]FieldWriter) (int, error)
+
+	if !clearMemoryAfterFree {
+		f = w.writeRow_memclearOff
+	} else {
+		f = w.writeRow_memclearOn
+	}
+
+	w.writeRow = func(row []FieldWriter) (int, error) {
+		w.writeRow = f
+		w.bitFlags |= wFlagHeaderWritten
+
+		if w.comment != invalidControlRune {
+			// detect if the first field begins with a comment sequence
+			// and if so, set that the first field should be quoted
+			// regardless of its type or content
+
+			if row[0].startsWithRune(w.fieldWriterBuf[:0], w.comment) {
+				w.bitFlags |= wFlagForceQuoteFirstField
+				defer func() {
+					w.bitFlags &= ^wFlagForceQuoteFirstField
+				}()
+			}
+		}
+
+		return w.writeRow(row)
+	}
 }
 
 // Close should be called after writing all rows
@@ -781,76 +570,45 @@ func (w *Writer) Close() error {
 	w.setErr(ErrWriterClosed)
 
 	if (w.bitFlags & wFlagClearMemoryAfterFree) != 0 {
-		for _, v := range [][]byte{w.fieldBuf, w.recordBuf} {
-			v := v[:cap(v)]
-			for i := range v {
-				v[i] = 0
-			}
-		}
-
-		for i := range w.fieldWriters {
-			w.fieldWriters[i] = FieldWriter{}
-		}
-
-		for i := range w.fieldWriterBuf {
-			w.fieldWriterBuf[i] = 0
-		}
+		clear(w.recordBuf[:cap(w.recordBuf)])
+		clear(w.fieldWriters)
+		clear(w.fieldWriterBuf[:])
 	}
 
 	return nil
 }
 
-func (w *Writer) appendField(bufs ...[]byte) {
-	for _, v := range bufs {
-		old := w.fieldBuf
-
-		w.fieldBuf = append(w.fieldBuf, v...)
-
-		if cap(old) == 0 {
-			continue
-		}
-
-		old = old[:cap(old)]
-
-		if &old[0] == &(w.fieldBuf[:1])[0] {
-			continue
-		}
-
-		for i := range old {
-			old[i] = 0
-		}
-	}
+func (w *Writer) appendRec(p []byte) {
+	appendAndClear(&w.recordBuf, p)
 }
 
-func (w *Writer) appendRec(bufs ...[]byte) {
-	for _, v := range bufs {
-		old := w.recordBuf
+// setRecordBuf should only be called when the record buf has been appended to
+// and might have been reallocated as a result and clear mem on free is enabled.
+//
+// This function will clear the old buffer if it is no longer being utilized.
+func (w *Writer) setRecordBuf(p []byte) {
+	old := w.recordBuf
+	w.recordBuf = p
 
-		w.recordBuf = append(w.recordBuf, v...)
-
-		if cap(old) == 0 {
-			continue
-		}
-
-		old = old[:cap(old)]
-
-		if &old[0] == &(w.recordBuf[:1])[0] {
-			continue
-		}
-
-		for i := range old {
-			old[i] = 0
-		}
+	if cap(old) == 0 {
+		return
 	}
+	old = old[:cap(old)]
+
+	if &old[0] == &p[0] {
+		return
+	}
+
+	clear(old)
 }
 
 type whCfg struct {
 	headers         []string
 	commentLines    []string
-	commentRune     rune
+	comment         rune
 	trimHeaders     bool
 	headersSet      bool
-	commentRuneSet  bool
+	commentSet      bool
 	commentLinesSet bool
 	includeBOM      bool
 }
@@ -887,10 +645,20 @@ func (WriteHeaderOptions) Headers(h ...string) WriteHeaderOption {
 	}
 }
 
+// CommentRune specifies that each comment line begins with this specific rune
+// followed by a space when writing a csv document Header.
+//
+// If you need comment parsing consistency and do not always call WriteHeader
+// then instead use the CommentRune option when creating the writer instance
+// and avoid using this option.
+//
+// In general you should avoid using this option and instead specify
+// CommentRune when calling NewWriter unless you understand and accept the
+// indeterminism risks.
 func (WriteHeaderOptions) CommentRune(r rune) WriteHeaderOption {
 	return func(cfg *whCfg) {
-		cfg.commentRune = r
-		cfg.commentRuneSet = true
+		cfg.comment = r
+		cfg.commentSet = true
 	}
 }
 
@@ -916,33 +684,33 @@ func (cfg *whCfg) validate(w *Writer) error {
 		}
 	}
 
-	if cfg.commentRuneSet {
-
-		// note: not letting comment runes be newline characters is
-		// opinionated but it is a good practice leaning towards simplicity.
-		//
-		// I am open to a PR that makes this more flexible.
-
-		if !validUtf8Rune(cfg.commentRune) || isNewlineRuneForWrite(cfg.commentRune) {
-			return errors.New("invalid comment rune")
+	if !cfg.commentSet {
+		if w.comment != invalidControlRune {
+			// loads the value from the parent writer context and
+			// trusts the validation the writer already performed
+			cfg.commentSet = true
+			cfg.comment = w.comment
+		} else if cfg.commentLinesSet {
+			return errors.New("comment lines require a comment rune")
 		}
+	} else if w.comment != invalidControlRune {
+		return errors.New("comment rune cannot be specified when writing headers while the writer instance already has one specified")
+	} else {
+		fieldSep, _ := utf8.DecodeRune(w.fieldSepBytes[:])
 
-		if w.quote == cfg.commentRune {
-			return errors.New("invalid quote and comment rune combination")
-		}
+		if err := isValidComment(cfg.comment, w.quote, fieldSep, w.escape, w.escape != invalidControlRune); err != nil {
+			return err
+		} else {
+			// note this block is a positive path state-altering action
+			// anything added after this parent if context should similarly
+			// be a positive path action that should never really fail
 
-		if w.fieldSep == cfg.commentRune {
-			return errors.New("invalid field separator and comment rune combination")
+			w.comment = cfg.comment
 		}
-
-		if (w.bitFlags&wFlagEscapeSet) != 0 && w.escape == cfg.commentRune {
-			return errors.New("invalid escape and comment rune combination")
-		}
-	} else if cfg.commentLinesSet {
-		return errors.New("comment lines require a comment rune")
 	}
 
 	// positive path remaining actions:
+	// (note that the first one in the positive path was the else clause above)
 
 	if cfg.headersSet && w.numFields == -1 {
 		w.numFields = len(cfg.headers)
@@ -988,29 +756,43 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 		return result, errors.Join(ErrBadConfig, err)
 	}
 
-	if cfg.commentLinesSet {
-
-		var buf bytes.Buffer
-		if (w.bitFlags & wFlagClearMemoryAfterFree) != 0 {
-			defer func() {
-				buf.Reset()
-				b := buf.Bytes()
-				b = b[:cap(b)]
-				for i := range b {
-					b[i] = 0
-				}
-			}()
+	if cfg.commentLinesSet && (w.bitFlags&wFlagErrOnNonUTF8) != 0 {
+		for _, s := range cfg.commentLines {
+			if !utf8.ValidString(s) {
+				return result, ErrNonUTF8InComment
+			}
 		}
+	}
+
+	var n int
+	var err error
+
+	if cfg.includeBOM {
+		n, err = w.writeBOM()
+		result += n
+		if err != nil {
+			return result, err
+		}
+	}
+
+	if cfg.commentLinesSet {
 
 		// note that while separate strings will be placed on separate lines, all newline
 		// sequences will be converted to record separator newline sequences.
 		//
 		// This makes for predictable record separator discovery and parsing when reading.
 
-		// TODO: don't write runes, write chunks of bytes where possible
-
 		commentBufArr := [2]string{}
 		var found bool
+
+		var recSepAndLinePrefix, linePrefix []byte
+		{
+			var recSepAndLinePrefixArr [utf8.UTFMax*2 + 1]byte
+			recSepAndLinePrefix = append(recSepAndLinePrefixArr[:0], w.recordSepBytes[:w.recordSepByteLen]...)
+			recSepAndLinePrefix = utf8.AppendRune(recSepAndLinePrefix, cfg.comment)
+			recSepAndLinePrefix = utf8.AppendRune(recSepAndLinePrefix, ' ')
+			linePrefix = recSepAndLinePrefix[w.recordSepByteLen:]
+		}
 
 		for i := range cfg.commentLines {
 			commentBuf := commentBufArr[:]
@@ -1018,13 +800,18 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 			if !found {
 				commentBuf = commentBuf[:1]
 			}
+
 			for {
 
-				buf.WriteRune(cfg.commentRune)
-				buf.WriteRune(' ')
+				n, err = w.writer.Write(linePrefix)
+				result += n
+				if err != nil {
+					err = errors.Join(ErrWriteHeaderFailed, writeIOErr{err})
+					w.setErr(err)
+					return result, err
+				}
 
 				if len(commentBuf[0]) > 0 {
-
 					// line here is immutable
 					//
 					// unsafe may look concerning and scary, and it can be,
@@ -1043,34 +830,56 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 					// just as an extra precaution.
 					line := unsafe.Slice(unsafe.StringData(commentBuf[0]), len(commentBuf[0]))
 
-					for len(line) != 0 {
-						r, s := utf8.DecodeRune(line)
-						if s == 1 && r == utf8.RuneError {
-							if (w.bitFlags & wFlagErrOnNonUTF8) != 0 {
-								return result, ErrNonUTF8InComment
+					scanIdx := 0
+					for {
+						di := bytes.IndexAny(line[scanIdx:], newlineRunesForWrite)
+						if di == -1 {
+							if scanIdx != len(line) {
+								n, err = w.writer.Write(line[scanIdx:])
+								result += n
+								if err != nil {
+									err = errors.Join(ErrWriteHeaderFailed, writeIOErr{err})
+									w.setErr(err)
+									return result, err
+								}
 							}
 
-							buf.WriteByte(line[0])
-
-							line = line[s:]
-							continue
+							break
 						}
 
-						if isNewlineRuneForWrite(r) {
-							buf.Write(w.recordSepBytes[:w.recordSepByteLen])
-							buf.WriteRune(cfg.commentRune)
-							buf.WriteRune(' ')
+						i := scanIdx + di
+						_, runeSize := utf8.DecodeRune(line[i:])
 
-							line = line[s:]
-							continue
+						if di != 0 {
+							// write the non-newline content before newline and comment prefix
+							n, err = w.writer.Write(line[scanIdx:i])
+							result += n
+							if err != nil {
+								err = errors.Join(ErrWriteHeaderFailed, writeIOErr{err})
+								w.setErr(err)
+								return result, err
+							}
 						}
 
-						buf.WriteRune(r)
-						line = line[s:]
+						scanIdx = i + runeSize
+
+						n, err = w.writer.Write(recSepAndLinePrefix)
+						result += n
+						if err != nil {
+							err = errors.Join(ErrWriteHeaderFailed, writeIOErr{err})
+							w.setErr(err)
+							return result, err
+						}
 					}
 				}
 
-				buf.Write(w.recordSepBytes[:w.recordSepByteLen])
+				n, err = w.writer.Write(w.recordSepBytes[:w.recordSepByteLen])
+				result += n
+				if err != nil {
+					err = errors.Join(ErrWriteHeaderFailed, writeIOErr{err})
+					w.setErr(err)
+					return result, err
+				}
 
 				if len(commentBuf) < 2 {
 					break
@@ -1081,64 +890,6 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 					commentBuf = commentBuf[:1]
 				}
 			}
-		}
-
-		if cfg.includeBOM {
-			n, err := w.writeBOM()
-			result += n
-			if err != nil {
-				return result, err
-			}
-		}
-
-		n, err := io.Copy(w.writer, &buf)
-		result += int(n)
-		if err != nil {
-			err := errors.Join(ErrWriteHeaderFailed, writeIOErr{err})
-			w.setErr(err)
-			return result, err
-		}
-
-		// these slip closures handle the case where the first rune of the
-		// first column of the first record match the comment rune when a
-		// comment has been written to the writer so when being read the
-		// data record is not interpreted as a comment by mistake
-		{
-			prevProcessFirstField := w.processFirstField
-			prevWriteDoubleQuotesForRecord := w.writeDoubleQuotesForRecord
-			commentRune := cfg.commentRune
-			fieldQuoter := w.processFieldFunc(true)
-
-			w.processFirstField = func(v []byte) (int, error) {
-				if (w.bitFlags & wFlagRecordWritten) == 0 {
-					if r, _ := utf8.DecodeRune(v); r == commentRune {
-						return fieldQuoter(v)
-					}
-
-					return prevProcessFirstField(v)
-				}
-
-				w.processFirstField = prevProcessFirstField
-				w.writeDoubleQuotesForRecord = prevWriteDoubleQuotesForRecord
-				return w.processFirstField(v)
-			}
-
-			w.writeDoubleQuotesForRecord = func() {
-				if (w.bitFlags & wFlagRecordWritten) == 0 {
-					prevWriteDoubleQuotesForRecord()
-					return
-				}
-
-				w.processFirstField = prevProcessFirstField
-				w.writeDoubleQuotesForRecord = prevWriteDoubleQuotesForRecord
-				w.writeDoubleQuotesForRecord()
-			}
-		}
-	} else if cfg.includeBOM {
-		n, err := w.writeBOM()
-		result += n
-		if err != nil {
-			return result, err
 		}
 	}
 
@@ -1156,52 +907,19 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 
 	// TODO: if providing buffer size hints, then it's likely that the headers should use a different size hint
 
-	n, err := w.WriteRow(headers...)
+	n, err = w.WriteRow(headers...)
 	result += n
 	if err != nil {
-		v := errors.Join(ErrWriteHeaderFailed, err)
-		err = v
+		err = errors.Join(ErrWriteHeaderFailed, err)
 		w.setErr(err)
 	}
 
 	return result, err
 }
 
-func (w *Writer) processFieldFunc(forceQuote bool) func(v []byte) (int, error) {
-	escapeSet := ((w.bitFlags & wFlagEscapeSet) != 0)
-	clearMemoryAfterFree := ((w.bitFlags & wFlagClearMemoryAfterFree) != 0)
-
-	if escapeSet {
-		if forceQuote {
-			if clearMemoryAfterFree {
-				return w.processField_escapeOn_forceQuoteOn_memclearOn
-			}
-			return w.processField_escapeOn_forceQuoteOn_memclearOff
-		}
-
-		if clearMemoryAfterFree {
-			return w.processField_escapeOn_forceQuoteOff_memclearOn
-		}
-		return w.processField_escapeOn_forceQuoteOff_memclearOff
-	}
-
-	if forceQuote {
-		if clearMemoryAfterFree {
-			return w.processField_escapeOff_forceQuoteOn_memclearOn
-		}
-		return w.processField_escapeOff_forceQuoteOn_memclearOff
-	}
-
-	if clearMemoryAfterFree {
-		return w.processField_escapeOff_forceQuoteOff_memclearOn
-	}
-
-	return w.processField_escapeOff_forceQuoteOff_memclearOff
-}
-
 // WriteRow writes a vararg collection of strings as a csv record row.
 //
-// Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the exact same slice length.
+// Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the same slice length.
 func (w *Writer) WriteRow(row ...string) (int, error) {
 	if err := w.writeRowPreflightCheck(len(row)); err != nil {
 		return 0, err
@@ -1224,7 +942,7 @@ func (w *Writer) WriteRow(row ...string) (int, error) {
 
 // WriteFieldRow will take a vararg collection of FieldWriter instances and write them as a csv record row.
 //
-// Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the exact same slice length.
+// Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the same slice length.
 //
 // This call will copy the provided list of field writers to an internally maintained buffer for amortized access and removal of allocations due to the slice escaping.
 //
@@ -1249,7 +967,7 @@ func (w *Writer) WriteFieldRow(row ...FieldWriter) (int, error) {
 // WriteFieldRowBorrowed is similar to WriteFieldRow except the slice of rows provided is expected to be externally maintained and reused.
 // In such a case this function will be faster than WriteFieldRow, but really it should only be used if performance testing indicates copying of field writers that occurs in WriteFieldRow is a bottleneck
 //
-// Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the exact same slice length.
+// Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the same slice length.
 func (w *Writer) WriteFieldRowBorrowed(row []FieldWriter) (int, error) {
 	if err := w.writeRowPreflightCheck(len(row)); err != nil {
 		return 0, err
@@ -1290,15 +1008,6 @@ func (w *Writer) writeRowPreflightCheck(n int) (_err error) {
 	return nil
 }
 
-func (w *Writer) runeRequiresQuotes(r rune) bool {
-	switch r {
-	case w.fieldSep:
-		return true
-	default:
-		return isNewlineRuneForWrite(r)
-	}
-}
-
 func (w *Writer) setErr(err error) {
 	w.err = err
 }
@@ -1317,4 +1026,53 @@ func isNewlineRuneForWrite(c rune) bool {
 		return true
 	}
 	return false
+}
+
+func isValidComment(comment, quote, fieldSep, escape rune, escapeSet bool) error {
+	// note: not letting comment runes be newline characters is
+	// opinionated but it is a good practice leaning towards simplicity.
+	//
+	// I am open to a PR that makes this more flexible.
+
+	if !validUtf8Rune(comment) || isNewlineRuneForWrite(comment) {
+		return errors.New("invalid comment rune")
+	}
+
+	if quote == comment {
+		return errors.New("invalid quote and comment rune combination")
+	}
+
+	if fieldSep == comment {
+		return errors.New("invalid field separator and comment rune combination")
+	}
+
+	if escapeSet && escape == comment {
+		return errors.New("invalid escape and comment rune combination")
+	}
+
+	return nil
+}
+
+// appendAndClear should be small enough to always be inlined
+func appendAndClear(dst *[]byte, p []byte) {
+	n := len(p)
+	if n == 0 {
+		return
+	}
+
+	s := *dst
+	sCap := cap(s)
+	sFree := sCap - len(s)
+
+	*dst = append(s, p...)
+
+	if sFree >= n {
+		// no reallocation occurred
+		return
+	}
+
+	// a reallocation definitely occurred
+	// clear the old contents within `s`
+
+	clear(s[:sCap])
 }

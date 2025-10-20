@@ -1,5 +1,47 @@
 # V3.* Changes[^1]
 
+## v3.2.0 - 2025-10-19
+
+The great long-overdue Writer refactor.
+
+
+Deprecated:
+- (WriterOptions) InitialFieldBufferSize
+- (WriterOptions) InitialFieldBuffer
+
+The above methods are now deprecated and no longer have any effect on the writing strategy.
+
+
+New Functions:
+- (WriterOptions) CommentRune(r rune)
+- (FieldWriterFactory) UncheckedUTF8Bytes([]byte)
+- (FieldWriterFactory) UncheckedUTF8String(string)
+
+
+It is now possible to specify the comment rune when constructing a writer regardless of whether or not
+the WriteHeader method of the writer is called. This fixes a gap in deterministic parsing. The
+CommentRune option used when calling WriteHeader has also been altered to behave in the same
+fashion as this new option regardless of if the header writing operation has comment lines or not.
+Previously if the comment rune was specified when writing a header and no comment lines existed then
+the document could not be deterministically parsed by the reader with Comment set to the same rune.
+
+This was confusing issue has been fixed.
+
+Should it be specified during writer construction and when calling WriteHeader an error will now be
+returned. It can only be specified when constructing the writer or calling WriteHeader - not both.
+
+
+UncheckedUTF8* variants of the FieldWriter String and Byte methods are now offered to (in a very minor
+capacity) speed up serialization operations should the author know for absolute certainty that the
+values within them are already utf8 compliant and do not need to be checked when writing them out to
+a utf8 csv document.
+
+
+---
+
+In this update the writer has been significantly refactored to increase the speed of writing documents
+and ensure allocations are largely avoided.
+
 ## v3.1.1 - 2025-10-10
 
 Internal allocation size bugfix. The FieldWriter types that are processed as signed integers
