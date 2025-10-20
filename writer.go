@@ -578,24 +578,8 @@ func (w *Writer) Close() error {
 	return nil
 }
 
-func (w *Writer) appendRec(buf []byte) {
-	if len(buf) == 0 {
-		return
-	}
-
-	old := w.recordBuf
-	w.recordBuf = append(w.recordBuf, buf...)
-
-	if cap(old) == 0 {
-		return
-	}
-	old = old[:cap(old)]
-
-	if &old[0] == &w.recordBuf[0] {
-		return
-	}
-
-	clear(old)
+func (w *Writer) appendRec(p []byte) {
+	appendAndClear(&w.recordBuf, p)
 }
 
 // setRecordBuf should only be called when the record buf has been appended to
@@ -935,7 +919,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 
 // WriteRow writes a vararg collection of strings as a csv record row.
 //
-// Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the exact same slice length.
+// Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the same slice length.
 func (w *Writer) WriteRow(row ...string) (int, error) {
 	if err := w.writeRowPreflightCheck(len(row)); err != nil {
 		return 0, err
@@ -958,7 +942,7 @@ func (w *Writer) WriteRow(row ...string) (int, error) {
 
 // WriteFieldRow will take a vararg collection of FieldWriter instances and write them as a csv record row.
 //
-// Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the exact same slice length.
+// Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the same slice length.
 //
 // This call will copy the provided list of field writers to an internally maintained buffer for amortized access and removal of allocations due to the slice escaping.
 //
@@ -983,7 +967,7 @@ func (w *Writer) WriteFieldRow(row ...FieldWriter) (int, error) {
 // WriteFieldRowBorrowed is similar to WriteFieldRow except the slice of rows provided is expected to be externally maintained and reused.
 // In such a case this function will be faster than WriteFieldRow, but really it should only be used if performance testing indicates copying of field writers that occurs in WriteFieldRow is a bottleneck
 //
-// Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the exact same slice length.
+// Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the same slice length.
 func (w *Writer) WriteFieldRowBorrowed(row []FieldWriter) (int, error) {
 	if err := w.writeRowPreflightCheck(len(row)); err != nil {
 		return 0, err
@@ -1069,12 +1053,26 @@ func isValidComment(comment, quote, fieldSep, escape rune, escapeSet bool) error
 	return nil
 }
 
-// intSumOverflowCheck will be kept super small
-// so it can be easily inlined when used
-func intSumOverflowCheck(sum, termAdded int) {
-	if sum >= termAdded {
+// appendAndClear should be small enough to always be inlined
+func appendAndClear(dst *[]byte, p []byte) {
+	n := len(p)
+	if n == 0 {
 		return
 	}
 
-	panic(panicIntOverflow)
+	s := *dst
+	sCap := cap(s)
+	sFree := sCap - len(s)
+
+	*dst = append(s, p...)
+
+	if sFree >= n {
+		// no reallocation occurred
+		return
+	}
+
+	// a reallocation definitely occurred
+	// clear the old contents within `s`
+
+	clear(s[:sCap])
 }

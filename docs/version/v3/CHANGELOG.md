@@ -2,7 +2,7 @@
 
 ## v3.2.0 - 2025-10-19
 
-The great long overdue Writer refactor.
+The great long-overdue Writer refactor.
 
 
 Deprecated:
@@ -14,13 +14,13 @@ The above methods are now deprecated and no longer have any effect on the writin
 
 New Functions:
 - (WriterOptions) CommentRune(r rune)
-- (FieldWriterFactory) UncheckedUTF8Bytes(p []byte)
-- (FieldWriterFactory) UncheckedUTF8String(p []byte)
+- (FieldWriterFactory) UncheckedUTF8Bytes([]byte)
+- (FieldWriterFactory) UncheckedUTF8String(string)
 
 
 It is now possible to specify the comment rune when constructing a writer regardless of whether or not
 the WriteHeader method of the writer is called. This fixes a gap in deterministic parsing. The
-CommentRune option used when calling WriteHeader has also been altered to behave in the exact same
+CommentRune option used when calling WriteHeader has also been altered to behave in the same
 fashion as this new option regardless of if the header writing operation has comment lines or not.
 Previously if the comment rune was specified when writing a header and no comment lines existed then
 the document could not be deterministically parsed by the reader with Comment set to the same rune.

@@ -94,7 +94,6 @@ const (
 	panicMissedHandlingMaxRecordIndex        // "missed handling record index at max value"
 	panicMissedHandlingMaxSecOpFieldIndex    // "missed handling field index at max SecOp value"
 	panicMissedHandlingMaxExpectedFieldIndex // "missed handling field index at expected max configured value"
-	panicIntOverflow                         // "int overflow"
 )
 
 func (p panicErr) String() string {
@@ -104,7 +103,6 @@ func (p panicErr) String() string {
 		"missed handling record index at max value",         // panicMissedHandlingMaxRecordIndex
 		"missed handling field index at SecOp max value",    // panicMissedHandlingMaxSecOpFieldIndex
 		"missed handling field index at expected max value", // panicMissedHandlingMaxExpectedFieldIndex
-		"int overflow", // panicIntOverflow
 	}[p-1]
 }
 
@@ -1649,42 +1647,18 @@ func (r *secOpReader) incRecordIndexWithMax(max uint64) func() {
 	}
 }
 
-func (r *secOpReader) defaultAppendRecBuf(b []byte) bool {
-	r.recordBuf = append(r.recordBuf, b...)
-
+func (r *secOpReader) defaultAppendRecBuf(p []byte) bool {
+	r.recordBuf = append(r.recordBuf, p...)
 	return false
 }
 
-func (r *secOpReader) appendRecBufWithMemclear(b []byte) bool {
-	if len(b) == 0 {
-		return false
-	}
-
-	oldRef := r.recordBuf
-
-	r.recordBuf = append(r.recordBuf, b...)
-
-	if cap(oldRef) == 0 {
-		return false
-	}
-
-	oldRef = oldRef[:cap(oldRef)]
-
-	if &oldRef[0] == &r.recordBuf[0] {
-		return false
-	}
-
-	clear(oldRef)
-
+func (r *secOpReader) appendRecBufWithMemclear(p []byte) bool {
+	appendAndClear(&r.recordBuf, p)
 	return false
 }
 
 func (r *secOpReader) appendRecBufMaxCheck(max int) func([]byte) bool {
 	return func(b []byte) bool {
-		if len(b) == 0 {
-			return false
-		}
-
 		// check if addition exceeds max or overflows
 		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
 			// simulate adding bytes up to the max
@@ -1695,19 +1669,14 @@ func (r *secOpReader) appendRecBufMaxCheck(max int) func([]byte) bool {
 		}
 
 		r.recordBuf = append(r.recordBuf, b...)
-
 		return false
 	}
 }
 
 func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func([]byte) bool {
-	return func(b []byte) bool {
-		if len(b) == 0 {
-			return false
-		}
-
+	return func(p []byte) bool {
 		// check if addition exceeds max or overflows
-		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
+		if len(r.recordBuf)+len(p) > max || len(r.recordBuf)+len(p) < len(r.recordBuf) {
 			// simulate adding bytes up to the max
 			// note that r.streamErr will make the index a "human" value and add 1
 			r.byteIndex += uint64(max - len(r.recordBuf))
@@ -1715,22 +1684,7 @@ func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func([]byte) bool {
 			return true
 		}
 
-		oldRef := r.recordBuf
-
-		r.recordBuf = append(r.recordBuf, b...)
-
-		if cap(oldRef) == 0 {
-			return false
-		}
-
-		oldRef = oldRef[:cap(oldRef)]
-
-		if &oldRef[0] == &r.recordBuf[0] {
-			return false
-		}
-
-		clear(oldRef)
-
+		appendAndClear(&r.recordBuf, p)
 		return false
 	}
 }
