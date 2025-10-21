@@ -13,7 +13,7 @@ import (
 	"github.com/josephcopenhaver/csv-go/v3"
 )
 
-func BenchmarkSTDWrite(b *testing.B) {
+func BenchmarkSTDWritePostInitSmallNegInts(b *testing.B) {
 	b.ReportAllocs()
 
 	cw := std_csv.NewWriter(io.Discard)
@@ -28,7 +28,37 @@ func BenchmarkSTDWrite(b *testing.B) {
 	}
 }
 
-func BenchmarkWrite(b *testing.B) {
+func BenchmarkSTDWritePostInitLargeNegInts(b *testing.B) {
+	b.ReportAllocs()
+
+	cw := std_csv.NewWriter(io.Discard)
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := cw.Write([]string{strconv.Itoa(math.MinInt), strconv.Itoa(math.MinInt)})
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func BenchmarkSTDWritePostInitStrings(b *testing.B) {
+	b.ReportAllocs()
+
+	cw := std_csv.NewWriter(io.Discard)
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := cw.Write([]string{"-1", "-1"})
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+func BenchmarkWritePostInitSmallNegInts(b *testing.B) {
 	b.ReportAllocs()
 
 	cw, err := csv.NewWriter(
@@ -46,8 +76,64 @@ func BenchmarkWrite(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, err = cw.WriteFieldRow(
-			fw.String("-1"),
-			fw.String("-1"),
+			fw.Int(-1),
+			fw.Int(-1),
+		)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	_ = cw.Close()
+}
+
+func BenchmarkWritePostInitLargeNegInts(b *testing.B) {
+	b.ReportAllocs()
+
+	cw, err := csv.NewWriter(
+		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().ErrorOnNonUTF8(false),
+	)
+	if err != nil {
+		panic(err)
+	}
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+
+	fw := csv.FieldWriters()
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = cw.WriteFieldRow(
+			fw.Int(math.MinInt),
+			fw.Int(math.MinInt),
+		)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	_ = cw.Close()
+}
+
+func BenchmarkWritePostInitStrings(b *testing.B) {
+	b.ReportAllocs()
+
+	cw, err := csv.NewWriter(
+		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().ErrorOnNonUTF8(false),
+	)
+	if err != nil {
+		panic(err)
+	}
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = cw.WriteRow(
+			"-1",
+			"-1",
 		)
 		if err != nil {
 			panic(err)

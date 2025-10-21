@@ -25,7 +25,7 @@ fashion as this new option regardless of if the header writing operation has com
 Previously if the comment rune was specified when writing a header and no comment lines existed then
 the document could not be deterministically parsed by the reader with Comment set to the same rune.
 
-This was confusing issue has been fixed.
+This confusing issue has been fixed.
 
 Should it be specified during writer construction and when calling WriteHeader an error will now be
 returned. It can only be specified when constructing the writer or calling WriteHeader - not both.
@@ -139,4 +139,4 @@ or record.
 - NewReader now returns an interface rather than a pointer to a concrete exported type to match the spirit of hiding the internals as much as possible. To ease transition the *Reader struct that was returned is now a Reader interface with the same exported function signature.
 - ExpectHeaders now errors when a nil value is passed in. In addition it now takes a variadic slice of strings rather than a slice of strings to better match other option styles.
 
-[^1]: For V2.* changes [see here](/docs/version/v2/CHANGELOG.md)
+[^1]: For V2.* changes [see here](https://github.com/josephcopenhaver/csv-go/blob/main/docs/version/v2/CHANGELOG.md)
