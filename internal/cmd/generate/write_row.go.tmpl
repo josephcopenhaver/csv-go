@@ -95,19 +95,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []F
 
 			{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
-			r, n := utf8.DecodeRune(src[i:])
-			switch r {
-			case w.quote:
-				{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-				{{template "appendRec0" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
-				{{template "loadQF" .}}(src, i+n, i+n)
-			case w.escape:
-				{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-				{{template "appendRec0" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
-				{{template "loadQF" .}}(src, i+n, i+n)
-			default:
-				{{template "loadQF" .}}(src, 0, i+n)
-			}
+			{{template "loadQF" .}}(src, i)
 
 			{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
@@ -141,18 +129,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []F
 
 			{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
-			switch r {
-			case w.quote:
-				{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-				{{template "appendRec0" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
-				err = {{template "loadQFCheckUTF8" .}}(src, i+n, i+n)
-			case w.escape:
-				{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-				{{template "appendRec0" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
-				err = {{template "loadQFCheckUTF8" .}}(src, i+n, i+n)
-			default:
-				err = {{template "loadQFCheckUTF8" .}}(src, 0, i+n)
-			}
+			err = {{template "loadQFCheckUTF8" .}}(src, i)
 			if err != nil {
 				return 0, err
 			}
@@ -232,19 +209,7 @@ SUBSEQUENT_FIELD_WRITE:
 
 				{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
-				r, n := utf8.DecodeRune(src[i:])
-				switch r {
-				case w.quote:
-					{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-					{{template "appendRec0" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
-					{{template "loadQF" .}}(src, i+n, i+n)
-				case w.escape:
-					{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-					{{template "appendRec0" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
-					{{template "loadQF" .}}(src, i+n, i+n)
-				default:
-					{{template "loadQF" .}}(src, 0, i+n)
-				}
+				{{template "loadQF" .}}(src, i)
 
 				{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
@@ -278,18 +243,7 @@ SUBSEQUENT_FIELD_WRITE:
 
 				{{template "appendRec0" .}}w.quoteBytes[:w.quoteByteLen]{{template "appendRec1" .}}
 
-				switch r {
-				case w.quote:
-					{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-					{{template "appendRec0" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
-					err = {{template "loadQFCheckUTF8" .}}(src, i+n, i+n)
-				case w.escape:
-					{{template "appendRec0" .}}src[:i]{{template "appendRec1" .}}
-					{{template "appendRec0" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
-					err = {{template "loadQFCheckUTF8" .}}(src, i+n, i+n)
-				default:
-					err = {{template "loadQFCheckUTF8" .}}(src, 0, i+n)
-				}
+				err = {{template "loadQFCheckUTF8" .}}(src, i)
 				if err != nil {
 					return 0, err
 				}
