@@ -26,14 +26,6 @@ const (
 	// it should match the maxLenSerializedTime value
 	boundedFieldWritersMaxByteLen = 35
 
-	invalidRuneUTF8Encoded = 0xEFBFBD
-	// note that if a utf8.RuneError rune is supplied the offset is 1 and not 2
-	//
-	// 2 here is completely invalid and obviously so from an encoding perspective,
-	// so we use it to indicate that the rune supplied to the writer is definitely
-	// invalid
-	invalidRuneUTF8EncodedWithOffset = ((2 << (8 * 4)) | invalidRuneUTF8Encoded)
-
 	// fieldWriterTypesRuneList contains all non rune, bytes, and string type output byte values which can permute into various combinations
 	fieldWriterTypesRuneList = "-:.+0123456789aefInNTZ" // 0-9, float, NaN, Inf, time
 )
@@ -111,18 +103,23 @@ func (w *FieldWriter) startsWithRune(buf []byte, r rune) bool {
 
 func (w *FieldWriter) runeAppendText(b []byte) ([]byte, error) {
 	r := w._64_bits
-	if r == invalidRuneUTF8EncodedWithOffset {
+
+	//
+	// switch on the size and append bytes accordingly
+	//
+
+	switch uint8(r >> (8 * 4)) {
+	case 1:
+		return append(b, byte(r)), nil
+	case 2:
+		return append(b, byte(r>>(8*1)), byte(r)), nil
+	case 3:
+		return append(b, byte(r>>(8*2)), byte(r>>(8*1)), byte(r)), nil
+	case 4:
+		return append(b, byte(r>>(8*3)), byte(r>>(8*2)), byte(r>>(8*1)), byte(r)), nil
+	default:
 		return nil, ErrInvalidRune
 	}
-
-	var buf [utf8.UTFMax]byte
-	buf[3] = byte(r)
-	buf[2] = byte(r >> (8 * 1))
-	buf[1] = byte(r >> (8 * 2))
-	buf[0] = byte(r >> (8 * 3))
-	offset := uint8(r >> (8 * 4))
-
-	return append(b, buf[offset:]...), nil
 }
 
 func (w *FieldWriter) AppendText(b []byte) ([]byte, error) {
@@ -285,8 +282,7 @@ func (FieldWriterFactory) Rune(r rune) FieldWriter {
 	numBytes := utf8.RuneLen(r)
 	if numBytes == -1 {
 		return FieldWriter{
-			kind:     wfkRune,
-			_64_bits: invalidRuneUTF8EncodedWithOffset,
+			kind: wfkRune,
 		}
 	}
 
@@ -294,7 +290,7 @@ func (FieldWriterFactory) Rune(r rune) FieldWriter {
 	offset := uint8(utf8.UTFMax - numBytes)
 	utf8.EncodeRune(buf[offset:], r)
 
-	v := (uint64(offset) << (8 * 4)) |
+	v := (uint64(numBytes) << (8 * 4)) |
 		(uint64(buf[0]) << (8 * 3)) |
 		(uint64(buf[1]) << (8 * 2)) |
 		(uint64(buf[2]) << (8 * 1)) |
