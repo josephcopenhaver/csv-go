@@ -143,6 +143,7 @@ func BenchmarkWritePostInitStrings(b *testing.B) {
 
 	cw, err := csv.NewWriter(
 		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().InitialRecordBufferSize(4096),
 		csv.WriterOpts().ErrorOnNonUTF8(false),
 	)
 	if err != nil {

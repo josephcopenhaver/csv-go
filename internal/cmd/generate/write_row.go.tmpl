@@ -4,10 +4,6 @@
 {{define "loadQFCheckUTF8"}}w.loadQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}{{end}}
 
 func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
 	// write the first field
 	{
 		f := &fields[0]

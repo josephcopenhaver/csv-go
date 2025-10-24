@@ -947,6 +947,8 @@ func (w *Writer) WriteRow(row ...string) (int, error) {
 		fieldWriters[i] = fw.String(row[i])
 	}
 
+	w.recordBuf = w.recordBuf[:0]
+
 	return w.writeRow(fieldWriters)
 }
 
@@ -969,7 +971,9 @@ func (w *Writer) WriteFieldRow(row ...FieldWriter) (int, error) {
 		w.fieldWriters = fieldWriters
 	}
 
-	copy(fieldWriters, row)
+	copy(fieldWriters, row) // only needed because writeRow's handling of the slice is not guaranteed to escape because of fairly poor escape analysis in go - this will cause any pointer types in the fieldWriters to escape as well so it is not perfect
+
+	w.recordBuf = w.recordBuf[:0]
 
 	return w.writeRow(fieldWriters)
 }
@@ -982,6 +986,8 @@ func (w *Writer) WriteFieldRowBorrowed(row []FieldWriter) (int, error) {
 	if err := w.writeRowPreflightCheck(len(row)); err != nil {
 		return 0, err
 	}
+
+	w.recordBuf = w.recordBuf[:0]
 
 	return w.writeRow(row)
 }

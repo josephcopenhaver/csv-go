@@ -2117,10 +2117,6 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 }
 
 func (w *Writer) writeRow_memclearOff(fields []FieldWriter) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
 	// write the first field
 	{
 		f := &fields[0]
@@ -2380,10 +2376,6 @@ FIRST_FIELD_WRITTEN:
 }
 
 func (w *Writer) writeRow_memclearOn(fields []FieldWriter) (int, error) {
-	defer func() {
-		w.recordBuf = w.recordBuf[:0]
-	}()
-
 	// write the first field
 	{
 		f := &fields[0]
