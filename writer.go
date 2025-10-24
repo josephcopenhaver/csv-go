@@ -416,7 +416,12 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	quoteByteLen := int8(utf8.EncodeRune(quoteBytes[:], cfg.quote))
 	fieldSepByteLen := int8(utf8.EncodeRune(fieldSepBytes[:], cfg.fieldSeparator))
 	if cfg.escapeSet {
-		controlRunes = string([]rune{cfg.quote, cfg.escape, cfg.fieldSeparator}) + newlineRunesForWrite
+		switch cfg.recordSep[0] {
+		case '\r', '\n':
+			controlRunes = string([]rune{cfg.quote, cfg.escape, cfg.fieldSeparator, '\r', '\n'})
+		default:
+			controlRunes = string([]rune{cfg.quote, cfg.escape, cfg.fieldSeparator, cfg.recordSep[0]})
+		}
 		escapeControlRunes = string([]rune{cfg.quote, cfg.escape})
 
 		n := utf8.EncodeRune(escapedQuote[:], cfg.escape)
@@ -428,8 +433,13 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		n *= 2
 		escapedEscapeByteLen = int8(n)
 	} else {
-		controlRunes = string([]rune{cfg.quote, cfg.fieldSeparator}) + newlineRunesForWrite
-		escapeControlRunes = string(cfg.quote)
+		switch cfg.recordSep[0] {
+		case '\r', '\n':
+			controlRunes = string([]rune{cfg.quote, cfg.fieldSeparator, '\r', '\n'})
+		default:
+			controlRunes = string([]rune{cfg.quote, cfg.fieldSeparator, cfg.recordSep[0]})
+		}
+		escapeControlRunes = string([]rune{cfg.quote})
 
 		n := utf8.EncodeRune(escapedQuote[:], cfg.quote)
 		copy(escapedQuote[n:], escapedQuote[:n])
@@ -937,6 +947,8 @@ func (w *Writer) WriteRow(row ...string) (int, error) {
 		fieldWriters[i] = fw.String(row[i])
 	}
 
+	w.recordBuf = w.recordBuf[:0]
+
 	return w.writeRow(fieldWriters)
 }
 
@@ -959,7 +971,9 @@ func (w *Writer) WriteFieldRow(row ...FieldWriter) (int, error) {
 		w.fieldWriters = fieldWriters
 	}
 
-	copy(fieldWriters, row)
+	copy(fieldWriters, row) // only needed because writeRow's handling of the slice is not guaranteed to escape because of fairly poor escape analysis in go - this will cause any pointer types in the fieldWriters to escape as well so it is not perfect
+
+	w.recordBuf = w.recordBuf[:0]
 
 	return w.writeRow(fieldWriters)
 }
@@ -972,6 +986,8 @@ func (w *Writer) WriteFieldRowBorrowed(row []FieldWriter) (int, error) {
 	if err := w.writeRowPreflightCheck(len(row)); err != nil {
 		return 0, err
 	}
+
+	w.recordBuf = w.recordBuf[:0]
 
 	return w.writeRow(row)
 }

@@ -11,34 +11,42 @@
 //
 // Essentially the function does the same as the parent context except has no intent around overall
 // quoting the field or detecting runes outside of the quote + escape character.
-func (w *Writer) loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src []byte, loadIdx, scanIdx int) {
+func (w *Writer) loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src []byte, scanIdx int) {
 	// escape any quote or escape runes found
+
+	i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
+	if i == -1 {
+		{{template "appendRec0" .}}src{{template "appendRec1" .}}
+		return
+	}
+	scanIdx += i
+
+	{{template "appendRec0" .}}src[:scanIdx]{{template "appendRec1" .}}
+
 	for {
-		i := bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
-		if i == -1 {
-			{{template "appendRec0" .}}src[loadIdx:]{{template "appendRec1" .}}
-			return
-		}
-		i += scanIdx
-
-		{{template "appendRec0" .}}src[loadIdx:i]{{template "appendRec1" .}}
-
-		r, n := utf8.DecodeRune(src[i:])
-		scanIdx = i+n
-		loadIdx = scanIdx
+		r, n := utf8.DecodeRune(src[scanIdx:])
+		scanIdx += n
 
 		if w.quote == r {
 			{{template "appendRec0" .}}w.escapedQuote[:w.escapedQuoteByteLen]{{template "appendRec1" .}}
-			continue
+		} else {
+			{{template "appendRec0" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
 		}
 
-		{{template "appendRec0" .}}w.escapedEscape[:w.escapedEscapeByteLen]{{template "appendRec1" .}}
+		i = bytes.IndexAny(src[scanIdx:], w.escapeControlRunes)
+		if i == -1 {
+			{{template "appendRec0" .}}src[scanIdx:]{{template "appendRec1" .}}
+			return
+		}
+
+		scanIdx += i
 	}
 }
 
 // loadQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}} performs the same duties as loadQField_memclearO{{if .Memclear}}n{{else}}ff{{end}} and in a much more expensive
 // scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src []byte, loadIdx, scanIdx int) error {
+func (w *Writer) loadQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src []byte, scanIdx int) error {
+	var loadIdx int
 	for {
 		r, n := utf8.DecodeRune(src[scanIdx:])
 		if n == 0 {
