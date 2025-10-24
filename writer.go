@@ -416,7 +416,12 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	quoteByteLen := int8(utf8.EncodeRune(quoteBytes[:], cfg.quote))
 	fieldSepByteLen := int8(utf8.EncodeRune(fieldSepBytes[:], cfg.fieldSeparator))
 	if cfg.escapeSet {
-		controlRunes = string([]rune{cfg.quote, cfg.escape, cfg.fieldSeparator}) + newlineRunesForWrite
+		switch cfg.recordSep[0] {
+		case '\r', '\n':
+			controlRunes = string([]rune{cfg.quote, cfg.escape, cfg.fieldSeparator, '\r', '\n'})
+		default:
+			controlRunes = string([]rune{cfg.quote, cfg.escape, cfg.fieldSeparator, cfg.recordSep[0]})
+		}
 		escapeControlRunes = string([]rune{cfg.quote, cfg.escape})
 
 		n := utf8.EncodeRune(escapedQuote[:], cfg.escape)
@@ -428,8 +433,13 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		n *= 2
 		escapedEscapeByteLen = int8(n)
 	} else {
-		controlRunes = string([]rune{cfg.quote, cfg.fieldSeparator}) + newlineRunesForWrite
-		escapeControlRunes = string(cfg.quote)
+		switch cfg.recordSep[0] {
+		case '\r', '\n':
+			controlRunes = string([]rune{cfg.quote, cfg.fieldSeparator, '\r', '\n'})
+		default:
+			controlRunes = string([]rune{cfg.quote, cfg.fieldSeparator, cfg.recordSep[0]})
+		}
+		escapeControlRunes = string([]rune{cfg.quote})
 
 		n := utf8.EncodeRune(escapedQuote[:], cfg.quote)
 		copy(escapedQuote[n:], escapedQuote[:n])
