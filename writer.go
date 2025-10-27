@@ -525,15 +525,15 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		bitFlags:             bitFlags,
 	}
 
-	w.setWriteRowStrategy(cfg.clearMemoryAfterFree, cfg.escapeSet)
+	w.setWriteRowStrategy()
 
 	return w, nil
 }
 
-func (w *Writer) setWriteRowStrategy(clearMemoryAfterFree, escapeSet bool) {
+func (w *Writer) setWriteRowStrategy() {
 	var f func([]FieldWriter) (int, error)
 
-	if !clearMemoryAfterFree {
+	if (w.bitFlags & wFlagClearMemoryAfterFree) == 0 {
 		f = w.writeRow_memclearOff
 	} else {
 		f = w.writeRow_memclearOn
