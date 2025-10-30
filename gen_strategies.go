@@ -59,7 +59,7 @@ func (r *fastReader) prepareRow() bool {
 					}
 
 					if n >= ReaderMinBufferSize {
-						if c := r.rawBuf[n-1]; c&asciiBitMask == 0 {
+						if c := r.rawBuf[n-1]; c < utf8.RuneSelf {
 							// ends in 1 byte ascii character
 
 							if c == asciiCarriageReturn && r.recordSepRuneLen != 1 {
@@ -143,7 +143,7 @@ func (r *fastReader) prepareRow() bool {
 
 	CHUNK_PROCESSOR:
 		for {
-			di := r.controlRuneScape.indexAnyInBytes(r.rawBuf[r.rawIndex:])
+			c, size, di := r.controlRuneScape.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
 			if di == -1 {
 				// consume it all without adjustment
 
@@ -211,12 +211,6 @@ func (r *fastReader) prepareRow() bool {
 				break
 			}
 			idx := r.rawIndex + di
-
-			c := rune(r.rawBuf[idx])
-			size := uint8(1)
-			if (c & asciiBitMask) != 0 {
-				c, size = decodeMBControlRune(r.rawBuf[idx:])
-			}
 
 			// TODO: benchmark if skipping intermediate copies for signals not valid for a state saves time
 			//
@@ -967,7 +961,7 @@ func (r *fastReader) prepareRow() bool {
 					// preserve field separator
 					var controlRuneScape runeScape6
 					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
-					controlRuneScape.addRune(c)
+					controlRuneScape.addRuneUniqueUnchecked(c)
 
 					if (r.bitFlags & rFlagQuote) != 0 {
 						controlRuneScape.addRuneUniqueUnchecked(r.quote)
@@ -1064,7 +1058,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					}
 
 					if n >= ReaderMinBufferSize {
-						if c := r.rawBuf[n-1]; c&asciiBitMask == 0 {
+						if c := r.rawBuf[n-1]; c < utf8.RuneSelf {
 							// ends in 1 byte ascii character
 
 							if c == asciiCarriageReturn && r.recordSepRuneLen != 1 {
@@ -1148,7 +1142,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 	CHUNK_PROCESSOR:
 		for {
-			di := r.controlRuneScape.indexAnyInBytes(r.rawBuf[r.rawIndex:])
+			c, size, di := r.controlRuneScape.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
 			if di == -1 {
 				// consume it all without adjustment
 
@@ -1223,12 +1217,6 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				break
 			}
 			idx := r.rawIndex + di
-
-			c := rune(r.rawBuf[idx])
-			size := uint8(1)
-			if (c & asciiBitMask) != 0 {
-				c, size = decodeMBControlRune(r.rawBuf[idx:])
-			}
 
 			// TODO: benchmark if skipping intermediate copies for signals not valid for a state saves time
 			//
@@ -2049,7 +2037,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					// preserve field separator
 					var controlRuneScape runeScape6
 					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
-					controlRuneScape.addRune(c)
+					controlRuneScape.addRuneUniqueUnchecked(c)
 
 					if (r.bitFlags & rFlagQuote) != 0 {
 						controlRuneScape.addRuneUniqueUnchecked(r.quote)

@@ -406,29 +406,35 @@ func Test_runeScape6_containsWideRune(t *testing.T) {
 	}
 
 	// when there is a mix of wide rune in the set and in the search string and hit is an ascii rune
-	// then -1 should not be returned from indexAnyInBytes
+	// then indexAnyRuneLenInBytes should not return (0, 0, -1)
 	{
 		var rs runeScape6
 
 		rs.addRune(test4ByteRune)
 		rs.addRune(test1ByteRune)
 
-		is.Equal(7, rs.indexAnyInBytes([]byte(test2ByteRuneEnc+"0"+test3ByteRuneEnc+"1"+test1ByteRuneEnc)))
+		r, n, i := rs.indexAnyRuneLenInBytes([]byte(test2ByteRuneEnc + "0" + test3ByteRuneEnc + "1" + test1ByteRuneEnc))
+		is.Equal(test1ByteRune, r)
+		is.Equal(uint8(1), n)
+		is.Equal(7, i)
 	}
 
 	// when there is a mix of wide rune in the set and in the search string and hit is wide rune
-	// then -1 should not be returned from indexAnyInBytes
+	// then indexAnyRuneLenInBytes should not return (0, 0, -1)
 	{
 		var rs runeScape6
 
 		rs.addRune(test4ByteRune)
 		rs.addRune(test1ByteRune)
 
-		is.Equal(7, rs.indexAnyInBytes([]byte(test2ByteRuneEnc+"0"+test3ByteRuneEnc+"1"+test4ByteRuneEnc)))
+		r, n, i := rs.indexAnyRuneLenInBytes([]byte(test2ByteRuneEnc + "0" + test3ByteRuneEnc + "1" + test4ByteRuneEnc))
+		is.Equal(test4ByteRune, r)
+		is.Equal(uint8(4), n)
+		is.Equal(7, i)
 	}
 
 	// when there is a mix of wide rune in the set and no overlap in a mixed string
-	// then indexAnyInBytes should return -1
+	// then indexAnyRuneLenInBytes should return (0, 0, -1)
 	{
 
 		var rs runeScape6
@@ -436,12 +442,14 @@ func Test_runeScape6_containsWideRune(t *testing.T) {
 		rs.addRune(test1ByteRune)
 		rs.addRune(test4ByteRune)
 
-		i := rs.indexAnyInBytes([]byte("0" + test3ByteRuneEnc))
+		r, n, i := rs.indexAnyRuneLenInBytes([]byte("0" + test3ByteRuneEnc))
+		is.Equal(rune(0), r)
+		is.Equal(uint8(0), n)
 		is.Equal(int(-1), i)
 	}
 
 	// when there is a mix of wide rune in the set and overlap in a mixed string
-	// then indexAnyInBytes should not return -1
+	// then indexAnyRuneLenInBytes should not return (0, 0, -1)
 	{
 
 		var rs runeScape6
@@ -449,7 +457,9 @@ func Test_runeScape6_containsWideRune(t *testing.T) {
 		rs.addRune(test1ByteRune)
 		rs.addRune(test4ByteRune)
 
-		i := rs.indexAnyInBytes([]byte("0" + test3ByteRuneEnc + test4ByteRuneEnc))
+		r, n, i := rs.indexAnyRuneLenInBytes([]byte("0" + test3ByteRuneEnc + test4ByteRuneEnc))
+		is.Equal(test4ByteRune, r)
+		is.Equal(uint8(4), n)
 		is.Equal(int(4), i)
 	}
 }

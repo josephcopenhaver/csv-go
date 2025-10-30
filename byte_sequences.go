@@ -438,15 +438,15 @@ func (rs *runeScape6) addRuneUniqueUnchecked(r rune) {
 	rs.numWideRunes++
 }
 
-func (rs *runeScape6) indexAnyInBytes(p []byte) int {
+func (rs *runeScape6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 	if rs.numWideRunes == 0 {
 		for i, b := range p {
 			if (rs.bits[b>>5] & (uint32(1) << (b & 31))) != 0 {
-				return i
+				return rune(b), 1, i
 			}
 		}
 
-		return -1
+		return 0, 0, -1
 	}
 
 	var i int
@@ -454,7 +454,7 @@ func (rs *runeScape6) indexAnyInBytes(p []byte) int {
 		b := p[i]
 		if b < utf8.RuneSelf {
 			if (rs.bits[b>>5] & (uint32(1) << (b & 31))) != 0 {
-				return i
+				return rune(b), 1, i
 			}
 
 			i++
@@ -463,11 +463,11 @@ func (rs *runeScape6) indexAnyInBytes(p []byte) int {
 
 		r, n := utf8.DecodeRune(p[i:])
 		if n != 1 && rs.containsWideRune(r) {
-			return i
+			return r, uint8(n), i
 		}
 
 		i += n
 	}
 
-	return -1
+	return 0, 0, -1
 }
