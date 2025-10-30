@@ -44,7 +44,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer w.Close()
+	defer func() {
+		if err := w.Close(); err != nil {
+			panic(err)
+		}
+	}()
 
 	cw, err := csv.NewWriter(
 		csv.WriterOpts().Writer(w),
@@ -52,7 +56,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer cw.Close()
+	defer func() {
+		if err := cw.Close(); err != nil {
+			panic(err)
+		}
+	}()
 
 	for row := range cr.IntoIter() {
 		if _, err := cw.WriteRow(row...); err != nil {
@@ -101,3 +109,104 @@ Note that the writer also has WriteFieldRow*() functions (WriteFieldRow, WriteFi
 ---
 
 [![Go Reference](https://pkg.go.dev/badge/github.com/josephcopenhaver/csv-go/v3.svg)](https://pkg.go.dev/github.com/josephcopenhaver/csv-go/v3)
+
+---
+
+Here's the same example as above adjusted to optimize throughput via additional configurations.
+
+```go
+package main
+
+// this is a toy example that reads a csv file and writes to another without making allocations while processing
+
+import (
+	"bufio"
+	"os"
+
+	"github.com/josephcopenhaver/csv-go/v3"
+)
+
+func main() {
+	r, err := os.Open("input.csv")
+	if err != nil {
+		panic(err)
+	}
+	defer r.Close()
+
+	// using a buffered reader to avoid hot io pipes / writing less than the system storage device block size or ideal network protocol packet payload size
+	// could instead use something async powered to get concurrent behaviors
+	br := bufio.NewReader(r)
+
+	var cr csv.Reader
+	{
+		op := csv.ReaderOpts()
+		cr, err = csv.NewReader(
+			op.Reader(br),
+			op.RecordSeparator("\n"), // simplifies the execution plan ever so slightly and ensures consistent parsing rather than depending on automatic discovery
+			op.InitialRecordBufferSize(4*1024*1024), // seeds the reading record buffer to a particular initial capacity
+			op.BorrowRow(true),                      // evades allocations BUT makes it unsafe to store/use the resulting slice past the next call to Scan
+			op.BorrowFields(true),                   // evades allocations BUT makes it unsafe to store/use the resulting character content of each slice element result anywhere past the next call to Scan
+			op.NumFields(2),                         // simplifies the execution plan ever so slightly
+			// by default quotes have no meaning
+			// so must be specified to match RFC 4180
+			// op.Quote('"'),
+		)
+		if err != nil {
+			panic(err)
+		}
+		defer func() {
+			if err := cr.Close(); err != nil {
+				panic(err)
+			}
+		}()
+	}
+
+	w, err := os.Create("output.csv")
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		if err := w.Close(); err != nil {
+			panic(err)
+		}
+	}()
+
+	// using a buffered writer to avoid hot io pipes / writing less than the system storage device block size or ideal network protocol packet payload size
+	// could instead use something async powered to get concurrent behaviors
+	bw := bufio.NewWriterSize(w, 4*1024*1024)
+	defer func() {
+		if err := bw.Flush(); err != nil {
+			panic(err)
+		}
+	}()
+
+	var cw *csv.Writer
+	{
+		op := csv.WriterOpts()
+		cw, err = csv.NewWriter(
+			op.Writer(bw),
+			op.InitialRecordBufferSize(4*1024*1024), // seeds the writing record buffer to a particular initial capacity
+		)
+		if err != nil {
+			panic(err)
+		}
+		defer func() {
+			if err := cw.Close(); err != nil {
+				panic(err)
+			}
+		}()
+	}
+
+	// using Scan instead of the iterator sugar to avoid allocation of the iterator closures
+	for cr.Scan() {
+		// if BorrowRow=true or BorrowFields=true then implementation reading rows from the Reader MUST NOT keep the rows alive beyond the next call to cr.Scan()
+		row := cr.Row()
+		if _, err := cw.WriteRow(row...); err != nil {
+			panic(err)
+		}
+	}
+	if err := cr.Err(); err != nil {
+		panic(err)
+	}
+}
+```
