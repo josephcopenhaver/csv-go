@@ -1087,8 +1087,8 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 		controlRuneScape.addByte(asciiLineFeed)
 		controlRuneScape.addByte(asciiVerticalTab)
 		controlRuneScape.addByte(asciiFormFeed)
-		controlRuneScape.addRune(utf8NextLine)
-		controlRuneScape.addRune(utf8LineSeparator)
+		controlRuneScape.addWideRune(utf8NextLine)
+		controlRuneScape.addWideRune(utf8LineSeparator)
 	}
 
 	if cfg.errOnNewlineInUnquotedField {
