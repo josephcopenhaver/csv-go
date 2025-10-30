@@ -101,7 +101,7 @@ func (w *FieldWriter) startsWithRune(buf []byte, r rune) bool {
 	}
 }
 
-func (w *FieldWriter) runeAppendText(b []byte) ([]byte, error) {
+func (w *FieldWriter) runeAppendText(p []byte) ([]byte, error) {
 	r := w._64_bits
 
 	//
@@ -110,44 +110,44 @@ func (w *FieldWriter) runeAppendText(b []byte) ([]byte, error) {
 
 	switch uint8(r >> (8 * 4)) {
 	case 1:
-		return append(b, byte(r)), nil
+		return append(p, byte(r)), nil
 	case 2:
-		return append(b, byte(r>>(8*1)), byte(r)), nil
+		return append(p, byte(r>>(8*1)), byte(r)), nil
 	case 3:
-		return append(b, byte(r>>(8*2)), byte(r>>(8*1)), byte(r)), nil
+		return append(p, byte(r>>(8*2)), byte(r>>(8*1)), byte(r)), nil
 	case 4:
-		return append(b, byte(r>>(8*3)), byte(r>>(8*2)), byte(r>>(8*1)), byte(r)), nil
+		return append(p, byte(r>>(8*3)), byte(r>>(8*2)), byte(r>>(8*1)), byte(r)), nil
 	default:
 		return nil, ErrInvalidRune
 	}
 }
 
-func (w *FieldWriter) AppendText(b []byte) ([]byte, error) {
+func (w *FieldWriter) AppendText(p []byte) ([]byte, error) {
 
 	switch w.kind {
 	case wfkBytes:
-		return append(b, w.bytes...), nil
+		return append(p, w.bytes...), nil
 	case wfkString:
-		return append(b, w.str...), nil
+		return append(p, w.str...), nil
 	case wfkInt, wfkInt64, wfkDuration:
-		return strconv.AppendInt(b, int64(w._64_bits), 10), nil
+		return strconv.AppendInt(p, int64(w._64_bits), 10), nil
 	case wfkUint64:
-		return strconv.AppendUint(b, uint64(w._64_bits), 10), nil
+		return strconv.AppendUint(p, uint64(w._64_bits), 10), nil
 	case wfkTime:
-		return w.time.AppendFormat(b, time.RFC3339Nano), nil
+		return w.time.AppendFormat(p, time.RFC3339Nano), nil
 	case wfkRune:
-		return w.runeAppendText(b)
+		return w.runeAppendText(p)
 	case wfkBool:
 		boolAsByte := byte('0') + byte(w._64_bits)
-		return append(b, boolAsByte), nil
+		return append(p, boolAsByte), nil
 	case wfkFloat64:
-		return strconv.AppendFloat(b, math.Float64frombits(w._64_bits), 'g', -1, 64), nil
+		return strconv.AppendFloat(p, math.Float64frombits(w._64_bits), 'g', -1, 64), nil
 	}
 
 	return nil, ErrInvalidFieldWriter
 }
 
-func (w *FieldWriter) MarshalText() (text []byte, err error) {
+func (w *FieldWriter) MarshalText() ([]byte, error) {
 	var b []byte
 
 	switch w.kind {

@@ -201,7 +201,7 @@ func TestFunctionalWriterErrorPaths(t *testing.T) {
 				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
 			},
 			wrs: []wr{
-				{fwr: []csv.FieldWriter{csv.FieldWriters().String("")}, errIs: []error{csv.ErrIO}, errStr: csv.ErrIO.Error() + `: test-error: 0199fa565f45ca1407f90d3baa484ce7`},
+				{r: []string{""}, errIs: []error{csv.ErrIO}, errStr: csv.ErrIO.Error() + `: test-error: 0199fa565f45ca1407f90d3baa484ce7`},
 			},
 		},
 		{
@@ -243,7 +243,7 @@ func TestFunctionalWriterErrorPaths(t *testing.T) {
 		{
 			when: "writing two string columns where the second column as a comma followed by an incorrect uf8 byte sequence",
 			wrs: []wr{
-				{fwr: []csv.FieldWriter{csv.FieldWriters().String(""), csv.FieldWriters().String(",\x7F\xFF\xFF\xFF")}, errIs: []error{csv.ErrNonUTF8InRecord}, errStr: csv.ErrNonUTF8InRecord.Error()},
+				{r: []string{"", ",\x7F\xFF\xFF\xFF"}, errIs: []error{csv.ErrNonUTF8InRecord}, errStr: csv.ErrNonUTF8InRecord.Error()},
 			},
 		},
 		{
@@ -333,6 +333,16 @@ func TestFunctionalWriterErrorPaths(t *testing.T) {
 				io.ErrClosedPipe,
 			},
 			whErrStr: csv.ErrWriteHeaderFailed.Error() + "\n" + csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error(),
+		},
+		{
+			when: "writer errors on all writes and attempting to write one record",
+			selfInit: func(tc *functionalWriterTestCase) {
+				w := &errWriter{writer: io.Discard, err: io.ErrClosedPipe}
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().Writer(w))
+			},
+			wrs: []wr{
+				{r: []string{"hello", "dave"}, errIs: []error{csv.ErrIO, io.ErrClosedPipe}, errStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error()},
+			},
 		},
 	}
 

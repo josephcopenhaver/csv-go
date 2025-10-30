@@ -34,29 +34,19 @@ func TestUnitReaderPanicOnValidate(t *testing.T) {
 		recordSepRuneLen: -2,
 	}
 
-	validate := func() (r any, _ error) {
-		defer func() {
-			r = recover()
-		}()
-		return nil, cfg.validate()
-	}
-
-	r, err := validate()
-	is.NotNil(r)
-	is.Nil(err)
-
-	is.Equal(r, panicRecordSepRuneLen)
+	is.PanicsWithValue(panicRecordSepRuneLen, func() {
+		_ = cfg.validate()
+	})
 
 	cfg = rCfg{
 		reader:           strings.NewReader(""),
 		recordSepRuneLen: 3,
 	}
 
-	r, err = validate()
-	is.NotNil(r)
-	is.Nil(err)
+	is.PanicsWithValue(panicRecordSepRuneLen, func() {
+		_ = cfg.validate()
+	})
 
-	is.Equal(r, panicRecordSepRuneLen)
 	is.Equal(panicRecordSepRuneLen.String(), panicRecordSepRuneLen.Error())
 	is.Equal(panicRecordSepRuneLen.String(), "invalid record separator rune length")
 }
@@ -86,18 +76,10 @@ func TestUnitReaderPanicOnHandleEOF(t *testing.T) {
 
 	cri.state = rState(rStateInLineComment + 1)
 
-	handleEOF := func() (_ bool, r any) {
-		defer func() {
-			r = recover()
-		}()
-		return cri.handleEOF(), nil
-	}
+	is.PanicsWithValue(panicUnknownReaderStateDuringEOF, func() {
+		_ = cri.handleEOF()
+	})
 
-	resp, r := handleEOF()
-	is.NotNil(r)
-	is.False(resp)
-
-	is.Equal(r, panicUnknownReaderStateDuringEOF)
 	is.Equal(panicUnknownReaderStateDuringEOF.String(), panicUnknownReaderStateDuringEOF.Error())
 	is.Equal(panicUnknownReaderStateDuringEOF.String(), "reader in unknown state when EOF encountered")
 }
@@ -128,18 +110,8 @@ func TestUnitSecOpReaderPanicOnHandleEOF(t *testing.T) {
 
 	cri.recordIndex = 1
 
-	handlePanic := func() (r any) {
-		defer func() {
-			r = recover()
-		}()
-		cri.incRecordIndex()
-		return nil
-	}
+	is.PanicsWithValue(panicMissedHandlingMaxRecordIndex, cri.incRecordIndex)
 
-	r := handlePanic()
-	is.NotNil(r)
-
-	is.Equal(r, panicMissedHandlingMaxRecordIndex)
 	is.Equal(panicMissedHandlingMaxRecordIndex.String(), panicMissedHandlingMaxRecordIndex.Error())
 	is.Equal(panicMissedHandlingMaxRecordIndex.String(), "missed handling record index at max value")
 }
@@ -174,18 +146,10 @@ func TestUnitReaderPanicOnCorruptedFieldLengthsEOF(t *testing.T) {
 	cri.fieldLengths = append(cri.fieldLengths, 0)
 	cri.fieldIndex++
 
-	handlePanic := func() (r any) {
-		defer func() {
-			r = recover()
-		}()
+	is.PanicsWithValue(panicMissedHandlingMaxExpectedFieldIndex, func() {
 		cri.checkNumFields(nil)
-		return nil
-	}
+	})
 
-	r := handlePanic()
-	is.NotNil(r)
-
-	is.Equal(r, panicMissedHandlingMaxExpectedFieldIndex)
 	is.Equal(panicMissedHandlingMaxExpectedFieldIndex.String(), panicMissedHandlingMaxExpectedFieldIndex.Error())
 	is.Equal(panicMissedHandlingMaxExpectedFieldIndex.String(), "missed handling field index at expected max value")
 }

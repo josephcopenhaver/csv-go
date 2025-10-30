@@ -61,6 +61,30 @@ func TestFieldWriterMarshalText(t *testing.T) {
 		is.Equal(`"`, string(v))
 	}
 
+	// rune (2 byte utf8 encoded) - cent sign
+	{
+		f := fw.Rune('\u00A2')
+		v, err := f.MarshalText()
+		is.Nil(err)
+		is.Equal("\xC2\xA2", string(v))
+	}
+
+	// rune (3 byte utf8 encoded) - euro sign
+	{
+		f := fw.Rune('\u20AC')
+		v, err := f.MarshalText()
+		is.Nil(err)
+		is.Equal("\xE2\x82\xAC", string(v))
+	}
+
+	// rune (4 byte utf8 encoded) - grinning face
+	{
+		f := fw.Rune('\U0001F600')
+		v, err := f.MarshalText()
+		is.Nil(err)
+		is.Equal("\xF0\x9F\x98\x80", string(v))
+	}
+
 	// invalid rune
 	{
 		f := fw.Rune(0x808080)

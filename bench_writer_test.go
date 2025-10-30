@@ -63,7 +63,10 @@ func BenchmarkSTDWritePostInitStrings(b *testing.B) {
 	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := cw.Write([]string{"-1", "-1"})
+		err := cw.Write([]string{
+			"-1",
+			"-1",
+		})
 		if err != nil {
 			panic(err)
 		}
