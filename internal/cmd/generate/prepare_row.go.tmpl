@@ -132,7 +132,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 	CHUNK_PROCESSOR:
 		for {
-			di := bytes.IndexAny(r.rawBuf[r.rawIndex:], r.controlRunes)
+			di := r.controlRuneScape.indexAnyInBytes(r.rawBuf[r.rawIndex:])
 			if di == -1 {
 				// consume it all without adjustment
 
@@ -558,7 +558,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					// r.state = ... (unchanged)
 				}
-			{{end}}case r.recordSep[0]:
+			{{end}}case r.recordSepStartRune:
 				if r.recordSepRuneLen == 2 {
 					// checking for a full CRLF
 					//
@@ -958,43 +958,35 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 					if c == asciiCarriageReturn && idx+1 < len(r.rawBuf) && r.rawBuf[idx+1] == asciiLineFeed {
 						r.recordSepRuneLen = 2
-						r.recordSep[0] = asciiCarriageReturn
-						r.recordSep[1] = asciiLineFeed
+						r.recordSepStartRune = asciiCarriageReturn
 					} else {
 						r.recordSepRuneLen = 1
-						r.recordSep[0] = c
+						r.recordSepStartRune = c
 					}
 
 					// preserve field separator
-					var buf [{{if .NotQuotePossible}}5{{else}}7{{end}}]rune
-					controlRunes := append(buf[:0], r.fieldSeparator)
-					controlRunes = append(controlRunes, c)
+					var controlRuneScape runeScape6
+					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
+					controlRuneScape.addRune(c)
 
 					{{if not .NotQuotePossible}}if (r.bitFlags & rFlagQuote) != 0 {
-						controlRunes = append(controlRunes, r.quote)
+						controlRuneScape.addRuneUniqueUnchecked(r.quote)
 					}
 					if (r.bitFlags & rFlagEscape) != 0 {
-						controlRunes = append(controlRunes, r.escape)
+						controlRuneScape.addRuneUniqueUnchecked(r.escape)
 					}
 					{{end}}if (r.bitFlags & rFlagComment) != 0 {
-						controlRunes = append(controlRunes, r.comment)
+						controlRuneScape.addRuneUniqueUnchecked(r.comment)
 					}
 
 					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 						// error on newline in unquoted field block
 
-						crs := []byte(string(controlRunes))
-
-						if !bytes.Contains(crs, []byte{asciiCarriageReturn}) {
-							controlRunes = append(controlRunes, asciiCarriageReturn)
-						}
-
-						if !bytes.Contains(crs, []byte{asciiLineFeed}) {
-							controlRunes = append(controlRunes, asciiLineFeed)
-						}
+						controlRuneScape.addByte(asciiCarriageReturn)
+						controlRuneScape.addByte(asciiLineFeed)
 					}
 
-					r.controlRunes = string(controlRunes)
+					r.controlRuneScape = controlRuneScape
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedField:

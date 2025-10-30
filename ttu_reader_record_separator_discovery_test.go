@@ -1,11 +1,11 @@
 package csv
 
 import (
-	"bytes"
 	"encoding/json"
 	"slices"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -94,16 +94,21 @@ func TestUnitReaderDiscoverRecordSeparator(t *testing.T) {
 
 					// verify control runes initialized as expected
 					{
-						allPossibleNLRunes := []rune{asciiCarriageReturn, asciiLineFeed, asciiVerticalTab, asciiFormFeed, utf8NextLine, utf8LineSeparator}
+						var expControlRuneScape runeScape6
 
-						expControlRunes := string(cri.fieldSeparator) + string(cri.quote) + string(cri.escape) + string(cri.comment)
-						for _, r := range allPossibleNLRunes {
-							if !bytes.ContainsRune([]byte(expControlRunes), r) {
-								expControlRunes += string(r)
-							}
-						}
+						expControlRuneScape.addRuneUniqueUnchecked(cri.fieldSeparator)
+						expControlRuneScape.addRuneUniqueUnchecked(cri.quote)
+						expControlRuneScape.addRuneUniqueUnchecked(cri.escape)
+						expControlRuneScape.addRuneUniqueUnchecked(cri.comment)
+						expControlRuneScape.addRuneUniqueUnchecked(utf8NextLine)
+						expControlRuneScape.addRuneUniqueUnchecked(utf8LineSeparator)
 
-						is.Equal(expControlRunes, cri.controlRunes)
+						expControlRuneScape.addByte(asciiCarriageReturn)
+						expControlRuneScape.addByte(asciiLineFeed)
+						expControlRuneScape.addByte(asciiVerticalTab)
+						expControlRuneScape.addByte(asciiFormFeed)
+
+						is.Equal(expControlRuneScape, cri.controlRuneScape)
 					}
 
 					is.Nil(cr.Row())
@@ -123,21 +128,21 @@ func TestUnitReaderDiscoverRecordSeparator(t *testing.T) {
 
 					// verify control runes changed to a subset as expected
 					{
-						expControlRunes := string(cri.fieldSeparator)
-						if strings.HasPrefix(recSep[1], "\r") {
-							expControlRunes += "\r"
-						} else {
-							expControlRunes += string(recSep[1])
-						}
-						expControlRunes += string(cri.quote) + string(cri.escape) + string(cri.comment)
-						if !bytes.ContainsRune([]byte(expControlRunes), asciiCarriageReturn) {
-							expControlRunes += string(rune(asciiCarriageReturn))
-						}
-						if !bytes.ContainsRune([]byte(expControlRunes), asciiLineFeed) {
-							expControlRunes += string(rune(asciiLineFeed))
-						}
+						var expControlRuneScape runeScape6
 
-						is.Equal(expControlRunes, cri.controlRunes)
+						expControlRuneScape.addRuneUniqueUnchecked(cri.fieldSeparator)
+						{
+							r, _ := utf8.DecodeRuneInString(recSep[1])
+							expControlRuneScape.addRuneUniqueUnchecked(r)
+						}
+						expControlRuneScape.addRuneUniqueUnchecked(cri.quote)
+						expControlRuneScape.addRuneUniqueUnchecked(cri.escape)
+						expControlRuneScape.addRuneUniqueUnchecked(cri.comment)
+
+						expControlRuneScape.addByte(asciiCarriageReturn)
+						expControlRuneScape.addByte(asciiLineFeed)
+
+						is.Equal(expControlRuneScape, cri.controlRuneScape)
 					}
 
 					is.Nil(cr.Close())

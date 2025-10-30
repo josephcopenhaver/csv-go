@@ -349,6 +349,70 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 			tc.newOpts = append(v, csv.WriterOpts().ClearFreedDataMemory(true))
 		}))
 	})
+
+	if canConvertStrWriteToFieldWrite(tc) {
+
+		//
+		// convert calls from string based APIs to fieldWriter API calls
+		//
+
+		t.Run("when str2field+ and "+tc.when, func(t *testing.T) {
+			t.Helper()
+
+			t.Run(name, f(func(tc *functionalWriterTestCase) {
+				for i := range tc.wrs {
+					src := tc.wrs[i].r
+					if src == nil {
+						continue
+					}
+					tc.wrs[i].r = nil
+
+					dst := make([]csv.FieldWriter, len(src))
+					tc.wrs[i].fwr = dst
+					for i, s := range src {
+						dst[i] = csv.FieldWriters().String(s)
+					}
+				}
+			}))
+		})
+
+		t.Run("when str2field+ clearmem+ and "+tc.when, func(t *testing.T) {
+			t.Helper()
+
+			t.Run(name, f(func(tc *functionalWriterTestCase) {
+				for i := range tc.wrs {
+					src := tc.wrs[i].r
+					if src == nil {
+						continue
+					}
+					tc.wrs[i].r = nil
+
+					dst := make([]csv.FieldWriter, len(src))
+					tc.wrs[i].fwr = dst
+					for i, s := range src {
+						dst[i] = csv.FieldWriters().String(s)
+					}
+				}
+
+				v := slices.Clone(tc.newOpts)
+				tc.newOpts = append(v, csv.WriterOpts().ClearFreedDataMemory(true))
+			}))
+		})
+	}
+}
+
+func canConvertStrWriteToFieldWrite(tc *functionalWriterTestCase) bool {
+	if len(tc.wrs) == 0 {
+		return false
+	}
+
+	for i := range tc.wrs {
+		if tc.wrs[i].fwr != nil {
+			return false
+		}
+	}
+
+	return true
 }
 
 func bomBytes() []byte {
@@ -615,7 +679,7 @@ func TestFunctionalWriterOKPaths(t *testing.T) {
 			when: "writing a record of one empty string slice column",
 			then: "the output is quoted",
 			wrs: []wr{
-				{fwr: []csv.FieldWriter{csv.FieldWriters().String("")}, n: 3},
+				{r: []string{""}, n: 3},
 			},
 			res: "\"\"\n",
 		},
@@ -623,7 +687,7 @@ func TestFunctionalWriterOKPaths(t *testing.T) {
 			when: "writing a record of two empty string slice columns",
 			then: "the output is not quoted",
 			wrs: []wr{
-				{fwr: []csv.FieldWriter{csv.FieldWriters().String(""), csv.FieldWriters().String("")}, n: 2},
+				{r: []string{"", ""}, n: 2},
 			},
 			res: ",\n",
 		},
@@ -708,7 +772,7 @@ func TestFunctionalWriterOKPaths(t *testing.T) {
 				csv.WriterOpts().Escape('\\'),
 			},
 			wrs: []wr{
-				{fwr: []csv.FieldWriter{csv.FieldWriters().String(""), csv.FieldWriters().String(`\`)}, n: 6},
+				{r: []string{"", `\`}, n: 6},
 			},
 			res: ",\"\\\\\"\n",
 		},
@@ -719,7 +783,7 @@ func TestFunctionalWriterOKPaths(t *testing.T) {
 				csv.WriterOpts().Escape('\\'),
 			},
 			wrs: []wr{
-				{fwr: []csv.FieldWriter{csv.FieldWriters().String(""), csv.FieldWriters().String(`"`)}, n: 6},
+				{r: []string{"", `"`}, n: 6},
 			},
 			res: ",\"\\\"\"\n",
 		},
@@ -735,9 +799,135 @@ func TestFunctionalWriterOKPaths(t *testing.T) {
 			when: "writing a record of two String column with second value set to comma",
 			then: "comma rune should be quoted",
 			wrs: []wr{
-				{fwr: []csv.FieldWriter{csv.FieldWriters().String(""), csv.FieldWriters().String(",")}, n: 5},
+				{r: []string{"", ","}, n: 5},
 			},
 			res: ",\",\"\n",
+		},
+		{
+			when: "writing a record of two String column with second value set to comma",
+			then: "comma rune should be quoted",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().RecordSeparator("\u2028"),
+			},
+			wrs: []wr{
+				{r: []string{"abc", "123"}, n: 10},
+			},
+			res: "abc,123\u2028",
+		},
+		{
+			when: "quote character is a 4 byte grinning face icon and field contains another multibyte character",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Quote('\U0001F600'),
+			},
+			wrs: []wr{
+				{r: []string{"a\u20ACc", "d\u20ACf"}, n: 12},
+			},
+			res: "a\u20ACc,d\u20ACf\n",
+		},
+		{
+			when: "quote character is a 4 byte grinning face and field contains another multibyte character",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Quote('\U0001F600'),
+			},
+			wrs: []wr{
+				{r: []string{"a\u20ACc", "d\u20ACf"}, n: 12},
+			},
+			res: "a\u20ACc,d\u20ACf\n",
+		},
+		{
+			when: "quote character is a 4 byte grinning face and field contains quote and another multibyte character",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().Quote('\U0001F600'),
+			},
+			wrs: []wr{
+				{r: []string{"a\u20ACc", "d\U0001F600f\u20ACh"}, n: 29},
+			},
+			res: "a\u20ACc,\U0001F600d\U0001F600\U0001F600f\u20ACh\U0001F600\n",
+		},
+		{
+			when: "ErrorOnNonUTF8=false second field has no control character overlap",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().ErrorOnNonUTF8(false),
+			},
+			wrs: []wr{
+				{r: []string{"abc", "123"}, n: 8},
+			},
+			res: "abc,123\n",
+		},
+		{
+			when: "ErrorOnNonUTF8=false second field has quote",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().ErrorOnNonUTF8(false),
+			},
+			wrs: []wr{
+				{r: []string{"abc", `1"3`}, n: 11},
+			},
+			res: `abc,"1""3"` + "\n",
+		},
+		{
+			when: "ErrorOnNonUTF8=false second field has record separator",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().ErrorOnNonUTF8(false),
+			},
+			wrs: []wr{
+				{r: []string{"abc", "1\n3"}, n: 10},
+			},
+			res: "abc,\"1\n3\"" + "\n",
+		},
+		{
+			when: "ErrorOnNonUTF8=false second field has escape",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().ErrorOnNonUTF8(false),
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{r: []string{"abc", `1\3`}, n: 11},
+			},
+			res: `abc,"1\\3"` + "\n",
+		},
+		{
+			when: "ErrorOnNonUTF8=false first field has two escapes",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().ErrorOnNonUTF8(false),
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{r: []string{`1\3\5`, "abc"}, n: 14},
+			},
+			res: `"1\\3\\5",abc` + "\n",
+		},
+		{
+			when: "ErrorOnNonUTF8=false second field has two escapes",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().ErrorOnNonUTF8(false),
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{r: []string{"abc", `1\3\5`}, n: 14},
+			},
+			res: `abc,"1\\3\\5"` + "\n",
+		},
+		{
+			when: "ErrorOnNonUTF8=true first field has two escapes",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().ErrorOnNonUTF8(true),
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{r: []string{`1\3\5`, "abc"}, n: 14},
+			},
+			res: `"1\\3\\5",abc` + "\n",
+		},
+		{
+			when: "ErrorOnNonUTF8=true second field has two escapes",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().ErrorOnNonUTF8(true),
+				csv.WriterOpts().Escape('\\'),
+			},
+			wrs: []wr{
+				{r: []string{"abc", `1\3\5`}, n: 14},
+			},
+			res: `abc,"1\\3\\5"` + "\n",
 		},
 	}
 

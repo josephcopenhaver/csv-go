@@ -16,11 +16,8 @@ var tsImports string
 //go:embed prepare_row.go.tmpl
 var tsPrepareRow string
 
-//go:embed write_row.go.tmpl
-var tsWriteRow string
-
-//go:embed write_quoted_field.go.tmpl
-var tsWriteQF string
+//go:embed write.go.tmpl
+var tsWrite string
 
 func parse(s string) *template.Template {
 	t, err := template.New("").Option("missingkey=error").Parse(s)
@@ -133,9 +130,9 @@ func main() {
 		})
 	}
 
-	// render writeRow strategies
+	// render write strategies
 	{
-		t := parse(tsWriteRow)
+		t := parse(tsWrite)
 
 		type cfg struct {
 			Memclear bool
@@ -148,23 +145,6 @@ func main() {
 			{Memclear: true},
 		})
 	}
-
-	// render write quoted field strategies
-	{
-		t := parse(tsWriteQF)
-
-		type cfg struct {
-			Memclear bool
-		}
-
-		render := renderer[cfg](&buf)
-
-		render(t, []cfg{
-			{Memclear: false},
-			{Memclear: true},
-		})
-	}
-
 	b := buf.Bytes()
 
 	//

@@ -26,6 +26,12 @@ func BenchmarkSTDWritePostInitSmallNegInts(b *testing.B) {
 			panic(err)
 		}
 	}
+
+	// "Writes are buffered, so [Writer.Flush] must eventually be called to ensure that the record is written to the underlying io.Writer." - from Write's docstring
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		panic(err)
+	}
 }
 
 func BenchmarkSTDWritePostInitLargeNegInts(b *testing.B) {
@@ -41,6 +47,12 @@ func BenchmarkSTDWritePostInitLargeNegInts(b *testing.B) {
 			panic(err)
 		}
 	}
+
+	// "Writes are buffered, so [Writer.Flush] must eventually be called to ensure that the record is written to the underlying io.Writer." - from Write's docstring
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		panic(err)
+	}
 }
 
 func BenchmarkSTDWritePostInitStrings(b *testing.B) {
@@ -51,10 +63,19 @@ func BenchmarkSTDWritePostInitStrings(b *testing.B) {
 	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := cw.Write([]string{"-1", "-1"})
+		err := cw.Write([]string{
+			"-1",
+			"-1",
+		})
 		if err != nil {
 			panic(err)
 		}
+	}
+
+	// "Writes are buffered, so [Writer.Flush] must eventually be called to ensure that the record is written to the underlying io.Writer." - from Write's docstring
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		panic(err)
 	}
 }
 
@@ -84,6 +105,8 @@ func BenchmarkWritePostInitSmallNegInts(b *testing.B) {
 		}
 	}
 
+	// stopping the timer because STD does not have an equivalent purpose Close call
+	b.StopTimer()
 	_ = cw.Close()
 }
 
@@ -113,6 +136,8 @@ func BenchmarkWritePostInitLargeNegInts(b *testing.B) {
 		}
 	}
 
+	// stopping the timer because STD does not have an equivalent purpose Close call
+	b.StopTimer()
 	_ = cw.Close()
 }
 
@@ -121,6 +146,7 @@ func BenchmarkWritePostInitStrings(b *testing.B) {
 
 	cw, err := csv.NewWriter(
 		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().InitialRecordBufferSize(4096),
 		csv.WriterOpts().ErrorOnNonUTF8(false),
 	)
 	if err != nil {
@@ -140,6 +166,8 @@ func BenchmarkWritePostInitStrings(b *testing.B) {
 		}
 	}
 
+	// stopping the timer because STD does not have an equivalent purpose Close call
+	b.StopTimer()
 	_ = cw.Close()
 }
 
@@ -174,6 +202,7 @@ func BenchmarkWriteWithSliceExpansion(b *testing.B) {
 		}
 	}
 
+	b.StopTimer()
 	_ = cw.Close()
 }
 
@@ -203,6 +232,7 @@ func BenchmarkWriteWithSliceBorrowed(b *testing.B) {
 		}
 	}
 
+	b.StopTimer()
 	_ = cw.Close()
 }
 
@@ -232,6 +262,7 @@ func BenchmarkWriteWithQuotes(b *testing.B) {
 		}
 	}
 
+	b.StopTimer()
 	_ = cw.Close()
 }
 
