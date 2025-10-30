@@ -48,7 +48,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					}
 
 					if n >= ReaderMinBufferSize {
-						if c := r.rawBuf[n-1]; c & asciiBitMask == 0 {
+						if c := r.rawBuf[n-1]; c < utf8.RuneSelf {
 							// ends in 1 byte ascii character
 
 							if c == asciiCarriageReturn && r.recordSepRuneLen != 1 {
@@ -132,7 +132,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 	CHUNK_PROCESSOR:
 		for {
-			di := r.controlRuneScape.indexAnyInBytes(r.rawBuf[r.rawIndex:])
+			c, size, di := r.controlRuneScape.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
 			if di == -1 {
 				// consume it all without adjustment
 
@@ -201,12 +201,6 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 				break
 			}
 			idx := r.rawIndex + di
-
-			c := rune(r.rawBuf[idx])
-			size := uint8(1)
-			if (c & asciiBitMask) != 0 {
-				c, size = decodeMBControlRune(r.rawBuf[idx:])
-			}
 
 			// TODO: benchmark if skipping intermediate copies for signals not valid for a state saves time
 			//
