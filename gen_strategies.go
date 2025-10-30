@@ -967,7 +967,7 @@ func (r *fastReader) prepareRow() bool {
 					// preserve field separator
 					var controlRuneScape runeScape6
 					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
-					controlRuneScape.addRune(c)
+					controlRuneScape.addRuneUniqueUnchecked(c)
 
 					if (r.bitFlags & rFlagQuote) != 0 {
 						controlRuneScape.addRuneUniqueUnchecked(r.quote)
@@ -2049,7 +2049,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					// preserve field separator
 					var controlRuneScape runeScape6
 					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
-					controlRuneScape.addRune(c)
+					controlRuneScape.addRuneUniqueUnchecked(c)
 
 					if (r.bitFlags & rFlagQuote) != 0 {
 						controlRuneScape.addRuneUniqueUnchecked(r.quote)
