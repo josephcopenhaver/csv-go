@@ -105,16 +105,7 @@ func (WriterOptions) RecordSeparator(s string) WriterOption {
 		return badRecordSeparatorWConfig
 	}
 
-	// usage of unsafe here is actually safe because v is
-	// never modified and no parts of its contents exist
-	// without cloning values to other parts of memory
-	// past the lifecycle of this function
-	//
-	// It will also never be called if the len is zero,
-	// just as an extra precaution.
-	v := unsafe.Slice(unsafe.StringData(s), len(s))
-
-	r1, n1 := utf8.DecodeRune(v)
+	r1, n1 := utf8.DecodeRuneInString(s)
 	if r1 == utf8.RuneError {
 		// note that even when explicitly setting to utf8.RuneError
 		// we're not allowing it
@@ -125,7 +116,7 @@ func (WriterOptions) RecordSeparator(s string) WriterOption {
 		// need it supported
 		return badRecordSeparatorWConfig
 	}
-	if n1 == len(v) {
+	if n1 == len(s) {
 		// note: requiring record separators to be newline character is opinionated
 		// but it is a good practice leaning towards simplicity.
 		//
@@ -144,7 +135,7 @@ func (WriterOptions) RecordSeparator(s string) WriterOption {
 		}
 	}
 
-	r2, n2 := utf8.DecodeRune(v[n1:])
+	r2, n2 := utf8.DecodeRuneInString(s[n1:])
 	if r2 == utf8.RuneError {
 		// note that even when explicitly setting to utf8.RuneError
 		// we're not allowing it
@@ -155,7 +146,7 @@ func (WriterOptions) RecordSeparator(s string) WriterOption {
 		// need it supported
 		return badRecordSeparatorWConfig
 	}
-	if n1+n2 == len(v) && r1 == asciiCarriageReturn && r2 == asciiLineFeed {
+	if n1+n2 == len(s) && r1 == asciiCarriageReturn && r2 == asciiLineFeed {
 		return func(cfg *wCfg) {
 			cfg.recordSep[0] = r1
 			cfg.recordSep[1] = r2
@@ -837,7 +828,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 
 					scanIdx := 0
 					for {
-						di := newlineForWriteRuneScape.indexAnyInBytes(line[scanIdx:])
+						_, runeSize, di := newlineForWriteRuneScape.indexAnyRuneLenInBytes(line[scanIdx:])
 						if di == -1 {
 							if scanIdx != len(line) {
 								n, err = w.writer.Write(line[scanIdx:])
@@ -853,7 +844,6 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 						}
 
 						i := scanIdx + di
-						_, runeSize := utf8.DecodeRune(line[i:])
 
 						if di != 0 {
 							// write the non-newline content before newline and comment prefix
@@ -866,7 +856,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 							}
 						}
 
-						scanIdx = i + runeSize
+						scanIdx = i + int(runeSize)
 
 						n, err = w.writer.Write(recSepAndLinePrefix)
 						result += n

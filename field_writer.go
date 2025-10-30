@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-	"unsafe"
 )
 
 var (
@@ -58,43 +57,16 @@ type FieldWriter struct {
 	_64_bits uint64
 }
 
-func (w *FieldWriter) isZeroLen() bool {
-	switch w.kind {
-	case wfkBytes:
-		return len(w.bytes) == 0
-	case wfkString:
-		return len(w.str) == 0
-	case wfkInt, wfkInt64, wfkDuration, wfkUint64, wfkTime, wfkRune, wfkBool, wfkFloat64:
-		return false
-	default:
-		// I reserve the right to panic here in the future should I wish to.
-		return false
-	}
-}
-
 func (w *FieldWriter) startsWithRune(buf []byte, r rune) bool {
-	p := []byte(string(r))
-
 	switch w.kind {
 	case wfkBytes:
-		if len(w.bytes) == 0 {
-			return false
-		}
-
-		return bytes.HasPrefix(w.bytes, p)
+		return bytes.HasPrefix(w.bytes, []byte(string(r)))
 	case wfkString:
-		s := w.str
-		if len(s) == 0 {
-			return false
-		}
-
-		b := unsafe.Slice(unsafe.StringData(s), len(s))
-
-		return bytes.HasPrefix(b, p)
+		return strings.HasPrefix(w.str, string(r))
 	case wfkInt, wfkInt64, wfkDuration, wfkUint64, wfkTime, wfkRune, wfkBool, wfkFloat64:
 		var err error
 		buf, err = w.AppendText(buf)
-		return (err == nil && bytes.HasPrefix(buf, p))
+		return (err == nil && bytes.HasPrefix(buf, []byte(string(r))))
 	default:
 		// I reserve the right to panic here in the future should I wish to.
 		return false
