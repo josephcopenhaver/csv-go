@@ -58,20 +58,6 @@ type FieldWriter struct {
 	_64_bits uint64
 }
 
-func (w *FieldWriter) isZeroLen() bool {
-	switch w.kind {
-	case wfkBytes:
-		return len(w.bytes) == 0
-	case wfkString:
-		return len(w.str) == 0
-	case wfkInt, wfkInt64, wfkDuration, wfkUint64, wfkTime, wfkRune, wfkBool, wfkFloat64:
-		return false
-	default:
-		// I reserve the right to panic here in the future should I wish to.
-		return false
-	}
-}
-
 func (w *FieldWriter) startsWithRune(buf []byte, r rune) bool {
 	p := []byte(string(r))
 

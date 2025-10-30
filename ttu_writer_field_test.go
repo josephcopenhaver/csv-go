@@ -23,7 +23,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 
 	{
 		var f FieldWriter
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.NotNil(err)
 		is.Nil(v)
@@ -38,7 +37,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 
 	{
 		f := fw.Bytes([]byte(``))
-		is.True(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(``, string(v))
@@ -46,7 +44,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 
 	{
 		f := fw.Bytes([]byte(`9999999999999999999999999999999999999999999999999`))
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`9999999999999999999999999999999999999999999999999`, string(v))
@@ -55,7 +52,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// rune
 	{
 		f := fw.Rune('"')
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`"`, string(v))
@@ -88,7 +84,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// invalid rune
 	{
 		f := fw.Rune(0x808080)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.ErrorIs(err, ErrInvalidRune)
 		is.Nil(v)
@@ -100,7 +95,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 
 	{
 		f := fw.String(``)
-		is.True(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(``, string(v))
@@ -108,7 +102,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 
 	{
 		f := fw.String(`9999999999999999999999999999999999999999999999999`)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`9999999999999999999999999999999999999999999999999`, string(v))
@@ -121,7 +114,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Int(0)
 	{
 		f := fw.Int(0)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`0`, string(v))
@@ -130,7 +122,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Int(-1)
 	{
 		f := fw.Int(-1)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`-1`, string(v))
@@ -139,7 +130,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Int(math.MinInt)
 	{
 		f := fw.Int(math.MinInt)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(strconv.FormatInt(math.MinInt, 10), string(v))
@@ -148,7 +138,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Int(math.MaxInt)
 	{
 		f := fw.Int(math.MaxInt)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(strconv.FormatInt(math.MaxInt, 10), string(v))
@@ -158,7 +147,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	{
 		x := uint64(math.MaxUint64)
 		f := fw.Int(int(x))
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`-1`, string(v))
@@ -171,7 +159,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Int64(0)
 	{
 		f := fw.Int64(0)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`0`, string(v))
@@ -180,7 +167,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Int64(-1)
 	{
 		f := fw.Int64(-1)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`-1`, string(v))
@@ -189,7 +175,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Int64(math.MinInt64)
 	{
 		f := fw.Int64(math.MinInt64)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(strconv.FormatInt(math.MinInt64, 10), string(v))
@@ -198,7 +183,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Int64(math.MaxInt64)
 	{
 		f := fw.Int64(math.MaxInt64)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(strconv.FormatInt(math.MaxInt64, 10), string(v))
@@ -208,7 +192,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	{
 		x := uint64(math.MaxUint64)
 		f := fw.Int64(int64(x))
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`-1`, string(v))
@@ -222,7 +205,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	{
 		x := -1
 		f := fw.Uint64(uint64(x))
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(strconv.FormatUint(math.MaxUint64, 10), string(v))
@@ -231,7 +213,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Uint64(0)
 	{
 		f := fw.Uint64(0)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`0`, string(v))
@@ -240,7 +221,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Uint64(math.MaxUint64)
 	{
 		f := fw.Uint64(math.MaxUint64)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(strconv.FormatUint(math.MaxUint64, 10), string(v))
@@ -253,7 +233,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Time(time.Time{})
 	{
 		f := fw.Time(time.Time{})
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`0001-01-01T00:00:00Z`, string(v))
@@ -262,7 +241,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Time(time.Time{}.Add(1))
 	{
 		f := fw.Time(time.Time{}.Add(1))
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`0001-01-01T00:00:00.000000001Z`, string(v))
@@ -271,7 +249,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Time(time.Time{}.Add(1).In(<+1 hour timezone>))
 	{
 		f := fw.Time(time.Time{}.Add(1).In(time.FixedZone("unused", int((time.Hour*1)/time.Second))))
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`0001-01-01T01:00:00.000000001+01:00`, string(v))
@@ -284,7 +261,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// bool(true)
 	{
 		f := fw.Bool(true)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`1`, string(v))
@@ -293,7 +269,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// bool(false)
 	{
 		f := fw.Bool(false)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`0`, string(v))
@@ -306,7 +281,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Duration(-1)
 	{
 		f := fw.Duration(-1)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`-1`, string(v))
@@ -315,7 +289,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Duration(1)
 	{
 		f := fw.Duration(1)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`1`, string(v))
@@ -328,7 +301,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Float64(0.01)
 	{
 		f := fw.Float64(0.01)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`0.01`, string(v))
@@ -337,7 +309,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Float64(-0.01)
 	{
 		f := fw.Float64(-0.01)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`-0.01`, string(v))
@@ -346,7 +317,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Float64(math.NaN())
 	{
 		f := fw.Float64(math.NaN())
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`NaN`, string(v))
@@ -355,7 +325,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Float64(0.0)
 	{
 		f := fw.Float64(0.0)
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`0`, string(v))
@@ -364,7 +333,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Float64(math.Inf(1))
 	{
 		f := fw.Float64(math.Inf(1))
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`+Inf`, string(v))
@@ -373,7 +341,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Float64(math.Inf(0))
 	{
 		f := fw.Float64(math.Inf(0))
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`+Inf`, string(v))
@@ -382,7 +349,6 @@ func TestFieldWriterMarshalText(t *testing.T) {
 	// Float64(math.Inf(-1))
 	{
 		f := fw.Float64(math.Inf(-1))
-		is.False(f.isZeroLen())
 		v, err := f.MarshalText()
 		is.Nil(err)
 		is.Equal(`-Inf`, string(v))
