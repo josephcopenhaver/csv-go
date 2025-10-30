@@ -304,8 +304,6 @@ func (rs *runeScape4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 			if (rs.bits[b>>5] & (uint32(1) << (b & 31))) != 0 {
 				return rune(b), 1, i
 			}
-
-			continue
 		}
 
 		return 0, 0, -1
@@ -353,8 +351,6 @@ func (rs *runeScape6) addRune(r rune) {
 
 // addByte assumes that the byte is a valid unicode value less than 128
 func (rs *runeScape6) addByte(b byte) {
-	// &1 on the bits index ensures constantly within the bounds of the array
-	// so compiles down to some nice fast operations at the expense of readability
 	rs.bits[b>>5] |= (uint32(1) << (b & 31))
 }
 

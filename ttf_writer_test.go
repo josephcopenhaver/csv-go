@@ -353,7 +353,7 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 	if canConvertStrWriteToFieldWrite(tc) {
 
 		//
-		// up-convert calls to string based APIs to fieldWriter API calls
+		// convert calls from string based APIs to fieldWriter API calls
 		//
 
 		t.Run("when str2field+ and "+tc.when, func(t *testing.T) {

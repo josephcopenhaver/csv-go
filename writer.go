@@ -1,7 +1,6 @@
 package csv
 
 import (
-	"bytes"
 	"errors"
 	"io"
 	"strings"
@@ -791,6 +790,15 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 			linePrefix = recSepAndLinePrefix[w.recordSepSeq.n:]
 		}
 
+		// note, could technically use a runeScape2 here - but that's overkill for a small
+		// and unlikely to be highly reused aspect
+		//
+		// I am open to a PR should that behavior be more desirable.
+		var newlineForWriteRuneScape runeScape4
+		for _, r := range newlineRunesForWrite {
+			newlineForWriteRuneScape.addRuneUniqueUnchecked(r)
+		}
+
 		for i := range cfg.commentLines {
 			commentBuf := commentBufArr[:]
 			commentBuf[0], commentBuf[1], found = strings.Cut(cfg.commentLines[i], "\r\n")
@@ -829,7 +837,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 
 					scanIdx := 0
 					for {
-						di := bytes.IndexAny(line[scanIdx:], newlineRunesForWrite) // TODO: replace with an optimized function
+						di := newlineForWriteRuneScape.indexAnyInBytes(line[scanIdx:])
 						if di == -1 {
 							if scanIdx != len(line) {
 								n, err = w.writer.Write(line[scanIdx:])
