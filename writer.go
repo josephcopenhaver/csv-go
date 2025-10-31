@@ -843,11 +843,10 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 							break
 						}
 
-						i := scanIdx + di
-
-						if di != 0 {
+						if prevIdx := scanIdx; di != 0 {
+							scanIdx += di
 							// write the non-newline content before newline and comment prefix
-							n, err = w.writer.Write(line[scanIdx:i])
+							n, err = w.writer.Write(line[prevIdx:scanIdx])
 							result += n
 							if err != nil {
 								err = errors.Join(ErrWriteHeaderFailed, writeIOErr{err})
@@ -856,7 +855,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 							}
 						}
 
-						scanIdx = i + int(runeSize)
+						scanIdx += int(runeSize)
 
 						n, err = w.writer.Write(recSepAndLinePrefix)
 						result += n
