@@ -171,6 +171,90 @@ func BenchmarkWritePostInitStrings(b *testing.B) {
 	_ = cw.Close()
 }
 
+func BenchmarkSTDWritePostInitWideStringsWithoutEncValidation(b *testing.B) {
+	b.ReportAllocs()
+
+	cw := std_csv.NewWriter(io.Discard)
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := cw.Write([]string{
+			"\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600",
+			"\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600",
+		})
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// "Writes are buffered, so [Writer.Flush] must eventually be called to ensure that the record is written to the underlying io.Writer." - from Write's docstring
+	cw.Flush()
+	if err := cw.Error(); err != nil {
+		panic(err)
+	}
+}
+
+func BenchmarkWritePostInitWideStringsWithEncValidation(b *testing.B) {
+	b.ReportAllocs()
+
+	cw, err := csv.NewWriter(
+		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().InitialRecordBufferSize(4096),
+		csv.WriterOpts().ErrorOnNonUTF8(true),
+	)
+	if err != nil {
+		panic(err)
+	}
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = cw.WriteRow(
+			"\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600",
+			"\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600",
+		)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// stopping the timer because STD does not have an equivalent purpose Close call
+	b.StopTimer()
+	_ = cw.Close()
+}
+
+func BenchmarkWritePostInitWideStringsWithoutEncValidation(b *testing.B) {
+	b.ReportAllocs()
+
+	cw, err := csv.NewWriter(
+		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().InitialRecordBufferSize(4096),
+		csv.WriterOpts().ErrorOnNonUTF8(false),
+	)
+	if err != nil {
+		panic(err)
+	}
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err = cw.WriteRow(
+			"\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600",
+			"\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600\U0001F600",
+		)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// stopping the timer because STD does not have an equivalent purpose Close call
+	b.StopTimer()
+	_ = cw.Close()
+}
+
 func BenchmarkWriteWithSliceExpansion(b *testing.B) {
 	//
 	// To Reader/Author: if you find yourself using this reused row pattern, just use WriteFieldRowBorrowed instead
