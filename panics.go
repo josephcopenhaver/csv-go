@@ -1,3 +1,10 @@
+// panics.go
+//
+// This file contains panic codes that, if the algorithms within this package are fully correct, cannot and will not ever happen.
+//
+// Any error that can happen due to user-exposed aspects ARE NEVER DEFINED HERE. Those are errors returned to the
+// calling context to handle appropriately.
+
 package csv
 
 // panicErr ensures the source of a panic comes from this module and not some other one
@@ -14,7 +21,7 @@ const (
 	panicMissedHandlingMaxRecordIndex        // "missed handling record index at max value"
 	panicMissedHandlingMaxSecOpFieldIndex    // "missed handling field index at max SecOp value"
 	panicMissedHandlingMaxExpectedFieldIndex // "missed handling field index at expected max configured value"
-	panicInvalidByteSequenceLength           // "invalid byte sequence length"
+	panicInvalidRuneEncoderLen               // "invalid rune encoder length"
 )
 
 func (p panicErr) String() string {
@@ -24,7 +31,7 @@ func (p panicErr) String() string {
 		"missed handling record index at max value",         // panicMissedHandlingMaxRecordIndex
 		"missed handling field index at SecOp max value",    // panicMissedHandlingMaxSecOpFieldIndex
 		"missed handling field index at expected max value", // panicMissedHandlingMaxExpectedFieldIndex
-		"invalid byte sequence length",                      // panicInvalidByteSequenceLength
+		"invalid rune encoder length",                       // panicInvalidRuneEncoderLen
 	}[p-1]
 }
 

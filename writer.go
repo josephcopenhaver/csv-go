@@ -352,14 +352,14 @@ func (cfg *wCfg) validate() error {
 type Writer struct {
 	fieldWriterBuf         [boundedFieldWritersMaxByteLen]byte
 	recordBuf              []byte
-	controlRuneScape       runeScape4
-	escapeControlRuneScape runeScape4
-	twoQuotesSeq           byteSequenceLong
-	escapedQuoteSeq        byteSequenceLong
-	escapedEscapeSeq       byteSequenceLong
-	fieldSepSeq            byteSequenceShort
-	recordSepSeq           byteSequenceShort
-	quoteSeq               byteSequenceShort
+	controlRuneScape       runeSet4
+	escapeControlRuneScape runeSet4
+	twoQuotesSeq           twoRuneEncoder
+	escapedQuoteSeq        twoRuneEncoder
+	escapedEscapeSeq       twoRuneEncoder
+	fieldSepSeq            runeEncoder
+	recordSepSeq           runeEncoder
+	quoteSeq               runeEncoder
 	numFields              int
 	writer                 io.Writer
 	err                    error
@@ -413,8 +413,8 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		}
 	}
 
-	var recordSepSeq byteSequenceShort
-	var controlRuneScape, escapeControlRuneScape runeScape4
+	var recordSepSeq runeEncoder
+	var controlRuneScape, escapeControlRuneScape runeSet4
 
 	escapeControlRuneScape.addRuneUniqueUnchecked(cfg.quote)
 	controlRuneScape.addRuneUniqueUnchecked(cfg.quote)
@@ -424,20 +424,20 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		controlRuneScape.addRuneUniqueUnchecked('\r')
 		controlRuneScape.addRuneUniqueUnchecked('\n')
 		if cfg.recordSepRuneLen == 2 {
-			recordSepSeq = byteSequenceShort{2, [...]byte{'\r', '\n', 0, 0}}
+			recordSepSeq = runeEncoder{2, [...]byte{'\r', '\n', 0, 0}}
 			break
 		}
-		recordSepSeq = newSeq(cfg.recordSep[0])
+		recordSepSeq = newRuneEncoder(cfg.recordSep[0])
 	default:
 		controlRuneScape.addRuneUniqueUnchecked(cfg.recordSep[0])
-		recordSepSeq = newSeq(cfg.recordSep[0])
+		recordSepSeq = newRuneEncoder(cfg.recordSep[0])
 	}
 
-	fieldSepSeq := newSeq(cfg.fieldSeparator)
-	quoteSeq := newSeq(cfg.quote)
-	twoQuotesSeq := newSeq2(cfg.quote, cfg.quote)
+	fieldSepSeq := newRuneEncoder(cfg.fieldSeparator)
+	quoteSeq := newRuneEncoder(cfg.quote)
+	twoQuotesSeq := newTwoRuneEncoder(cfg.quote, cfg.quote)
 
-	var escapedQuoteSeq, escapedEscapeSeq byteSequenceLong
+	var escapedQuoteSeq, escapedEscapeSeq twoRuneEncoder
 	var escape rune
 	if !cfg.escapeSet {
 		escape = invalidControlRune
@@ -445,8 +445,8 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		escapedEscapeSeq = twoQuotesSeq
 	} else {
 		escape = cfg.escape
-		escapedQuoteSeq = newSeq2(cfg.escape, cfg.quote)
-		escapedEscapeSeq = newSeq2(cfg.escape, cfg.escape)
+		escapedQuoteSeq = newTwoRuneEncoder(cfg.escape, cfg.quote)
+		escapedEscapeSeq = newTwoRuneEncoder(cfg.escape, cfg.escape)
 		escapeControlRuneScape.addRuneUniqueUnchecked(escape)
 		controlRuneScape.addRuneUniqueUnchecked(escape)
 	}
@@ -785,7 +785,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 		// and unlikely to be highly reused aspect
 		//
 		// I am open to a PR should that behavior be more desirable.
-		var newlineForWriteRuneScape runeScape4
+		var newlineForWriteRuneScape runeSet4
 		for _, r := range newlineRunesForWrite {
 			newlineForWriteRuneScape.addRuneUniqueUnchecked(r)
 		}
