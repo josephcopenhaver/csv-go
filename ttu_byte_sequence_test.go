@@ -1,10 +1,17 @@
 package csv
 
 import (
+	"math/rand"
 	"testing"
 	"unicode/utf8"
 
 	"github.com/stretchr/testify/assert"
+)
+
+const (
+	utf16SurrogateCodePointStart   = 0xD800
+	utf16SurrogateCodePointEnd     = 0xDFFF
+	utf16SurrogateCodePointGapSize = utf16SurrogateCodePointEnd - utf16SurrogateCodePointStart + 1
 )
 
 const (
@@ -139,11 +146,11 @@ func Test_runeScape4_containsWideRune(t *testing.T) {
 		rs.addRune(test4ByteRune + 2)
 		rs.addRune(test4ByteRune + 3)
 
-		is.False(rs.containsRune(test4ByteRune + 4))
-		is.True(rs.containsRune(test4ByteRune + 3))
-		is.True(rs.containsRune(test4ByteRune + 2))
-		is.True(rs.containsRune(test4ByteRune + 1))
-		is.True(rs.containsRune(test4ByteRune))
+		is.False(rs._containsRune(test4ByteRune + 4))
+		is.True(rs._containsRune(test4ByteRune + 3))
+		is.True(rs._containsRune(test4ByteRune + 2))
+		is.True(rs._containsRune(test4ByteRune + 1))
+		is.True(rs._containsRune(test4ByteRune))
 	}
 
 	// adding the same wide rune twice should not change rune count
@@ -155,7 +162,7 @@ func Test_runeScape4_containsWideRune(t *testing.T) {
 
 		rs.addRune(test4ByteRune)
 		is.Equal(uint8(1), rs.numWideRunes)
-		is.False(rs.containsRune(test1ByteRune))
+		is.False(rs._containsRune(test1ByteRune))
 	}
 
 	// when there is a wide rune in the set but not in the search string
@@ -369,6 +376,52 @@ func Test_runeScape4_containsWideRune(t *testing.T) {
 		is.Equal(uint8(4), n)
 		is.Equal(int(4), i)
 	}
+
+	// when a random wide rune is added
+	//
+	// containsWideEndByte should be able to find it by last encoded byte form
+	// as well as full rune form.
+	{
+		var buf [utf8.UTFMax]byte
+		r := rune(rand.Intn(utf8.MaxRune+1-utf8.RuneSelf-utf16SurrogateCodePointGapSize) + utf8.RuneSelf)
+		if r >= utf16SurrogateCodePointStart {
+			r += utf16SurrogateCodePointGapSize
+		}
+
+		// added via addRuneUniqueUnchecked
+		{
+			var rs runeScape4
+			rs.addRuneUniqueUnchecked(r)
+
+			is.True(rs._containsWideEndByte(byte(r)), "r=%d", uint32(r))
+
+			// last 6 bits of the last byte in an encoded rune are always the
+			// last 6 bits of the codepoint rune value
+			is.True(rs._containsWideEndByte(byte(r)&0x3F), "r=%d", uint32(r))
+
+			// but for good measure, lets test the long way too
+			n := utf8.EncodeRune(buf[:], r)
+			is.NotEqual(1, n)
+			is.True(rs._containsWideEndByte(buf[n-1]), "r=%d", uint32(r))
+		}
+
+		// added via addWideRune
+		{
+			var rs runeScape4
+			rs.addWideRune(r)
+
+			is.True(rs._containsWideEndByte(byte(r)), "r=%d", uint32(r))
+
+			// last 6 bits of the last byte in an encoded rune are always the
+			// last 6 bits of the codepoint rune value
+			is.True(rs._containsWideEndByte(byte(r)&0x3F), "r=%d", uint32(r))
+
+			// but for good measure, lets test the long way too
+			n := utf8.EncodeRune(buf[:], r)
+			is.NotEqual(1, n)
+			is.True(rs._containsWideEndByte(buf[n-1]), "r=%d", uint32(r))
+		}
+	}
 }
 
 func Test_runeScape6_containsWideRune(t *testing.T) {
@@ -384,13 +437,13 @@ func Test_runeScape6_containsWideRune(t *testing.T) {
 		rs.addRune(test4ByteRune + 4)
 		rs.addRune(test4ByteRune + 5)
 
-		is.False(rs.containsRune(test4ByteRune + 6))
-		is.True(rs.containsRune(test4ByteRune + 5))
-		is.True(rs.containsRune(test4ByteRune + 4))
-		is.True(rs.containsRune(test4ByteRune + 3))
-		is.True(rs.containsRune(test4ByteRune + 2))
-		is.True(rs.containsRune(test4ByteRune + 1))
-		is.True(rs.containsRune(test4ByteRune))
+		is.False(rs._containsRune(test4ByteRune + 6))
+		is.True(rs._containsRune(test4ByteRune + 5))
+		is.True(rs._containsRune(test4ByteRune + 4))
+		is.True(rs._containsRune(test4ByteRune + 3))
+		is.True(rs._containsRune(test4ByteRune + 2))
+		is.True(rs._containsRune(test4ByteRune + 1))
+		is.True(rs._containsRune(test4ByteRune))
 	}
 
 	// adding the same wide rune twice to a runeScape6 should not change rune count
@@ -402,7 +455,7 @@ func Test_runeScape6_containsWideRune(t *testing.T) {
 
 		rs.addRune(test4ByteRune)
 		is.Equal(uint8(1), rs.numWideRunes)
-		is.False(rs.containsRune(test1ByteRune))
+		is.False(rs._containsRune(test1ByteRune))
 	}
 
 	// when there is a mix of wide rune in the set and in the search string and hit is an ascii rune
@@ -461,5 +514,51 @@ func Test_runeScape6_containsWideRune(t *testing.T) {
 		is.Equal(test4ByteRune, r)
 		is.Equal(uint8(4), n)
 		is.Equal(int(4), i)
+	}
+
+	// when a random wide rune is added
+	//
+	// containsWideEndByte should be able to find it by last encoded byte form
+	// as well as full rune form.
+	{
+		var buf [utf8.UTFMax]byte
+		r := rune(rand.Intn(utf8.MaxRune+1-utf8.RuneSelf-utf16SurrogateCodePointGapSize) + utf8.RuneSelf)
+		if r >= utf16SurrogateCodePointStart {
+			r += utf16SurrogateCodePointGapSize
+		}
+
+		// added via addRuneUniqueUnchecked
+		{
+			var rs runeScape6
+			rs.addRuneUniqueUnchecked(r)
+
+			is.True(rs._containsWideEndByte(byte(r)), "r=%d", uint32(r))
+
+			// last 6 bits of the last byte in an encoded rune are always the
+			// last 6 bits of the codepoint rune value
+			is.True(rs._containsWideEndByte(byte(r)&0x3F), "r=%d", uint32(r))
+
+			// but for good measure, lets test the long way too
+			n := utf8.EncodeRune(buf[:], r)
+			is.NotEqual(1, n)
+			is.True(rs._containsWideEndByte(buf[n-1]), "r=%d", uint32(r))
+		}
+
+		// added via addWideRune
+		{
+			var rs runeScape6
+			rs.addWideRune(r)
+
+			is.True(rs._containsWideEndByte(byte(r)), "r=%d", uint32(r))
+
+			// last 6 bits of the last byte in an encoded rune are always the
+			// last 6 bits of the codepoint rune value
+			is.True(rs._containsWideEndByte(byte(r)&0x3F), "r=%d", uint32(r))
+
+			// but for good measure, lets test the long way too
+			n := utf8.EncodeRune(buf[:], r)
+			is.NotEqual(1, n)
+			is.True(rs._containsWideEndByte(buf[n-1]), "r=%d", uint32(r))
+		}
 	}
 }
