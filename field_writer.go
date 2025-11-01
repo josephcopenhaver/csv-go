@@ -252,9 +252,15 @@ func (FieldWriterFactory) Time(t time.Time) FieldWriter {
 // ErrInvalidRune error.
 func (FieldWriterFactory) Rune(r rune) FieldWriter {
 	numBytes := utf8.RuneLen(r)
-	if numBytes == -1 {
+	switch numBytes {
+	case -1:
 		return FieldWriter{
 			kind: wfkRune,
+		}
+	case 1:
+		return FieldWriter{
+			kind:     wfkRune,
+			_64_bits: (uint64(1) << (8 * 4)) | uint64(r),
 		}
 	}
 

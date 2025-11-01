@@ -26,7 +26,7 @@ func Benchmark_runeScape4_containsWideRune(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = rs.containsWideRune(searchRune)
+		_ = (rs._containsWideEndByte(byte(searchRune)) && rs._containsWideRune(searchRune))
 	}
 }
 
@@ -54,6 +54,6 @@ func Benchmark_runeScape6_containsWideRune(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = rs.containsWideRune(searchRune)
+		_ = (rs._containsWideEndByte(byte(searchRune)) && rs._containsWideRune(searchRune))
 	}
 }
