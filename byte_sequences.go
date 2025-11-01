@@ -1,7 +1,6 @@
 package csv
 
 import (
-	"math/bits"
 	"unicode/utf8"
 )
 
@@ -125,7 +124,8 @@ func (rs *runeScape4) containsByte(b byte) bool {
 }
 
 // _containsWideEndByte works with either the last byte of a utf8 encoded rune
-// or the last 8 bits of a rune/code-point
+// or the last 8 bits of a rune/code-point since it only cares about the lower 6 bits
+// and the first two bits are guaranteed to be `10` or noise by the calling context natures.
 func (rs *runeScape4) _containsWideEndByte(b byte) bool {
 	return (rs.wideEndByteBits[(b>>5)&1] & (uint32(1) << (b & 31))) != 0
 }
@@ -226,8 +226,13 @@ func (rs *runeScape4) indexAnyInString(s string) int {
 		return -1
 	}
 
+	var i int
 	lastWideStartIdx := -utf8.UTFMax
-	for i := range len(s) {
+	for {
+		if i >= len(s) {
+			return -1
+		}
+
 		b := s[i]
 		switch {
 		case b < utf8.RuneSelf:
@@ -237,28 +242,55 @@ func (rs *runeScape4) indexAnyInString(s string) int {
 		case b >= utf8StartWideRuneMinByteValue:
 			lastWideStartIdx = i
 		case (b & utf8ContinuationByteMask) == utf8AfterMaskIsContinuationByteValue:
-			if ( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) && (i-lastWideStartIdx) < utf8.UTFMax && (lastWideStartIdx+bits.LeadingZeros8(^s[lastWideStartIdx])-1 == i) {
-				// verified already that
-				// 1 - the possible end utf8 multi-byte sequence is an ending value in the set
-				// 2 - the distance from the last known start of multi-byte sequence is close enough for this byte to be an ending byte
-				// 3 - the current index is indeed the end byte of the potentially invalid sequence
-				//
-				// so now need to verify that
-				// 1 - the rune decodes properly out of the bytes
-				// 2 - then we need to ensure that the full rune is recognized as in the set
-				if r, n := utf8.DecodeRuneInString(s[lastWideStartIdx:]); n > 1 && rs._containsWideRune(r) {
-					return lastWideStartIdx
-				}
+			if !(( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) && (i-lastWideStartIdx) < utf8.UTFMax) {
+				break
 			}
 
-			// note: there could be bytes in multi-byte runes that are exactly the same as the ending byte which means that a specially crafted message could
-			// cause repeated table lookups by a factor of 3 at worst. It might be better to scan-forward and bail-out so the next rune can be fully loaded.
+			// verified already that
+			// 1 - the possible end utf8 multi-byte sequence is an ending value in the set
+			// 2 - the distance from the last known start of multi-byte sequence is close enough for this byte to be an ending byte
+			// 3 - the current index is indeed the end byte of the potentially invalid sequence
 			//
-			// TODO: assess the above and fix/adjust if needed.
-		}
-	}
+			// so now need to verify that
+			// 1 - the rune decodes properly out of the bytes
+			// 2 - then we need to ensure that the full rune is recognized as in the set
 
-	return -1
+			r, n := utf8.DecodeRuneInString(s[lastWideStartIdx:])
+			switch n {
+			case 1:
+				// failed to decode the code-point, so clear state and carry on
+				lastWideStartIdx = -utf8.UTFMax
+			case (i - lastWideStartIdx + 1):
+				// decode was successful and end byte is correct, so just check that the full rune matches
+				if rs._containsWideRune(r) {
+					return lastWideStartIdx
+				}
+
+				// not a match, so clear state and carry on
+				lastWideStartIdx = -utf8.UTFMax
+			default:
+				// decode was successful and end byte is NOT correct, so check if the end is further down the line
+				if n < (i - lastWideStartIdx + 1) {
+					// nope, we passed the ending of this one, so clear state and carry on
+					lastWideStartIdx = -utf8.UTFMax
+					break
+				}
+
+				// decode was successful but we need to fully revalidate the rune / code-point end to end
+
+				if ( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(uint32(r)>>5)&1] & (uint32(1) << (r & 31))) != 0) && rs._containsWideRune(r) {
+					return lastWideStartIdx
+				}
+
+				// try the next multi-byte sequence because this one was a bust
+				lastWideStartIdx = -utf8.UTFMax
+				i = lastWideStartIdx + n
+				continue
+			}
+		}
+
+		i++
+	}
 }
 
 func (rs *runeScape4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
@@ -273,8 +305,13 @@ func (rs *runeScape4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 		return 0, 0, -1
 	}
 
+	var i int
 	lastWideStartIdx := -utf8.UTFMax
-	for i := range len(s) {
+	for {
+		if i >= len(s) {
+			return 0, 0, -1
+		}
+
 		b := s[i]
 		switch {
 		case b < utf8.RuneSelf:
@@ -284,28 +321,55 @@ func (rs *runeScape4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 		case b >= utf8StartWideRuneMinByteValue:
 			lastWideStartIdx = i
 		case (b & utf8ContinuationByteMask) == utf8AfterMaskIsContinuationByteValue:
-			if ( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) && (i-lastWideStartIdx) < utf8.UTFMax && (lastWideStartIdx+bits.LeadingZeros8(^s[lastWideStartIdx])-1 == i) {
-				// verified already that
-				// 1 - the possible end utf8 multi-byte sequence is an ending value in the set
-				// 2 - the distance from the last known start of multi-byte sequence is close enough for this byte to be an ending byte
-				// 3 - the current index is indeed the end byte of the potentially invalid sequence
-				//
-				// so now need to verify that
-				// 1 - the rune decodes properly out of the bytes
-				// 2 - then we need to ensure that the full rune is recognized as in the set
-				if r, n := utf8.DecodeRuneInString(s[lastWideStartIdx:]); n > 1 && rs._containsWideRune(r) {
-					return r, uint8(n), lastWideStartIdx
-				}
+			if !(( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) && (i-lastWideStartIdx) < utf8.UTFMax) {
+				break
 			}
 
-			// note: there could be bytes in multi-byte runes that are exactly the same as the ending byte which means that a specially crafted message could
-			// cause repeated table lookups by a factor of 3 at worst. It might be better to scan-forward and bail-out so the next rune can be fully loaded.
+			// verified already that
+			// 1 - the possible end utf8 multi-byte sequence is an ending value in the set
+			// 2 - the distance from the last known start of multi-byte sequence is close enough for this byte to be an ending byte
+			// 3 - the current index is indeed the end byte of the potentially invalid sequence
 			//
-			// TODO: assess the above and fix/adjust if needed.
-		}
-	}
+			// so now need to verify that
+			// 1 - the rune decodes properly out of the bytes
+			// 2 - then we need to ensure that the full rune is recognized as in the set
 
-	return 0, 0, -1
+			r, n := utf8.DecodeRuneInString(s[lastWideStartIdx:])
+			switch n {
+			case 1:
+				// failed to decode the code-point, so clear state and carry on
+				lastWideStartIdx = -utf8.UTFMax
+			case (i - lastWideStartIdx + 1):
+				// decode was successful and end byte is correct, so just check that the full rune matches
+				if rs._containsWideRune(r) {
+					return r, uint8(n), lastWideStartIdx
+				}
+
+				// not a match, so clear state and carry on
+				lastWideStartIdx = -utf8.UTFMax
+			default:
+				// decode was successful and end byte is NOT correct, so check if the end is further down the line
+				if n < (i - lastWideStartIdx + 1) {
+					// nope, we passed the ending of this one, so clear state and carry on
+					lastWideStartIdx = -utf8.UTFMax
+					break
+				}
+
+				// decode was successful but we need to fully revalidate the rune / code-point end to end
+
+				if ( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(uint32(r)>>5)&1] & (uint32(1) << (r & 31))) != 0) && rs._containsWideRune(r) {
+					return r, uint8(n), lastWideStartIdx
+				}
+
+				// try the next multi-byte sequence because this one was a bust
+				lastWideStartIdx = -utf8.UTFMax
+				i = lastWideStartIdx + n
+				continue
+			}
+		}
+
+		i++
+	}
 }
 
 func (rs *runeScape4) indexAnyInBytes(p []byte) int {
@@ -319,8 +383,13 @@ func (rs *runeScape4) indexAnyInBytes(p []byte) int {
 		return -1
 	}
 
+	var i int
 	lastWideStartIdx := -utf8.UTFMax
-	for i := range len(p) {
+	for {
+		if i >= len(p) {
+			return -1
+		}
+
 		b := p[i]
 		switch {
 		case b < utf8.RuneSelf:
@@ -330,28 +399,55 @@ func (rs *runeScape4) indexAnyInBytes(p []byte) int {
 		case b >= utf8StartWideRuneMinByteValue:
 			lastWideStartIdx = i
 		case (b & utf8ContinuationByteMask) == utf8AfterMaskIsContinuationByteValue:
-			if ( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) && (i-lastWideStartIdx) < utf8.UTFMax && (lastWideStartIdx+bits.LeadingZeros8(^p[lastWideStartIdx])-1 == i) {
-				// verified already that
-				// 1 - the possible end utf8 multi-byte sequence is an ending value in the set
-				// 2 - the distance from the last known start of multi-byte sequence is close enough for this byte to be an ending byte
-				// 3 - the current index is indeed the end byte of the potentially invalid sequence
-				//
-				// so now need to verify that
-				// 1 - the rune decodes properly out of the bytes
-				// 2 - then we need to ensure that the full rune is recognized as in the set
-				if r, n := utf8.DecodeRune(p[lastWideStartIdx:]); n > 1 && rs._containsWideRune(r) {
-					return lastWideStartIdx
-				}
+			if !(( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) && (i-lastWideStartIdx) < utf8.UTFMax) {
+				break
 			}
 
-			// note: there could be bytes in multi-byte runes that are exactly the same as the ending byte which means that a specially crafted message could
-			// cause repeated table lookups by a factor of 3 at worst. It might be better to scan-forward and bail-out so the next rune can be fully loaded.
+			// verified already that
+			// 1 - the possible end utf8 multi-byte sequence is an ending value in the set
+			// 2 - the distance from the last known start of multi-byte sequence is close enough for this byte to be an ending byte
+			// 3 - the current index is indeed the end byte of the potentially invalid sequence
 			//
-			// TODO: assess the above and fix/adjust if needed.
-		}
-	}
+			// so now need to verify that
+			// 1 - the rune decodes properly out of the bytes
+			// 2 - then we need to ensure that the full rune is recognized as in the set
 
-	return -1
+			r, n := utf8.DecodeRune(p[lastWideStartIdx:])
+			switch n {
+			case 1:
+				// failed to decode the code-point, so clear state and carry on
+				lastWideStartIdx = -utf8.UTFMax
+			case (i - lastWideStartIdx + 1):
+				// decode was successful and end byte is correct, so just check that the full rune matches
+				if rs._containsWideRune(r) {
+					return lastWideStartIdx
+				}
+
+				// not a match, so clear state and carry on
+				lastWideStartIdx = -utf8.UTFMax
+			default:
+				// decode was successful and end byte is NOT correct, so check if the end is further down the line
+				if n < (i - lastWideStartIdx + 1) {
+					// nope, we passed the ending of this one, so clear state and carry on
+					lastWideStartIdx = -utf8.UTFMax
+					break
+				}
+
+				// decode was successful but we need to fully revalidate the rune / code-point end to end
+
+				if ( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(uint32(r)>>5)&1] & (uint32(1) << (r & 31))) != 0) && rs._containsWideRune(r) {
+					return lastWideStartIdx
+				}
+
+				// try the next multi-byte sequence because this one was a bust
+				lastWideStartIdx = -utf8.UTFMax
+				i = lastWideStartIdx + n
+				continue
+			}
+		}
+
+		i++
+	}
 }
 
 // indexAnyRuneLenInBytes finds the index of a rune in a byte sequence
@@ -369,8 +465,13 @@ func (rs *runeScape4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 		return 0, 0, -1
 	}
 
+	var i int
 	lastWideStartIdx := -utf8.UTFMax
-	for i := range len(p) {
+	for {
+		if i >= len(p) {
+			return 0, 0, -1
+		}
+
 		b := p[i]
 		switch {
 		case b < utf8.RuneSelf:
@@ -380,28 +481,55 @@ func (rs *runeScape4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 		case b >= utf8StartWideRuneMinByteValue:
 			lastWideStartIdx = i
 		case (b & utf8ContinuationByteMask) == utf8AfterMaskIsContinuationByteValue:
-			if ( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) && (i-lastWideStartIdx) < utf8.UTFMax && (lastWideStartIdx+bits.LeadingZeros8(^p[lastWideStartIdx])-1 == i) {
-				// verified already that
-				// 1 - the possible end utf8 multi-byte sequence is an ending value in the set
-				// 2 - the distance from the last known start of multi-byte sequence is close enough for this byte to be an ending byte
-				// 3 - the current index is indeed the end byte of the potentially invalid sequence
-				//
-				// so now need to verify that
-				// 1 - the rune decodes properly out of the bytes
-				// 2 - then we need to ensure that the full rune is recognized as in the set
-				if r, n := utf8.DecodeRune(p[lastWideStartIdx:]); n > 1 && rs._containsWideRune(r) {
-					return r, uint8(n), lastWideStartIdx
-				}
+			if !(( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) && (i-lastWideStartIdx) < utf8.UTFMax) {
+				break
 			}
 
-			// note: there could be bytes in multi-byte runes that are exactly the same as the ending byte which means that a specially crafted message could
-			// cause repeated table lookups by a factor of 3 at worst. It might be better to scan-forward and bail-out so the next rune can be fully loaded.
+			// verified already that
+			// 1 - the possible end utf8 multi-byte sequence is an ending value in the set
+			// 2 - the distance from the last known start of multi-byte sequence is close enough for this byte to be an ending byte
+			// 3 - the current index is indeed the end byte of the potentially invalid sequence
 			//
-			// TODO: assess the above and fix/adjust if needed.
-		}
-	}
+			// so now need to verify that
+			// 1 - the rune decodes properly out of the bytes
+			// 2 - then we need to ensure that the full rune is recognized as in the set
 
-	return 0, 0, -1
+			r, n := utf8.DecodeRune(p[lastWideStartIdx:])
+			switch n {
+			case 1:
+				// failed to decode the code-point, so clear state and carry on
+				lastWideStartIdx = -utf8.UTFMax
+			case (i - lastWideStartIdx + 1):
+				// decode was successful and end byte is correct, so just check that the full rune matches
+				if rs._containsWideRune(r) {
+					return r, uint8(n), lastWideStartIdx
+				}
+
+				// not a match, so clear state and carry on
+				lastWideStartIdx = -utf8.UTFMax
+			default:
+				// decode was successful and end byte is NOT correct, so check if the end is further down the line
+				if n < (i - lastWideStartIdx + 1) {
+					// nope, we passed the ending of this one, so clear state and carry on
+					lastWideStartIdx = -utf8.UTFMax
+					break
+				}
+
+				// decode was successful but we need to fully revalidate the rune / code-point end to end
+
+				if ( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(uint32(r)>>5)&1] & (uint32(1) << (r & 31))) != 0) && rs._containsWideRune(r) {
+					return r, uint8(n), lastWideStartIdx
+				}
+
+				// try the next multi-byte sequence because this one was a bust
+				lastWideStartIdx = -utf8.UTFMax
+				i = lastWideStartIdx + n
+				continue
+			}
+		}
+
+		i++
+	}
 }
 
 type runeScape6 struct {
@@ -440,7 +568,8 @@ func (rs *runeScape6) addByte(b byte) {
 }
 
 // _containsWideEndByte works with either the last byte of a utf8 encoded rune
-// or the last 8 bits of a rune/code-point
+// or the last 8 bits of a rune/code-point since it only cares about the lower 6 bits
+// and the first two bits are guaranteed to be `10` or noise by the calling context natures.
 func (rs *runeScape6) _containsWideEndByte(b byte) bool {
 	return (rs.wideEndByteBits[(b>>5)&1] & (uint32(1) << (b & 31))) != 0
 }
@@ -546,37 +675,69 @@ func (rs *runeScape6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 		return 0, 0, -1
 	}
 
+	var i int
 	lastWideStartIdx := -utf8.UTFMax
-	for i := range len(p) {
+	for {
+		if i >= len(p) {
+			return 0, 0, -1
+		}
+
 		b := p[i]
 		switch {
 		case b < utf8.RuneSelf:
-			if /* inlined call to _containsByte: */ (rs.singleByteBits[(b>>6)&1] & (uint64(1) << (b & 63))) != 0 {
+			if /* inlined call to containsByte: */ (rs.singleByteBits[(b>>6)&1] & (uint64(1) << (b & 63))) != 0 {
 				return rune(b), 1, i
 			}
 		case b >= utf8StartWideRuneMinByteValue:
 			lastWideStartIdx = i
 		case (b & utf8ContinuationByteMask) == utf8AfterMaskIsContinuationByteValue:
-			if ( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) && (i-lastWideStartIdx) < utf8.UTFMax && (lastWideStartIdx+bits.LeadingZeros8(^p[lastWideStartIdx])-1 == i) {
-				// verified already that
-				// 1 - the possible end utf8 multi-byte sequence is an ending value in the set
-				// 2 - the distance from the last known start of multi-byte sequence is close enough for this byte to be an ending byte
-				// 3 - the current index is indeed the end byte of the potentially invalid sequence
-				//
-				// so now need to verify that
-				// 1 - the rune decodes properly out of the bytes
-				// 2 - then we need to ensure that the full rune is recognized as in the set
-				if r, n := utf8.DecodeRune(p[lastWideStartIdx:]); n > 1 && rs._containsWideRune(r) {
-					return r, uint8(n), lastWideStartIdx
-				}
+			if !(( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) && (i-lastWideStartIdx) < utf8.UTFMax) {
+				break
 			}
 
-			// note: there could be bytes in multi-byte runes that are exactly the same as the ending byte which means that a specially crafted message could
-			// cause repeated table lookups by a factor of 3 at worst. It might be better to scan-forward and bail-out so the next rune can be fully loaded.
+			// verified already that
+			// 1 - the possible end utf8 multi-byte sequence is an ending value in the set
+			// 2 - the distance from the last known start of multi-byte sequence is close enough for this byte to be an ending byte
+			// 3 - the current index is indeed the end byte of the potentially invalid sequence
 			//
-			// TODO: assess the above and fix/adjust if needed.
-		}
-	}
+			// so now need to verify that
+			// 1 - the rune decodes properly out of the bytes
+			// 2 - then we need to ensure that the full rune is recognized as in the set
 
-	return 0, 0, -1
+			r, n := utf8.DecodeRune(p[lastWideStartIdx:])
+			switch n {
+			case 1:
+				// failed to decode the code-point, so clear state and carry on
+				lastWideStartIdx = -utf8.UTFMax
+			case (i - lastWideStartIdx + 1):
+				// decode was successful and end byte is correct, so just check that the full rune matches
+				if rs._containsWideRune(r) {
+					return r, uint8(n), lastWideStartIdx
+				}
+
+				// not a match, so clear state and carry on
+				lastWideStartIdx = -utf8.UTFMax
+			default:
+				// decode was successful and end byte is NOT correct, so check if the end is further down the line
+				if n < (i - lastWideStartIdx + 1) {
+					// nope, we passed the ending of this one, so clear state and carry on
+					lastWideStartIdx = -utf8.UTFMax
+					break
+				}
+
+				// decode was successful but we need to fully revalidate the rune / code-point end to end
+
+				if ( /* inlined call to _containsWideEndByte: */ (rs.wideEndByteBits[(uint32(r)>>5)&1] & (uint32(1) << (r & 31))) != 0) && rs._containsWideRune(r) {
+					return r, uint8(n), lastWideStartIdx
+				}
+
+				// try the next multi-byte sequence because this one was a bust
+				lastWideStartIdx = -utf8.UTFMax
+				i = lastWideStartIdx + n
+				continue
+			}
+		}
+
+		i++
+	}
 }
