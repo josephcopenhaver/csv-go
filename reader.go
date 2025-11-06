@@ -720,7 +720,7 @@ type rCfg struct {
 }
 
 type fastReader struct {
-	controlRuneScape runeScape6
+	controlRuneScape runeSet6
 	rawBuf           []byte
 	rawIndex         int
 	//
@@ -801,7 +801,7 @@ func (cfg *rCfg) validate() error {
 	if cfg.discoverRecordSeparator {
 		cfg.recordSepRuneLen = 0
 		// TODO: instead of setting a default value that is not reachable
-		// under normal circumstances, lets make sure the value cannot be used
+		// under normal circumstances, make sure the value cannot be used
 		// until after the separator is fully resolved by switching handlers.
 		//
 		// note that there is a problem
@@ -1033,7 +1033,7 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 	// - in-quoted-field
 	// - in-escape
 
-	var controlRuneScape runeScape6
+	var controlRuneScape runeSet6
 	controlRuneScape.addRuneUniqueUnchecked(cfg.fieldSeparator)
 
 	var bitFlags rFlag
@@ -1078,8 +1078,8 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 		controlRuneScape.addByte(asciiLineFeed)
 		controlRuneScape.addByte(asciiVerticalTab)
 		controlRuneScape.addByte(asciiFormFeed)
-		controlRuneScape.addWideRune(utf8NextLine)
-		controlRuneScape.addWideRune(utf8LineSeparator)
+		controlRuneScape.addMBRune(utf8NextLine)
+		controlRuneScape.addMBRune(utf8LineSeparator)
 	}
 
 	if cfg.errOnNewlineInUnquotedField {
@@ -1685,7 +1685,7 @@ type Reader interface {
 
 type internalReader any
 
-func newReader(cfg rCfg, controlRuneScape runeScape6, headers []string, rowBuf []string, bitFlags rFlag) (Reader, internalReader) {
+func newReader(cfg rCfg, controlRuneScape runeSet6, headers []string, rowBuf []string, bitFlags rFlag) (Reader, internalReader) {
 
 	r := &readerStrat{}
 

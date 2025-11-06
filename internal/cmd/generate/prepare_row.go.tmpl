@@ -959,7 +959,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					}
 
 					// preserve field separator
-					var controlRuneScape runeScape6
+					var controlRuneScape runeSet6
 					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
 					controlRuneScape.addRuneUniqueUnchecked(c)
 

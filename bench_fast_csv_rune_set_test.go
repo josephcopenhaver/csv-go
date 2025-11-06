@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func Benchmark_runeScape4_containsWideRune(b *testing.B) {
+func Benchmark_runeSet4_containsMBRune(b *testing.B) {
 	const (
 		// cent sign
 		test2ByteRune = '\u00A2'
@@ -16,7 +16,7 @@ func Benchmark_runeScape4_containsWideRune(b *testing.B) {
 
 	b.ReportAllocs()
 
-	var rs runeScape4
+	var rs runeSet4
 	rs.addRune(test2ByteRune)
 	rs.addRune(test3ByteRune)
 	rs.addRune(test4ByteRune)
@@ -26,11 +26,11 @@ func Benchmark_runeScape4_containsWideRune(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = rs.containsWideRune(searchRune)
+		_ = rs.containsMBRune(searchRune)
 	}
 }
 
-func Benchmark_runeScape6_containsWideRune(b *testing.B) {
+func Benchmark_runeSet6_containsMBRune(b *testing.B) {
 	const (
 		// cent sign
 		test2ByteRune = '\u00A2'
@@ -42,7 +42,7 @@ func Benchmark_runeScape6_containsWideRune(b *testing.B) {
 
 	b.ReportAllocs()
 
-	var rs runeScape6
+	var rs runeSet6
 	rs.addRune(test2ByteRune)
 	rs.addRune(test3ByteRune)
 	rs.addRune(test4ByteRune)
@@ -54,6 +54,6 @@ func Benchmark_runeScape6_containsWideRune(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = rs.containsWideRune(searchRune)
+		_ = rs.containsMBRune(searchRune)
 	}
 }

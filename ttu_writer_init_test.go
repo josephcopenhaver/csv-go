@@ -111,6 +111,8 @@ func TestUnitWriterInitializationBufferPaths(t *testing.T) {
 }
 
 func Test_isFieldWriterRune(t *testing.T) {
+	t.Parallel()
+
 	is := assert.New(t)
 
 	is.False(isFieldWriterRune([]rune{'|'}))

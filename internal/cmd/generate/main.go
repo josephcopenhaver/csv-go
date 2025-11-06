@@ -19,6 +19,9 @@ var tsPrepareRow string
 //go:embed write.go.tmpl
 var tsWrite string
 
+//go:embed fast_csv_rune_set.go.tmpl
+var tsRuneSet string
+
 func parse(s string) *template.Template {
 	t, err := template.New("").Option("missingkey=error").Parse(s)
 	if err != nil {
@@ -145,6 +148,42 @@ func main() {
 			{Memclear: true},
 		})
 	}
+
+	// render write strategies
+	{
+		t := parse(tsRuneSet)
+
+		type methodCfg struct {
+			Name    string
+			ArgType string
+			Returns string
+		}
+
+		type cfg struct {
+			MultiByteSize uint8
+			UsageType     string
+			UsageStruct   string
+			Methods       []methodCfg
+		}
+
+		render := renderer[cfg](&buf)
+
+		render(t, []cfg{
+			{4, "writing", "Writer", []methodCfg{
+				{"", "Bytes", "int"},
+				{"", "String", "int"},
+				{"RuneLen", "Bytes", "(rune, uint8, int)"},
+				{"RuneLen", "String", "(rune, uint8, int)"},
+			}},
+			{6, "reading", "Reader", []methodCfg{
+				{"", "Bytes", "int"},
+				{"", "String", "int"},
+				{"RuneLen", "Bytes", "(rune, uint8, int)"},
+				{"RuneLen", "String", "(rune, uint8, int)"},
+			}},
+		})
+	}
+
 	b := buf.Bytes()
 
 	//

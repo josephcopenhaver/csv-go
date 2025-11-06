@@ -94,7 +94,7 @@ func TestUnitReaderDiscoverRecordSeparator(t *testing.T) {
 
 					// verify control runes initialized as expected
 					{
-						var expControlRuneScape runeScape6
+						var expControlRuneScape runeSet6
 
 						expControlRuneScape.addRuneUniqueUnchecked(cri.fieldSeparator)
 						expControlRuneScape.addRuneUniqueUnchecked(cri.quote)
@@ -128,7 +128,7 @@ func TestUnitReaderDiscoverRecordSeparator(t *testing.T) {
 
 					// verify control runes changed to a subset as expected
 					{
-						var expControlRuneScape runeScape6
+						var expControlRuneScape runeSet6
 
 						expControlRuneScape.addRuneUniqueUnchecked(cri.fieldSeparator)
 						{

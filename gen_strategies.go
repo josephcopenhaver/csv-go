@@ -959,7 +959,7 @@ func (r *fastReader) prepareRow() bool {
 					}
 
 					// preserve field separator
-					var controlRuneScape runeScape6
+					var controlRuneScape runeSet6
 					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
 					controlRuneScape.addRuneUniqueUnchecked(c)
 
@@ -2035,7 +2035,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					}
 
 					// preserve field separator
-					var controlRuneScape runeScape6
+					var controlRuneScape runeSet6
 					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
 					controlRuneScape.addRuneUniqueUnchecked(c)
 
@@ -2195,13 +2195,13 @@ func (w *Writer) writeRow_memclearOff(fields []FieldWriter) (int, error) {
 
 				b := src[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsByte(b) {
+					if !w.controlRuneScape.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsWideRune(r) {
+				} else if !w.controlRuneScape.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -2309,13 +2309,13 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 			if b := src[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsByte(b) {
+				if !w.controlRuneScape.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsWideRune(r) {
+			} else if !w.controlRuneScape.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -2403,7 +2403,7 @@ func (w *Writer) loadQFWithCheckUTF8_memclearOff(src []byte, scanIdx int) error 
 		}
 
 		if b := src[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsByte(b) {
+			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
 				scanIdx++
 				continue
 			}
@@ -2411,7 +2411,7 @@ func (w *Writer) loadQFWithCheckUTF8_memclearOff(src []byte, scanIdx int) error 
 			n = 1
 		} else if r, n = utf8.DecodeRune(src[scanIdx:]); n == 1 {
 			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsWideRune(r) {
+		} else if !w.escapeControlRuneScape.containsMBRune(r) {
 			scanIdx += n
 			continue
 		}
@@ -2491,13 +2491,13 @@ func (w *Writer) writeStrRow_memclearOff(fields []string) (int, error) {
 
 				b := s[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsByte(b) {
+					if !w.controlRuneScape.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsWideRune(r) {
+				} else if !w.controlRuneScape.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -2563,13 +2563,13 @@ FIRST_FIELD_WRITTEN:
 			}
 
 			if b := s[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsByte(b) {
+				if !w.controlRuneScape.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsWideRune(r) {
+			} else if !w.controlRuneScape.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -2656,7 +2656,7 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOff(s string, scanIdx int) error
 		}
 
 		if b := s[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsByte(b) {
+			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
 				scanIdx++
 				continue
 			}
@@ -2664,7 +2664,7 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOff(s string, scanIdx int) error
 			n = 1
 		} else if r, n = utf8.DecodeRuneInString(s[scanIdx:]); n == 1 {
 			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsWideRune(r) {
+		} else if !w.escapeControlRuneScape.containsMBRune(r) {
 			scanIdx += n
 			continue
 		}
@@ -2796,13 +2796,13 @@ func (w *Writer) writeRow_memclearOn(fields []FieldWriter) (int, error) {
 
 				b := src[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsByte(b) {
+					if !w.controlRuneScape.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsWideRune(r) {
+				} else if !w.controlRuneScape.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -2910,13 +2910,13 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 			if b := src[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsByte(b) {
+				if !w.controlRuneScape.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsWideRune(r) {
+			} else if !w.controlRuneScape.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -3004,7 +3004,7 @@ func (w *Writer) loadQFWithCheckUTF8_memclearOn(src []byte, scanIdx int) error {
 		}
 
 		if b := src[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsByte(b) {
+			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
 				scanIdx++
 				continue
 			}
@@ -3012,7 +3012,7 @@ func (w *Writer) loadQFWithCheckUTF8_memclearOn(src []byte, scanIdx int) error {
 			n = 1
 		} else if r, n = utf8.DecodeRune(src[scanIdx:]); n == 1 {
 			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsWideRune(r) {
+		} else if !w.escapeControlRuneScape.containsMBRune(r) {
 			scanIdx += n
 			continue
 		}
@@ -3092,13 +3092,13 @@ func (w *Writer) writeStrRow_memclearOn(fields []string) (int, error) {
 
 				b := s[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsByte(b) {
+					if !w.controlRuneScape.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsWideRune(r) {
+				} else if !w.controlRuneScape.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -3164,13 +3164,13 @@ FIRST_FIELD_WRITTEN:
 			}
 
 			if b := s[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsByte(b) {
+				if !w.controlRuneScape.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsWideRune(r) {
+			} else if !w.controlRuneScape.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -3257,7 +3257,7 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOn(s string, scanIdx int) error 
 		}
 
 		if b := s[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsByte(b) {
+			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
 				scanIdx++
 				continue
 			}
@@ -3265,7 +3265,7 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOn(s string, scanIdx int) error 
 			n = 1
 		} else if r, n = utf8.DecodeRuneInString(s[scanIdx:]); n == 1 {
 			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsWideRune(r) {
+		} else if !w.escapeControlRuneScape.containsMBRune(r) {
 			scanIdx += n
 			continue
 		}
@@ -3286,4 +3286,1231 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOn(s string, scanIdx int) error 
 
 		w.setRecordBuf(w.escapedEscapeSeq.appendText(w.recordBuf))
 	}
+}
+
+//
+// runeSetBase contains common behavior utilized by runeSet4 and runeSet6
+//
+
+type runeSetBase struct {
+	mbRuneCount uint8
+	singleBytes [8]uint32
+	mbByteEnds  [2]uint32
+}
+
+// addByte assumes that the byte is a valid Unicode value less than 128
+//
+// any change to this function likely needs to be replicated to addRuneUniqueUnchecked()
+func (rs *runeSetBase) addByte(b byte) {
+	rs.singleBytes[b>>5] |= (uint32(1) << (b & 31))
+}
+
+// containsSingleByteRune would normally only work correctly when the input byte is less than utf8.RuneSelf
+// however the bit set is wide enough to support all 256 bits - consuming 16 bytes more of memory to avoid
+// an if-check and a bit-mask (to ensure bounds check elimination kicks in) which has shown to be definitely
+// faster.
+func (rs *runeSetBase) containsSingleByteRune(b byte) bool {
+	return (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0
+}
+
+// internalContainsMBEndByte works with either the last byte of a utf8 encoded multi-byte rune
+// or the 8 least significant bits of a rune since it only cares about the lower 6 bits
+// and the first two bits are guaranteed to be `10` or noise by the nature of the calling context.
+func (rs *runeSetBase) internalContainsMBEndByte(b byte) bool {
+	return (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0
+}
+
+//
+// NOTE: non-generated contents relevant to runeSet4 are present in fast_csv_rune_set.go
+//
+
+// runeSet4 is useful for csv writing as the Writer will only have up to 4 multi-byte runes ever in config.
+//
+// The 4 suffix indicates that at most 4 multi-byte runes are supported by the algorithms within this struct
+// which is done for efficiency reasons.
+//
+// invariants:
+// - utilizing context maintains that there will never be more than 4 multi-byte runes placed in the set
+type runeSet4 struct {
+	runeSetBase
+	mbRunes [4]rune
+}
+
+// addRune assumes that the rune is a valid Unicode value
+func (rs *runeSet4) addRune(r rune) {
+	if r < utf8.RuneSelf {
+		rs.addByte(byte(r))
+		return
+	}
+
+	rs.addMBRune(r)
+}
+
+// internalContainsMBRune assumes that the rune is a valid Unicode value that encodes to more than one byte
+func (rs *runeSet4) internalContainsMBRune(r rune) bool {
+
+	// unwound the loop search to avoid loop overhead
+	//
+	// becomes a fast series of opcodes when compiled
+	//
+	// it is end-state equivalent to the following:
+	//
+	//
+	// for i := range rs.mbRuneCount {
+	// 	if rs.mbRunes[i] == r {
+	// 		return true
+	// 	}
+	// }
+	//
+	// return false
+
+	switch rs.mbRuneCount {
+	case 4:
+		return (rs.mbRunes[0] == r || rs.mbRunes[1] == r || rs.mbRunes[2] == r || rs.mbRunes[3] == r)
+	case 3:
+		return (rs.mbRunes[0] == r || rs.mbRunes[1] == r || rs.mbRunes[2] == r)
+	case 2:
+		return (rs.mbRunes[0] == r || rs.mbRunes[1] == r)
+	case 1:
+		return (rs.mbRunes[0] == r)
+	}
+
+	return false
+}
+
+func (rs *runeSet4) containsMBRune(r rune) bool {
+	fastEndCheckOK := ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(byte(r)>>5)&1] & (uint32(1) << (r & 31))) != 0)
+	return fastEndCheckOK && rs.internalContainsMBRune(r)
+}
+
+// addMBRune assumes that the rune is a valid Unicode value that encodes to more than one byte
+//
+// any change to this function likely needs to be replicated to addRuneUniqueUnchecked()
+func (rs *runeSet4) addMBRune(r rune) {
+	if rs.internalContainsMBRune(r) {
+		return
+	}
+
+	rs.mbRunes[rs.mbRuneCount] = r
+	rs.mbRuneCount++
+
+	rs.mbByteEnds[(byte(r)>>5)&1] |= (uint32(1) << (r & 31))
+}
+
+// internalContainsRune assumes that the rune is a valid Unicode value
+func (rs *runeSet4) internalContainsRune(r rune) bool {
+	if r < utf8.RuneSelf {
+		return ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[byte(r)>>5] & (uint32(1) << (r & 31))) != 0)
+	}
+
+	return rs.internalContainsMBRune(r)
+}
+
+// addRuneUniqueUnchecked assumes that the rune is a valid Unicode value that (if it is multi-byte when encoded) has not already been added before
+//
+// any change to this function likely needs to be replicated to addMBRune() or addByte()
+func (rs *runeSet4) addRuneUniqueUnchecked(r rune) {
+	if r < utf8.RuneSelf {
+		rs.addByte(byte(r))
+		return
+	}
+
+	rs.mbRunes[rs.mbRuneCount] = r
+	rs.mbRuneCount++
+
+	rs.mbByteEnds[(byte(r)>>5)&1] |= (uint32(1) << (r & 31))
+}
+
+func (rs *runeSet4) indexAnyInBytes(p []byte) int {
+	if rs.mbRuneCount == 0 {
+		for i, b := range p {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+				return i
+			}
+		}
+
+		return -1
+	}
+
+	inLen := len(p)
+	var i, mbRuneIdxDiff int
+	lastMBStartIdx := invalidMBStartIdx
+	for {
+		if i >= inLen {
+			return -1
+		}
+
+		b := p[i]
+	TOP_SWITCH:
+		switch {
+		case /* matched ascii character */ ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0):
+			return i
+		case /* matched start of multi-byte rune */ b >= startMBMin:
+			switch leadingOnes8(b) {
+			case 4:
+				if b <= startMBMax {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 3
+					break TOP_SWITCH
+				}
+			case 3:
+				lastMBStartIdx = i
+				mbRuneIdxDiff = 2
+				break TOP_SWITCH
+			case 2:
+				if b >= startMB2ByteMin {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 1
+					break TOP_SWITCH
+				}
+			}
+			// byte was not a valid utf8 start of multi-byte encoded rune value; reset the tracking state
+			lastMBStartIdx = invalidMBStartIdx
+		case /* matched continuation byte */ (b & contMBMask) == contMBVal:
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
+
+				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
+				// case values will be 1 less than the number of bytes to load i.e.
+				//
+				// 3 -> index1 - index4; 2 -> index1 - index3; 1 -> index1 - index2
+				//
+				// also startByteIdx = i - mbRuneIdxDiff
+				//
+				// also given the way i, lastMBStartIdx, and mbRuneIdxDiff change over time mbRuneIdxDiff can only be within [1,3]
+				// when this block is entered so no default on the switch is required.
+
+				var r rune
+				switch mbRuneIdxDiff {
+				case 3:
+					// Invariants: b0 in [0xF0..0xF4]; b1,b2,b3 are 0b10xxxxxx.
+					b0, b1 := p[i-3], p[i-2]
+					switch b0 {
+					case 0xF0:
+						// block over-longs
+						if b1 < 0x90 {
+							break TOP_SWITCH
+						}
+					case 0xF4:
+						// would be outside the unicode plane above U+10FFFF
+						if b1 > 0x8F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 4-byte rune value
+
+					r = (rune(b0&0x07)<<18 | rune(b1&0x3F)<<12 | rune(p[i-1]&0x3F)<<6 | rune(b&0x3F))
+				case 2:
+					// Invariants: b0 in [0xE0..0xEF]; b1,b2 are 0b10xxxxxx.
+					b0, b1 := p[i-2], p[i-1]
+					switch b0 {
+					case 0xE0:
+						// block over-longs
+						if b1 < 0xA0 {
+							break TOP_SWITCH
+						}
+					case 0xED:
+						// block surrogates
+						if b1 > 0x9F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 3-byte rune value
+
+					r = (rune(b0&0x0F)<<12 | rune(b1&0x3F)<<6 | rune(b&0x3F))
+				case 1:
+
+					// assemble the full 2-byte rune value
+
+					r = rune(p[i-1]&0x1F)<<6 | rune(b&0x3F)
+				}
+
+				if rs.internalContainsMBRune(r) {
+					return lastMBStartIdx
+				}
+			}
+		default:
+			// byte was not a tracked ASCII rune and it was not above 0x80
+			lastMBStartIdx = invalidMBStartIdx
+		}
+
+		i++
+	}
+}
+func (rs *runeSet4) indexAnyInString(s string) int {
+	if rs.mbRuneCount == 0 {
+		for i := range len(s) {
+			b := s[i]
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+				return i
+			}
+		}
+
+		return -1
+	}
+
+	inLen := len(s)
+	var i, mbRuneIdxDiff int
+	lastMBStartIdx := invalidMBStartIdx
+	for {
+		if i >= inLen {
+			return -1
+		}
+
+		b := s[i]
+	TOP_SWITCH:
+		switch {
+		case /* matched ascii character */ ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0):
+			return i
+		case /* matched start of multi-byte rune */ b >= startMBMin:
+			switch leadingOnes8(b) {
+			case 4:
+				if b <= startMBMax {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 3
+					break TOP_SWITCH
+				}
+			case 3:
+				lastMBStartIdx = i
+				mbRuneIdxDiff = 2
+				break TOP_SWITCH
+			case 2:
+				if b >= startMB2ByteMin {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 1
+					break TOP_SWITCH
+				}
+			}
+			// byte was not a valid utf8 start of multi-byte encoded rune value; reset the tracking state
+			lastMBStartIdx = invalidMBStartIdx
+		case /* matched continuation byte */ (b & contMBMask) == contMBVal:
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
+
+				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
+				// case values will be 1 less than the number of bytes to load i.e.
+				//
+				// 3 -> index1 - index4; 2 -> index1 - index3; 1 -> index1 - index2
+				//
+				// also startByteIdx = i - mbRuneIdxDiff
+				//
+				// also given the way i, lastMBStartIdx, and mbRuneIdxDiff change over time mbRuneIdxDiff can only be within [1,3]
+				// when this block is entered so no default on the switch is required.
+
+				var r rune
+				switch mbRuneIdxDiff {
+				case 3:
+					// Invariants: b0 in [0xF0..0xF4]; b1,b2,b3 are 0b10xxxxxx.
+					b0, b1 := s[i-3], s[i-2]
+					switch b0 {
+					case 0xF0:
+						// block over-longs
+						if b1 < 0x90 {
+							break TOP_SWITCH
+						}
+					case 0xF4:
+						// would be outside the unicode plane above U+10FFFF
+						if b1 > 0x8F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 4-byte rune value
+
+					r = (rune(b0&0x07)<<18 | rune(b1&0x3F)<<12 | rune(s[i-1]&0x3F)<<6 | rune(b&0x3F))
+				case 2:
+					// Invariants: b0 in [0xE0..0xEF]; b1,b2 are 0b10xxxxxx.
+					b0, b1 := s[i-2], s[i-1]
+					switch b0 {
+					case 0xE0:
+						// block over-longs
+						if b1 < 0xA0 {
+							break TOP_SWITCH
+						}
+					case 0xED:
+						// block surrogates
+						if b1 > 0x9F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 3-byte rune value
+
+					r = (rune(b0&0x0F)<<12 | rune(b1&0x3F)<<6 | rune(b&0x3F))
+				case 1:
+
+					// assemble the full 2-byte rune value
+
+					r = rune(s[i-1]&0x1F)<<6 | rune(b&0x3F)
+				}
+
+				if rs.internalContainsMBRune(r) {
+					return lastMBStartIdx
+				}
+			}
+		default:
+			// byte was not a tracked ASCII rune and it was not above 0x80
+			lastMBStartIdx = invalidMBStartIdx
+		}
+
+		i++
+	}
+}
+func (rs *runeSet4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
+	if rs.mbRuneCount == 0 {
+		for i, b := range p {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+				return rune(b), 1, i
+			}
+		}
+
+		return 0, 0, -1
+	}
+
+	inLen := len(p)
+	var i, mbRuneIdxDiff int
+	lastMBStartIdx := invalidMBStartIdx
+	for {
+		if i >= inLen {
+			return 0, 0, -1
+		}
+
+		b := p[i]
+	TOP_SWITCH:
+		switch {
+		case /* matched ascii character */ ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0):
+			return rune(b), 1, i
+		case /* matched start of multi-byte rune */ b >= startMBMin:
+			switch leadingOnes8(b) {
+			case 4:
+				if b <= startMBMax {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 3
+					break TOP_SWITCH
+				}
+			case 3:
+				lastMBStartIdx = i
+				mbRuneIdxDiff = 2
+				break TOP_SWITCH
+			case 2:
+				if b >= startMB2ByteMin {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 1
+					break TOP_SWITCH
+				}
+			}
+			// byte was not a valid utf8 start of multi-byte encoded rune value; reset the tracking state
+			lastMBStartIdx = invalidMBStartIdx
+		case /* matched continuation byte */ (b & contMBMask) == contMBVal:
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
+
+				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
+				// case values will be 1 less than the number of bytes to load i.e.
+				//
+				// 3 -> index1 - index4; 2 -> index1 - index3; 1 -> index1 - index2
+				//
+				// also startByteIdx = i - mbRuneIdxDiff
+				//
+				// also given the way i, lastMBStartIdx, and mbRuneIdxDiff change over time mbRuneIdxDiff can only be within [1,3]
+				// when this block is entered so no default on the switch is required.
+
+				var r rune
+				var n uint8
+				switch mbRuneIdxDiff {
+				case 3:
+					// Invariants: b0 in [0xF0..0xF4]; b1,b2,b3 are 0b10xxxxxx.
+					b0, b1 := p[i-3], p[i-2]
+					switch b0 {
+					case 0xF0:
+						// block over-longs
+						if b1 < 0x90 {
+							break TOP_SWITCH
+						}
+					case 0xF4:
+						// would be outside the unicode plane above U+10FFFF
+						if b1 > 0x8F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 4-byte rune value
+
+					r = (rune(b0&0x07)<<18 | rune(b1&0x3F)<<12 | rune(p[i-1]&0x3F)<<6 | rune(b&0x3F))
+					n = 4
+				case 2:
+					// Invariants: b0 in [0xE0..0xEF]; b1,b2 are 0b10xxxxxx.
+					b0, b1 := p[i-2], p[i-1]
+					switch b0 {
+					case 0xE0:
+						// block over-longs
+						if b1 < 0xA0 {
+							break TOP_SWITCH
+						}
+					case 0xED:
+						// block surrogates
+						if b1 > 0x9F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 3-byte rune value
+
+					r = (rune(b0&0x0F)<<12 | rune(b1&0x3F)<<6 | rune(b&0x3F))
+					n = 3
+				case 1:
+
+					// assemble the full 2-byte rune value
+
+					r = rune(p[i-1]&0x1F)<<6 | rune(b&0x3F)
+					n = 2
+				}
+
+				if rs.internalContainsMBRune(r) {
+					return r, n, lastMBStartIdx
+				}
+			}
+		default:
+			// byte was not a tracked ASCII rune and it was not above 0x80
+			lastMBStartIdx = invalidMBStartIdx
+		}
+
+		i++
+	}
+}
+func (rs *runeSet4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
+	if rs.mbRuneCount == 0 {
+		for i := range len(s) {
+			b := s[i]
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+				return rune(b), 1, i
+			}
+		}
+
+		return 0, 0, -1
+	}
+
+	inLen := len(s)
+	var i, mbRuneIdxDiff int
+	lastMBStartIdx := invalidMBStartIdx
+	for {
+		if i >= inLen {
+			return 0, 0, -1
+		}
+
+		b := s[i]
+	TOP_SWITCH:
+		switch {
+		case /* matched ascii character */ ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0):
+			return rune(b), 1, i
+		case /* matched start of multi-byte rune */ b >= startMBMin:
+			switch leadingOnes8(b) {
+			case 4:
+				if b <= startMBMax {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 3
+					break TOP_SWITCH
+				}
+			case 3:
+				lastMBStartIdx = i
+				mbRuneIdxDiff = 2
+				break TOP_SWITCH
+			case 2:
+				if b >= startMB2ByteMin {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 1
+					break TOP_SWITCH
+				}
+			}
+			// byte was not a valid utf8 start of multi-byte encoded rune value; reset the tracking state
+			lastMBStartIdx = invalidMBStartIdx
+		case /* matched continuation byte */ (b & contMBMask) == contMBVal:
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
+
+				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
+				// case values will be 1 less than the number of bytes to load i.e.
+				//
+				// 3 -> index1 - index4; 2 -> index1 - index3; 1 -> index1 - index2
+				//
+				// also startByteIdx = i - mbRuneIdxDiff
+				//
+				// also given the way i, lastMBStartIdx, and mbRuneIdxDiff change over time mbRuneIdxDiff can only be within [1,3]
+				// when this block is entered so no default on the switch is required.
+
+				var r rune
+				var n uint8
+				switch mbRuneIdxDiff {
+				case 3:
+					// Invariants: b0 in [0xF0..0xF4]; b1,b2,b3 are 0b10xxxxxx.
+					b0, b1 := s[i-3], s[i-2]
+					switch b0 {
+					case 0xF0:
+						// block over-longs
+						if b1 < 0x90 {
+							break TOP_SWITCH
+						}
+					case 0xF4:
+						// would be outside the unicode plane above U+10FFFF
+						if b1 > 0x8F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 4-byte rune value
+
+					r = (rune(b0&0x07)<<18 | rune(b1&0x3F)<<12 | rune(s[i-1]&0x3F)<<6 | rune(b&0x3F))
+					n = 4
+				case 2:
+					// Invariants: b0 in [0xE0..0xEF]; b1,b2 are 0b10xxxxxx.
+					b0, b1 := s[i-2], s[i-1]
+					switch b0 {
+					case 0xE0:
+						// block over-longs
+						if b1 < 0xA0 {
+							break TOP_SWITCH
+						}
+					case 0xED:
+						// block surrogates
+						if b1 > 0x9F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 3-byte rune value
+
+					r = (rune(b0&0x0F)<<12 | rune(b1&0x3F)<<6 | rune(b&0x3F))
+					n = 3
+				case 1:
+
+					// assemble the full 2-byte rune value
+
+					r = rune(s[i-1]&0x1F)<<6 | rune(b&0x3F)
+					n = 2
+				}
+
+				if rs.internalContainsMBRune(r) {
+					return r, n, lastMBStartIdx
+				}
+			}
+		default:
+			// byte was not a tracked ASCII rune and it was not above 0x80
+			lastMBStartIdx = invalidMBStartIdx
+		}
+
+		i++
+	}
+}
+
+//
+// NOTE: non-generated contents relevant to runeSet6 are present in fast_csv_rune_set.go
+//
+
+// runeSet6 is useful for csv reading as the Reader will only have up to 6 multi-byte runes ever in config.
+//
+// The 6 suffix indicates that at most 6 multi-byte runes are supported by the algorithms within this struct
+// which is done for efficiency reasons.
+//
+// invariants:
+// - utilizing context maintains that there will never be more than 6 multi-byte runes placed in the set
+type runeSet6 struct {
+	runeSetBase
+	mbRunes [6]rune
+}
+
+// addRune assumes that the rune is a valid Unicode value
+func (rs *runeSet6) addRune(r rune) {
+	if r < utf8.RuneSelf {
+		rs.addByte(byte(r))
+		return
+	}
+
+	rs.addMBRune(r)
+}
+
+// internalContainsMBRune assumes that the rune is a valid Unicode value that encodes to more than one byte
+func (rs *runeSet6) internalContainsMBRune(r rune) bool {
+
+	// unwound the loop search to avoid loop overhead
+	//
+	// becomes a fast series of opcodes when compiled
+	//
+	// it is end-state equivalent to the following:
+	//
+	//
+	// for i := range rs.mbRuneCount {
+	// 	if rs.mbRunes[i] == r {
+	// 		return true
+	// 	}
+	// }
+	//
+	// return false
+
+	switch rs.mbRuneCount {
+	case 6:
+		return (rs.mbRunes[0] == r || rs.mbRunes[1] == r || rs.mbRunes[2] == r || rs.mbRunes[3] == r || rs.mbRunes[4] == r || rs.mbRunes[5] == r)
+	case 5:
+		return (rs.mbRunes[0] == r || rs.mbRunes[1] == r || rs.mbRunes[2] == r || rs.mbRunes[3] == r || rs.mbRunes[4] == r)
+	case 4:
+		return (rs.mbRunes[0] == r || rs.mbRunes[1] == r || rs.mbRunes[2] == r || rs.mbRunes[3] == r)
+	case 3:
+		return (rs.mbRunes[0] == r || rs.mbRunes[1] == r || rs.mbRunes[2] == r)
+	case 2:
+		return (rs.mbRunes[0] == r || rs.mbRunes[1] == r)
+	case 1:
+		return (rs.mbRunes[0] == r)
+	}
+
+	return false
+}
+
+func (rs *runeSet6) containsMBRune(r rune) bool {
+	fastEndCheckOK := ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(byte(r)>>5)&1] & (uint32(1) << (r & 31))) != 0)
+	return fastEndCheckOK && rs.internalContainsMBRune(r)
+}
+
+// addMBRune assumes that the rune is a valid Unicode value that encodes to more than one byte
+//
+// any change to this function likely needs to be replicated to addRuneUniqueUnchecked()
+func (rs *runeSet6) addMBRune(r rune) {
+	if rs.internalContainsMBRune(r) {
+		return
+	}
+
+	rs.mbRunes[rs.mbRuneCount] = r
+	rs.mbRuneCount++
+
+	rs.mbByteEnds[(byte(r)>>5)&1] |= (uint32(1) << (r & 31))
+}
+
+// internalContainsRune assumes that the rune is a valid Unicode value
+func (rs *runeSet6) internalContainsRune(r rune) bool {
+	if r < utf8.RuneSelf {
+		return ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[byte(r)>>5] & (uint32(1) << (r & 31))) != 0)
+	}
+
+	return rs.internalContainsMBRune(r)
+}
+
+// addRuneUniqueUnchecked assumes that the rune is a valid Unicode value that (if it is multi-byte when encoded) has not already been added before
+//
+// any change to this function likely needs to be replicated to addMBRune() or addByte()
+func (rs *runeSet6) addRuneUniqueUnchecked(r rune) {
+	if r < utf8.RuneSelf {
+		rs.addByte(byte(r))
+		return
+	}
+
+	rs.mbRunes[rs.mbRuneCount] = r
+	rs.mbRuneCount++
+
+	rs.mbByteEnds[(byte(r)>>5)&1] |= (uint32(1) << (r & 31))
+}
+
+func (rs *runeSet6) indexAnyInBytes(p []byte) int {
+	if rs.mbRuneCount == 0 {
+		for i, b := range p {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+				return i
+			}
+		}
+
+		return -1
+	}
+
+	inLen := len(p)
+	var i, mbRuneIdxDiff int
+	lastMBStartIdx := invalidMBStartIdx
+	for {
+		if i >= inLen {
+			return -1
+		}
+
+		b := p[i]
+	TOP_SWITCH:
+		switch {
+		case /* matched ascii character */ ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0):
+			return i
+		case /* matched start of multi-byte rune */ b >= startMBMin:
+			switch leadingOnes8(b) {
+			case 4:
+				if b <= startMBMax {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 3
+					break TOP_SWITCH
+				}
+			case 3:
+				lastMBStartIdx = i
+				mbRuneIdxDiff = 2
+				break TOP_SWITCH
+			case 2:
+				if b >= startMB2ByteMin {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 1
+					break TOP_SWITCH
+				}
+			}
+			// byte was not a valid utf8 start of multi-byte encoded rune value; reset the tracking state
+			lastMBStartIdx = invalidMBStartIdx
+		case /* matched continuation byte */ (b & contMBMask) == contMBVal:
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
+
+				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
+				// case values will be 1 less than the number of bytes to load i.e.
+				//
+				// 3 -> index1 - index4; 2 -> index1 - index3; 1 -> index1 - index2
+				//
+				// also startByteIdx = i - mbRuneIdxDiff
+				//
+				// also given the way i, lastMBStartIdx, and mbRuneIdxDiff change over time mbRuneIdxDiff can only be within [1,3]
+				// when this block is entered so no default on the switch is required.
+
+				var r rune
+				switch mbRuneIdxDiff {
+				case 3:
+					// Invariants: b0 in [0xF0..0xF4]; b1,b2,b3 are 0b10xxxxxx.
+					b0, b1 := p[i-3], p[i-2]
+					switch b0 {
+					case 0xF0:
+						// block over-longs
+						if b1 < 0x90 {
+							break TOP_SWITCH
+						}
+					case 0xF4:
+						// would be outside the unicode plane above U+10FFFF
+						if b1 > 0x8F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 4-byte rune value
+
+					r = (rune(b0&0x07)<<18 | rune(b1&0x3F)<<12 | rune(p[i-1]&0x3F)<<6 | rune(b&0x3F))
+				case 2:
+					// Invariants: b0 in [0xE0..0xEF]; b1,b2 are 0b10xxxxxx.
+					b0, b1 := p[i-2], p[i-1]
+					switch b0 {
+					case 0xE0:
+						// block over-longs
+						if b1 < 0xA0 {
+							break TOP_SWITCH
+						}
+					case 0xED:
+						// block surrogates
+						if b1 > 0x9F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 3-byte rune value
+
+					r = (rune(b0&0x0F)<<12 | rune(b1&0x3F)<<6 | rune(b&0x3F))
+				case 1:
+
+					// assemble the full 2-byte rune value
+
+					r = rune(p[i-1]&0x1F)<<6 | rune(b&0x3F)
+				}
+
+				if rs.internalContainsMBRune(r) {
+					return lastMBStartIdx
+				}
+			}
+		default:
+			// byte was not a tracked ASCII rune and it was not above 0x80
+			lastMBStartIdx = invalidMBStartIdx
+		}
+
+		i++
+	}
+}
+func (rs *runeSet6) indexAnyInString(s string) int {
+	if rs.mbRuneCount == 0 {
+		for i := range len(s) {
+			b := s[i]
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+				return i
+			}
+		}
+
+		return -1
+	}
+
+	inLen := len(s)
+	var i, mbRuneIdxDiff int
+	lastMBStartIdx := invalidMBStartIdx
+	for {
+		if i >= inLen {
+			return -1
+		}
+
+		b := s[i]
+	TOP_SWITCH:
+		switch {
+		case /* matched ascii character */ ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0):
+			return i
+		case /* matched start of multi-byte rune */ b >= startMBMin:
+			switch leadingOnes8(b) {
+			case 4:
+				if b <= startMBMax {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 3
+					break TOP_SWITCH
+				}
+			case 3:
+				lastMBStartIdx = i
+				mbRuneIdxDiff = 2
+				break TOP_SWITCH
+			case 2:
+				if b >= startMB2ByteMin {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 1
+					break TOP_SWITCH
+				}
+			}
+			// byte was not a valid utf8 start of multi-byte encoded rune value; reset the tracking state
+			lastMBStartIdx = invalidMBStartIdx
+		case /* matched continuation byte */ (b & contMBMask) == contMBVal:
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
+
+				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
+				// case values will be 1 less than the number of bytes to load i.e.
+				//
+				// 3 -> index1 - index4; 2 -> index1 - index3; 1 -> index1 - index2
+				//
+				// also startByteIdx = i - mbRuneIdxDiff
+				//
+				// also given the way i, lastMBStartIdx, and mbRuneIdxDiff change over time mbRuneIdxDiff can only be within [1,3]
+				// when this block is entered so no default on the switch is required.
+
+				var r rune
+				switch mbRuneIdxDiff {
+				case 3:
+					// Invariants: b0 in [0xF0..0xF4]; b1,b2,b3 are 0b10xxxxxx.
+					b0, b1 := s[i-3], s[i-2]
+					switch b0 {
+					case 0xF0:
+						// block over-longs
+						if b1 < 0x90 {
+							break TOP_SWITCH
+						}
+					case 0xF4:
+						// would be outside the unicode plane above U+10FFFF
+						if b1 > 0x8F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 4-byte rune value
+
+					r = (rune(b0&0x07)<<18 | rune(b1&0x3F)<<12 | rune(s[i-1]&0x3F)<<6 | rune(b&0x3F))
+				case 2:
+					// Invariants: b0 in [0xE0..0xEF]; b1,b2 are 0b10xxxxxx.
+					b0, b1 := s[i-2], s[i-1]
+					switch b0 {
+					case 0xE0:
+						// block over-longs
+						if b1 < 0xA0 {
+							break TOP_SWITCH
+						}
+					case 0xED:
+						// block surrogates
+						if b1 > 0x9F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 3-byte rune value
+
+					r = (rune(b0&0x0F)<<12 | rune(b1&0x3F)<<6 | rune(b&0x3F))
+				case 1:
+
+					// assemble the full 2-byte rune value
+
+					r = rune(s[i-1]&0x1F)<<6 | rune(b&0x3F)
+				}
+
+				if rs.internalContainsMBRune(r) {
+					return lastMBStartIdx
+				}
+			}
+		default:
+			// byte was not a tracked ASCII rune and it was not above 0x80
+			lastMBStartIdx = invalidMBStartIdx
+		}
+
+		i++
+	}
+}
+func (rs *runeSet6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
+	if rs.mbRuneCount == 0 {
+		for i, b := range p {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+				return rune(b), 1, i
+			}
+		}
+
+		return 0, 0, -1
+	}
+
+	inLen := len(p)
+	var i, mbRuneIdxDiff int
+	lastMBStartIdx := invalidMBStartIdx
+	for {
+		if i >= inLen {
+			return 0, 0, -1
+		}
+
+		b := p[i]
+	TOP_SWITCH:
+		switch {
+		case /* matched ascii character */ ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0):
+			return rune(b), 1, i
+		case /* matched start of multi-byte rune */ b >= startMBMin:
+			switch leadingOnes8(b) {
+			case 4:
+				if b <= startMBMax {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 3
+					break TOP_SWITCH
+				}
+			case 3:
+				lastMBStartIdx = i
+				mbRuneIdxDiff = 2
+				break TOP_SWITCH
+			case 2:
+				if b >= startMB2ByteMin {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 1
+					break TOP_SWITCH
+				}
+			}
+			// byte was not a valid utf8 start of multi-byte encoded rune value; reset the tracking state
+			lastMBStartIdx = invalidMBStartIdx
+		case /* matched continuation byte */ (b & contMBMask) == contMBVal:
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
+
+				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
+				// case values will be 1 less than the number of bytes to load i.e.
+				//
+				// 3 -> index1 - index4; 2 -> index1 - index3; 1 -> index1 - index2
+				//
+				// also startByteIdx = i - mbRuneIdxDiff
+				//
+				// also given the way i, lastMBStartIdx, and mbRuneIdxDiff change over time mbRuneIdxDiff can only be within [1,3]
+				// when this block is entered so no default on the switch is required.
+
+				var r rune
+				var n uint8
+				switch mbRuneIdxDiff {
+				case 3:
+					// Invariants: b0 in [0xF0..0xF4]; b1,b2,b3 are 0b10xxxxxx.
+					b0, b1 := p[i-3], p[i-2]
+					switch b0 {
+					case 0xF0:
+						// block over-longs
+						if b1 < 0x90 {
+							break TOP_SWITCH
+						}
+					case 0xF4:
+						// would be outside the unicode plane above U+10FFFF
+						if b1 > 0x8F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 4-byte rune value
+
+					r = (rune(b0&0x07)<<18 | rune(b1&0x3F)<<12 | rune(p[i-1]&0x3F)<<6 | rune(b&0x3F))
+					n = 4
+				case 2:
+					// Invariants: b0 in [0xE0..0xEF]; b1,b2 are 0b10xxxxxx.
+					b0, b1 := p[i-2], p[i-1]
+					switch b0 {
+					case 0xE0:
+						// block over-longs
+						if b1 < 0xA0 {
+							break TOP_SWITCH
+						}
+					case 0xED:
+						// block surrogates
+						if b1 > 0x9F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 3-byte rune value
+
+					r = (rune(b0&0x0F)<<12 | rune(b1&0x3F)<<6 | rune(b&0x3F))
+					n = 3
+				case 1:
+
+					// assemble the full 2-byte rune value
+
+					r = rune(p[i-1]&0x1F)<<6 | rune(b&0x3F)
+					n = 2
+				}
+
+				if rs.internalContainsMBRune(r) {
+					return r, n, lastMBStartIdx
+				}
+			}
+		default:
+			// byte was not a tracked ASCII rune and it was not above 0x80
+			lastMBStartIdx = invalidMBStartIdx
+		}
+
+		i++
+	}
+}
+func (rs *runeSet6) indexAnyRuneLenInString(s string) (rune, uint8, int) {
+	if rs.mbRuneCount == 0 {
+		for i := range len(s) {
+			b := s[i]
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+				return rune(b), 1, i
+			}
+		}
+
+		return 0, 0, -1
+	}
+
+	inLen := len(s)
+	var i, mbRuneIdxDiff int
+	lastMBStartIdx := invalidMBStartIdx
+	for {
+		if i >= inLen {
+			return 0, 0, -1
+		}
+
+		b := s[i]
+	TOP_SWITCH:
+		switch {
+		case /* matched ascii character */ ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0):
+			return rune(b), 1, i
+		case /* matched start of multi-byte rune */ b >= startMBMin:
+			switch leadingOnes8(b) {
+			case 4:
+				if b <= startMBMax {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 3
+					break TOP_SWITCH
+				}
+			case 3:
+				lastMBStartIdx = i
+				mbRuneIdxDiff = 2
+				break TOP_SWITCH
+			case 2:
+				if b >= startMB2ByteMin {
+					lastMBStartIdx = i
+					mbRuneIdxDiff = 1
+					break TOP_SWITCH
+				}
+			}
+			// byte was not a valid utf8 start of multi-byte encoded rune value; reset the tracking state
+			lastMBStartIdx = invalidMBStartIdx
+		case /* matched continuation byte */ (b & contMBMask) == contMBVal:
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
+
+				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
+				// case values will be 1 less than the number of bytes to load i.e.
+				//
+				// 3 -> index1 - index4; 2 -> index1 - index3; 1 -> index1 - index2
+				//
+				// also startByteIdx = i - mbRuneIdxDiff
+				//
+				// also given the way i, lastMBStartIdx, and mbRuneIdxDiff change over time mbRuneIdxDiff can only be within [1,3]
+				// when this block is entered so no default on the switch is required.
+
+				var r rune
+				var n uint8
+				switch mbRuneIdxDiff {
+				case 3:
+					// Invariants: b0 in [0xF0..0xF4]; b1,b2,b3 are 0b10xxxxxx.
+					b0, b1 := s[i-3], s[i-2]
+					switch b0 {
+					case 0xF0:
+						// block over-longs
+						if b1 < 0x90 {
+							break TOP_SWITCH
+						}
+					case 0xF4:
+						// would be outside the unicode plane above U+10FFFF
+						if b1 > 0x8F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 4-byte rune value
+
+					r = (rune(b0&0x07)<<18 | rune(b1&0x3F)<<12 | rune(s[i-1]&0x3F)<<6 | rune(b&0x3F))
+					n = 4
+				case 2:
+					// Invariants: b0 in [0xE0..0xEF]; b1,b2 are 0b10xxxxxx.
+					b0, b1 := s[i-2], s[i-1]
+					switch b0 {
+					case 0xE0:
+						// block over-longs
+						if b1 < 0xA0 {
+							break TOP_SWITCH
+						}
+					case 0xED:
+						// block surrogates
+						if b1 > 0x9F {
+							break TOP_SWITCH
+						}
+					}
+
+					// assemble the full 3-byte rune value
+
+					r = (rune(b0&0x0F)<<12 | rune(b1&0x3F)<<6 | rune(b&0x3F))
+					n = 3
+				case 1:
+
+					// assemble the full 2-byte rune value
+
+					r = rune(s[i-1]&0x1F)<<6 | rune(b&0x3F)
+					n = 2
+				}
+
+				if rs.internalContainsMBRune(r) {
+					return r, n, lastMBStartIdx
+				}
+			}
+		default:
+			// byte was not a tracked ASCII rune and it was not above 0x80
+			lastMBStartIdx = invalidMBStartIdx
+		}
+
+		i++
+	}
+}
+
+const len8LeadingOnesTab = "" +
+	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
+	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
+	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
+	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
+	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
+	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
+	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
+	"\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00" +
+	"\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01" +
+	"\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01" +
+	"\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01" +
+	"\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01" +
+	"\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02" +
+	"\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02" +
+	"\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03\x03" +
+	"\x04\x04\x04\x04\x04\x04\x04\x04\x05\x05\x05\x05\x06\x06\x07\x08"
+
+// leadingOnes8 returns the number of leading one bits in x; the result is 0 for x == 0 and 8 for 255.
+func leadingOnes8(b byte) uint8 {
+	return len8LeadingOnesTab[b]
 }
