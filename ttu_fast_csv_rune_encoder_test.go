@@ -24,6 +24,8 @@ const (
 )
 
 func Test_runeEncoder_appendText(t *testing.T) {
+	t.Parallel()
+
 	is := assert.New(t)
 
 	is.PanicsWithValue(panicInvalidRuneEncoderLen, func() {

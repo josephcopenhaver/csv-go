@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func Benchmark_runeSet4_containsWideRune(b *testing.B) {
+func Benchmark_runeSet4_containsMBRune(b *testing.B) {
 	const (
 		// cent sign
 		test2ByteRune = '\u00A2'
@@ -30,7 +30,7 @@ func Benchmark_runeSet4_containsWideRune(b *testing.B) {
 	}
 }
 
-func Benchmark_runeSet6_containsWideRune(b *testing.B) {
+func Benchmark_runeSet6_containsMBRune(b *testing.B) {
 	const (
 		// cent sign
 		test2ByteRune = '\u00A2'
