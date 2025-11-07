@@ -3294,15 +3294,15 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOn(s string, scanIdx int) error 
 
 type runeSetBase struct {
 	mbRuneCount uint8
-	singleBytes [8]uint32
-	mbByteEnds  [2]uint32
+	singleBytes [4]uint64
+	mbByteEnds  uint64
 }
 
 // addByte assumes that the byte is a valid Unicode value less than 128
 //
 // any change to this function likely needs to be replicated to addRuneUniqueUnchecked()
 func (rs *runeSetBase) addByte(b byte) {
-	rs.singleBytes[b>>5] |= (uint32(1) << (b & 31))
+	rs.singleBytes[b>>6] |= (uint64(1) << (b & 63))
 }
 
 // containsSingleByteRune would normally only work correctly when the input byte is less than utf8.RuneSelf
@@ -3310,14 +3310,14 @@ func (rs *runeSetBase) addByte(b byte) {
 // an if-check and a bit-mask (to ensure bounds check elimination kicks in) which has shown to be definitely
 // faster.
 func (rs *runeSetBase) containsSingleByteRune(b byte) bool {
-	return (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0
+	return (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0
 }
 
 // internalContainsMBEndByte works with either the last byte of a utf8 encoded multi-byte rune
 // or the 8 least significant bits of a rune since it only cares about the lower 6 bits
 // and the first two bits are guaranteed to be `10` or noise by the nature of the calling context.
 func (rs *runeSetBase) internalContainsMBEndByte(b byte) bool {
-	return (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0
+	return (rs.mbByteEnds & (uint64(1) << (b & 63))) != 0
 }
 
 //
@@ -3379,7 +3379,7 @@ func (rs *runeSet4) internalContainsMBRune(r rune) bool {
 }
 
 func (rs *runeSet4) containsMBRune(r rune) bool {
-	fastEndCheckOK := ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(byte(r)>>5)&1] & (uint32(1) << (r & 31))) != 0)
+	fastEndCheckOK := ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds & (uint64(1) << (r & 63))) != 0)
 	return fastEndCheckOK && rs.internalContainsMBRune(r)
 }
 
@@ -3394,13 +3394,13 @@ func (rs *runeSet4) addMBRune(r rune) {
 	rs.mbRunes[rs.mbRuneCount] = r
 	rs.mbRuneCount++
 
-	rs.mbByteEnds[(byte(r)>>5)&1] |= (uint32(1) << (r & 31))
+	rs.mbByteEnds |= (uint64(1) << (r & 63))
 }
 
 // internalContainsRune assumes that the rune is a valid Unicode value
 func (rs *runeSet4) internalContainsRune(r rune) bool {
 	if r < utf8.RuneSelf {
-		return ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[byte(r)>>5] & (uint32(1) << (r & 31))) != 0)
+		return ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[byte(r)>>6] & (uint64(1) << (r & 63))) != 0)
 	}
 
 	return rs.internalContainsMBRune(r)
@@ -3418,14 +3418,14 @@ func (rs *runeSet4) addRuneUniqueUnchecked(r rune) {
 	rs.mbRunes[rs.mbRuneCount] = r
 	rs.mbRuneCount++
 
-	rs.mbByteEnds[(byte(r)>>5)&1] |= (uint32(1) << (r & 31))
+	rs.mbByteEnds |= (uint64(1) << (r & 63))
 }
 
 func (rs *runeSet4) indexAnyInBytes(p []byte) int {
 	if rs.mbRuneCount == 0 {
 
 		for i, b := range p {
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return i
 			}
 		}
@@ -3440,7 +3440,7 @@ func (rs *runeSet4) indexAnyInBytes(p []byte) int {
 		if b < utf8.RuneSelf {
 			// matched ascii character
 
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return i
 			}
 
@@ -3451,7 +3451,7 @@ func (rs *runeSet4) indexAnyInBytes(p []byte) int {
 		if b < startMBMin {
 			// matched continuation byte
 
-			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds & (uint64(1) << (b & 63))) != 0) {
 				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
 
 				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
@@ -3550,7 +3550,7 @@ func (rs *runeSet4) indexAnyInString(s string) int {
 	if rs.mbRuneCount == 0 {
 		for i := range len(s) {
 			b := s[i]
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return i
 			}
 		}
@@ -3566,7 +3566,7 @@ func (rs *runeSet4) indexAnyInString(s string) int {
 		if b < utf8.RuneSelf {
 			// matched ascii character
 
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return i
 			}
 
@@ -3577,7 +3577,7 @@ func (rs *runeSet4) indexAnyInString(s string) int {
 		if b < startMBMin {
 			// matched continuation byte
 
-			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds & (uint64(1) << (b & 63))) != 0) {
 				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
 
 				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
@@ -3676,7 +3676,7 @@ func (rs *runeSet4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 	if rs.mbRuneCount == 0 {
 
 		for i, b := range p {
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return rune(b), 1, i
 			}
 		}
@@ -3691,7 +3691,7 @@ func (rs *runeSet4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 		if b < utf8.RuneSelf {
 			// matched ascii character
 
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return rune(b), 1, i
 			}
 
@@ -3702,7 +3702,7 @@ func (rs *runeSet4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 		if b < startMBMin {
 			// matched continuation byte
 
-			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds & (uint64(1) << (b & 63))) != 0) {
 				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
 
 				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
@@ -3805,7 +3805,7 @@ func (rs *runeSet4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 	if rs.mbRuneCount == 0 {
 		for i := range len(s) {
 			b := s[i]
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return rune(b), 1, i
 			}
 		}
@@ -3821,7 +3821,7 @@ func (rs *runeSet4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 		if b < utf8.RuneSelf {
 			// matched ascii character
 
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return rune(b), 1, i
 			}
 
@@ -3832,7 +3832,7 @@ func (rs *runeSet4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 		if b < startMBMin {
 			// matched continuation byte
 
-			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds & (uint64(1) << (b & 63))) != 0) {
 				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
 
 				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
@@ -3994,7 +3994,7 @@ func (rs *runeSet6) internalContainsMBRune(r rune) bool {
 }
 
 func (rs *runeSet6) containsMBRune(r rune) bool {
-	fastEndCheckOK := ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(byte(r)>>5)&1] & (uint32(1) << (r & 31))) != 0)
+	fastEndCheckOK := ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds & (uint64(1) << (r & 63))) != 0)
 	return fastEndCheckOK && rs.internalContainsMBRune(r)
 }
 
@@ -4009,13 +4009,13 @@ func (rs *runeSet6) addMBRune(r rune) {
 	rs.mbRunes[rs.mbRuneCount] = r
 	rs.mbRuneCount++
 
-	rs.mbByteEnds[(byte(r)>>5)&1] |= (uint32(1) << (r & 31))
+	rs.mbByteEnds |= (uint64(1) << (r & 63))
 }
 
 // internalContainsRune assumes that the rune is a valid Unicode value
 func (rs *runeSet6) internalContainsRune(r rune) bool {
 	if r < utf8.RuneSelf {
-		return ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[byte(r)>>5] & (uint32(1) << (r & 31))) != 0)
+		return ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[byte(r)>>6] & (uint64(1) << (r & 63))) != 0)
 	}
 
 	return rs.internalContainsMBRune(r)
@@ -4033,14 +4033,14 @@ func (rs *runeSet6) addRuneUniqueUnchecked(r rune) {
 	rs.mbRunes[rs.mbRuneCount] = r
 	rs.mbRuneCount++
 
-	rs.mbByteEnds[(byte(r)>>5)&1] |= (uint32(1) << (r & 31))
+	rs.mbByteEnds |= (uint64(1) << (r & 63))
 }
 
 func (rs *runeSet6) indexAnyInBytes(p []byte) int {
 	if rs.mbRuneCount == 0 {
 
 		for i, b := range p {
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return i
 			}
 		}
@@ -4055,7 +4055,7 @@ func (rs *runeSet6) indexAnyInBytes(p []byte) int {
 		if b < utf8.RuneSelf {
 			// matched ascii character
 
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return i
 			}
 
@@ -4066,7 +4066,7 @@ func (rs *runeSet6) indexAnyInBytes(p []byte) int {
 		if b < startMBMin {
 			// matched continuation byte
 
-			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds & (uint64(1) << (b & 63))) != 0) {
 				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
 
 				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
@@ -4165,7 +4165,7 @@ func (rs *runeSet6) indexAnyInString(s string) int {
 	if rs.mbRuneCount == 0 {
 		for i := range len(s) {
 			b := s[i]
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return i
 			}
 		}
@@ -4181,7 +4181,7 @@ func (rs *runeSet6) indexAnyInString(s string) int {
 		if b < utf8.RuneSelf {
 			// matched ascii character
 
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return i
 			}
 
@@ -4192,7 +4192,7 @@ func (rs *runeSet6) indexAnyInString(s string) int {
 		if b < startMBMin {
 			// matched continuation byte
 
-			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds & (uint64(1) << (b & 63))) != 0) {
 				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
 
 				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
@@ -4291,7 +4291,7 @@ func (rs *runeSet6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 	if rs.mbRuneCount == 0 {
 
 		for i, b := range p {
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return rune(b), 1, i
 			}
 		}
@@ -4306,7 +4306,7 @@ func (rs *runeSet6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 		if b < utf8.RuneSelf {
 			// matched ascii character
 
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return rune(b), 1, i
 			}
 
@@ -4317,7 +4317,7 @@ func (rs *runeSet6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 		if b < startMBMin {
 			// matched continuation byte
 
-			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds & (uint64(1) << (b & 63))) != 0) {
 				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
 
 				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
@@ -4420,7 +4420,7 @@ func (rs *runeSet6) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 	if rs.mbRuneCount == 0 {
 		for i := range len(s) {
 			b := s[i]
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return rune(b), 1, i
 			}
 		}
@@ -4436,7 +4436,7 @@ func (rs *runeSet6) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 		if b < utf8.RuneSelf {
 			// matched ascii character
 
-			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
+			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>6] & (uint64(1) << (b & 63))) != 0 {
 				return rune(b), 1, i
 			}
 
@@ -4447,7 +4447,7 @@ func (rs *runeSet6) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 		if b < startMBMin {
 			// matched continuation byte
 
-			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
+			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds & (uint64(1) << (b & 63))) != 0) {
 				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
 
 				// since mbRuneIdxDiff is the difference between included byte index positions for a rune to decode
