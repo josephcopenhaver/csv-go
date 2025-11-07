@@ -139,11 +139,10 @@ func (rs *runeSet{{.MultiByteSize}}) addRuneUniqueUnchecked(r rune) {
 	rs.mbByteEnds[(byte(r)>>5)&1] |= (uint32(1) << (r & 31))
 }
 
-{{$MultiByteSize := .MultiByteSize -}}
-{{range .Methods -}}
-func (rs *runeSet{{$MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .ArgType "Bytes"}}p []byte{{else}}s string{{end}}) {{.Returns}} {
+{{range .Methods}}
+func (rs *runeSet{{$.MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .ArgType "Bytes"}}p []byte{{else}}s string{{end}}) {{.Returns}} {
 	if rs.mbRuneCount == 0 {
-		{{- if eq .ArgType "Bytes"}}
+		{{if eq .ArgType "Bytes"}}
 		for i, b := range p {
 		{{- else -}}
 		for i := range len(s) {
@@ -157,11 +156,14 @@ func (rs *runeSet{{$MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .Ar
 		return {{if eq .Name "RuneLen"}}0, 0, {{end}}-1
 	}
 
-	inLen := len({{if eq .ArgType "Bytes"}}p{{else}}s{{end}})
-	var i, mbRuneIdxDiff int
+	var mbRuneIdxDiff int
 	lastMBStartIdx := invalidMBStartIdx
-	for i < inLen {
-		b := {{if eq .ArgType "Bytes"}}p{{else}}s{{end}}[i]
+	{{if eq .ArgType "Bytes" -}}
+	for i, b := range p {
+	{{- else -}}
+	for i := range len(s) {
+		b := s[i]
+	{{- end}}
 
 		if b < utf8.RuneSelf {
 			// matched ascii character
@@ -171,7 +173,6 @@ func (rs *runeSet{{$MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .Ar
 			}
 
 			lastMBStartIdx = invalidMBStartIdx
-			i++
 			continue
 		}
 
@@ -203,13 +204,11 @@ func (rs *runeSet{{$MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .Ar
 					case 0xF0:
 						// block over-longs
 						if b1 < 0x90 {
-							i++
 							continue
 						}
 					case 0xF4:
 						// would be outside the unicode plane above U+10FFFF
 						if b1 > 0x8F {
-							i++
 							continue
 						}
 					}
@@ -227,13 +226,11 @@ func (rs *runeSet{{$MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .Ar
 					case 0xE0:
 						// block over-longs
 						if b1 < 0xA0 {
-							i++
 							continue
 						}
 					case 0xED:
 						// block surrogates
 						if b1 > 0x9F {
-							i++
 							continue
 						}
 					}
@@ -259,7 +256,6 @@ func (rs *runeSet{{$MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .Ar
 				}
 			}
 
-			i++
 			continue
 		}
 
@@ -270,26 +266,21 @@ func (rs *runeSet{{$MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .Ar
 			if b <= startMBMax {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 3
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
 		case 3:
 			lastMBStartIdx = i
 			mbRuneIdxDiff = 2
+			continue
 		case 2:
 			if b >= startMB2ByteMin {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 1
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
-		default:
-			lastMBStartIdx = invalidMBStartIdx
 		}
 
-		i++
+		lastMBStartIdx = invalidMBStartIdx
 	}
 
 	return {{if eq .Name "RuneLen"}}0, 0, {{end}}-1
