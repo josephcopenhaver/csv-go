@@ -3423,6 +3423,7 @@ func (rs *runeSet4) addRuneUniqueUnchecked(r rune) {
 
 func (rs *runeSet4) indexAnyInBytes(p []byte) int {
 	if rs.mbRuneCount == 0 {
+
 		for i, b := range p {
 			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
 				return i
@@ -3432,11 +3433,9 @@ func (rs *runeSet4) indexAnyInBytes(p []byte) int {
 		return -1
 	}
 
-	inLen := len(p)
-	var i, mbRuneIdxDiff int
+	var mbRuneIdxDiff int
 	lastMBStartIdx := invalidMBStartIdx
-	for i < inLen {
-		b := p[i]
+	for i, b := range p {
 
 		if b < utf8.RuneSelf {
 			// matched ascii character
@@ -3446,7 +3445,6 @@ func (rs *runeSet4) indexAnyInBytes(p []byte) int {
 			}
 
 			lastMBStartIdx = invalidMBStartIdx
-			i++
 			continue
 		}
 
@@ -3475,13 +3473,11 @@ func (rs *runeSet4) indexAnyInBytes(p []byte) int {
 					case 0xF0:
 						// block over-longs
 						if b1 < 0x90 {
-							i++
 							continue
 						}
 					case 0xF4:
 						// would be outside the unicode plane above U+10FFFF
 						if b1 > 0x8F {
-							i++
 							continue
 						}
 					}
@@ -3496,13 +3492,11 @@ func (rs *runeSet4) indexAnyInBytes(p []byte) int {
 					case 0xE0:
 						// block over-longs
 						if b1 < 0xA0 {
-							i++
 							continue
 						}
 					case 0xED:
 						// block surrogates
 						if b1 > 0x9F {
-							i++
 							continue
 						}
 					}
@@ -3522,7 +3516,6 @@ func (rs *runeSet4) indexAnyInBytes(p []byte) int {
 				}
 			}
 
-			i++
 			continue
 		}
 
@@ -3533,30 +3526,26 @@ func (rs *runeSet4) indexAnyInBytes(p []byte) int {
 			if b <= startMBMax {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 3
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
 		case 3:
 			lastMBStartIdx = i
 			mbRuneIdxDiff = 2
+			continue
 		case 2:
 			if b >= startMB2ByteMin {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 1
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
-		default:
-			lastMBStartIdx = invalidMBStartIdx
 		}
 
-		i++
+		lastMBStartIdx = invalidMBStartIdx
 	}
 
 	return -1
 }
+
 func (rs *runeSet4) indexAnyInString(s string) int {
 	if rs.mbRuneCount == 0 {
 		for i := range len(s) {
@@ -3569,10 +3558,9 @@ func (rs *runeSet4) indexAnyInString(s string) int {
 		return -1
 	}
 
-	inLen := len(s)
-	var i, mbRuneIdxDiff int
+	var mbRuneIdxDiff int
 	lastMBStartIdx := invalidMBStartIdx
-	for i < inLen {
+	for i := range len(s) {
 		b := s[i]
 
 		if b < utf8.RuneSelf {
@@ -3583,7 +3571,6 @@ func (rs *runeSet4) indexAnyInString(s string) int {
 			}
 
 			lastMBStartIdx = invalidMBStartIdx
-			i++
 			continue
 		}
 
@@ -3612,13 +3599,11 @@ func (rs *runeSet4) indexAnyInString(s string) int {
 					case 0xF0:
 						// block over-longs
 						if b1 < 0x90 {
-							i++
 							continue
 						}
 					case 0xF4:
 						// would be outside the unicode plane above U+10FFFF
 						if b1 > 0x8F {
-							i++
 							continue
 						}
 					}
@@ -3633,13 +3618,11 @@ func (rs *runeSet4) indexAnyInString(s string) int {
 					case 0xE0:
 						// block over-longs
 						if b1 < 0xA0 {
-							i++
 							continue
 						}
 					case 0xED:
 						// block surrogates
 						if b1 > 0x9F {
-							i++
 							continue
 						}
 					}
@@ -3659,7 +3642,6 @@ func (rs *runeSet4) indexAnyInString(s string) int {
 				}
 			}
 
-			i++
 			continue
 		}
 
@@ -3670,32 +3652,29 @@ func (rs *runeSet4) indexAnyInString(s string) int {
 			if b <= startMBMax {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 3
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
 		case 3:
 			lastMBStartIdx = i
 			mbRuneIdxDiff = 2
+			continue
 		case 2:
 			if b >= startMB2ByteMin {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 1
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
-		default:
-			lastMBStartIdx = invalidMBStartIdx
 		}
 
-		i++
+		lastMBStartIdx = invalidMBStartIdx
 	}
 
 	return -1
 }
+
 func (rs *runeSet4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 	if rs.mbRuneCount == 0 {
+
 		for i, b := range p {
 			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
 				return rune(b), 1, i
@@ -3705,11 +3684,9 @@ func (rs *runeSet4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 		return 0, 0, -1
 	}
 
-	inLen := len(p)
-	var i, mbRuneIdxDiff int
+	var mbRuneIdxDiff int
 	lastMBStartIdx := invalidMBStartIdx
-	for i < inLen {
-		b := p[i]
+	for i, b := range p {
 
 		if b < utf8.RuneSelf {
 			// matched ascii character
@@ -3719,7 +3696,6 @@ func (rs *runeSet4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 			}
 
 			lastMBStartIdx = invalidMBStartIdx
-			i++
 			continue
 		}
 
@@ -3749,13 +3725,11 @@ func (rs *runeSet4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 					case 0xF0:
 						// block over-longs
 						if b1 < 0x90 {
-							i++
 							continue
 						}
 					case 0xF4:
 						// would be outside the unicode plane above U+10FFFF
 						if b1 > 0x8F {
-							i++
 							continue
 						}
 					}
@@ -3771,13 +3745,11 @@ func (rs *runeSet4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 					case 0xE0:
 						// block over-longs
 						if b1 < 0xA0 {
-							i++
 							continue
 						}
 					case 0xED:
 						// block surrogates
 						if b1 > 0x9F {
-							i++
 							continue
 						}
 					}
@@ -3799,7 +3771,6 @@ func (rs *runeSet4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 				}
 			}
 
-			i++
 			continue
 		}
 
@@ -3810,30 +3781,26 @@ func (rs *runeSet4) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 			if b <= startMBMax {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 3
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
 		case 3:
 			lastMBStartIdx = i
 			mbRuneIdxDiff = 2
+			continue
 		case 2:
 			if b >= startMB2ByteMin {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 1
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
-		default:
-			lastMBStartIdx = invalidMBStartIdx
 		}
 
-		i++
+		lastMBStartIdx = invalidMBStartIdx
 	}
 
 	return 0, 0, -1
 }
+
 func (rs *runeSet4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 	if rs.mbRuneCount == 0 {
 		for i := range len(s) {
@@ -3846,10 +3813,9 @@ func (rs *runeSet4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 		return 0, 0, -1
 	}
 
-	inLen := len(s)
-	var i, mbRuneIdxDiff int
+	var mbRuneIdxDiff int
 	lastMBStartIdx := invalidMBStartIdx
-	for i < inLen {
+	for i := range len(s) {
 		b := s[i]
 
 		if b < utf8.RuneSelf {
@@ -3860,7 +3826,6 @@ func (rs *runeSet4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 			}
 
 			lastMBStartIdx = invalidMBStartIdx
-			i++
 			continue
 		}
 
@@ -3890,13 +3855,11 @@ func (rs *runeSet4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 					case 0xF0:
 						// block over-longs
 						if b1 < 0x90 {
-							i++
 							continue
 						}
 					case 0xF4:
 						// would be outside the unicode plane above U+10FFFF
 						if b1 > 0x8F {
-							i++
 							continue
 						}
 					}
@@ -3912,13 +3875,11 @@ func (rs *runeSet4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 					case 0xE0:
 						// block over-longs
 						if b1 < 0xA0 {
-							i++
 							continue
 						}
 					case 0xED:
 						// block surrogates
 						if b1 > 0x9F {
-							i++
 							continue
 						}
 					}
@@ -3940,7 +3901,6 @@ func (rs *runeSet4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 				}
 			}
 
-			i++
 			continue
 		}
 
@@ -3951,26 +3911,21 @@ func (rs *runeSet4) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 			if b <= startMBMax {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 3
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
 		case 3:
 			lastMBStartIdx = i
 			mbRuneIdxDiff = 2
+			continue
 		case 2:
 			if b >= startMB2ByteMin {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 1
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
-		default:
-			lastMBStartIdx = invalidMBStartIdx
 		}
 
-		i++
+		lastMBStartIdx = invalidMBStartIdx
 	}
 
 	return 0, 0, -1
@@ -4083,6 +4038,7 @@ func (rs *runeSet6) addRuneUniqueUnchecked(r rune) {
 
 func (rs *runeSet6) indexAnyInBytes(p []byte) int {
 	if rs.mbRuneCount == 0 {
+
 		for i, b := range p {
 			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
 				return i
@@ -4092,11 +4048,9 @@ func (rs *runeSet6) indexAnyInBytes(p []byte) int {
 		return -1
 	}
 
-	inLen := len(p)
-	var i, mbRuneIdxDiff int
+	var mbRuneIdxDiff int
 	lastMBStartIdx := invalidMBStartIdx
-	for i < inLen {
-		b := p[i]
+	for i, b := range p {
 
 		if b < utf8.RuneSelf {
 			// matched ascii character
@@ -4106,7 +4060,6 @@ func (rs *runeSet6) indexAnyInBytes(p []byte) int {
 			}
 
 			lastMBStartIdx = invalidMBStartIdx
-			i++
 			continue
 		}
 
@@ -4135,13 +4088,11 @@ func (rs *runeSet6) indexAnyInBytes(p []byte) int {
 					case 0xF0:
 						// block over-longs
 						if b1 < 0x90 {
-							i++
 							continue
 						}
 					case 0xF4:
 						// would be outside the unicode plane above U+10FFFF
 						if b1 > 0x8F {
-							i++
 							continue
 						}
 					}
@@ -4156,13 +4107,11 @@ func (rs *runeSet6) indexAnyInBytes(p []byte) int {
 					case 0xE0:
 						// block over-longs
 						if b1 < 0xA0 {
-							i++
 							continue
 						}
 					case 0xED:
 						// block surrogates
 						if b1 > 0x9F {
-							i++
 							continue
 						}
 					}
@@ -4182,7 +4131,6 @@ func (rs *runeSet6) indexAnyInBytes(p []byte) int {
 				}
 			}
 
-			i++
 			continue
 		}
 
@@ -4193,30 +4141,26 @@ func (rs *runeSet6) indexAnyInBytes(p []byte) int {
 			if b <= startMBMax {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 3
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
 		case 3:
 			lastMBStartIdx = i
 			mbRuneIdxDiff = 2
+			continue
 		case 2:
 			if b >= startMB2ByteMin {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 1
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
-		default:
-			lastMBStartIdx = invalidMBStartIdx
 		}
 
-		i++
+		lastMBStartIdx = invalidMBStartIdx
 	}
 
 	return -1
 }
+
 func (rs *runeSet6) indexAnyInString(s string) int {
 	if rs.mbRuneCount == 0 {
 		for i := range len(s) {
@@ -4229,10 +4173,9 @@ func (rs *runeSet6) indexAnyInString(s string) int {
 		return -1
 	}
 
-	inLen := len(s)
-	var i, mbRuneIdxDiff int
+	var mbRuneIdxDiff int
 	lastMBStartIdx := invalidMBStartIdx
-	for i < inLen {
+	for i := range len(s) {
 		b := s[i]
 
 		if b < utf8.RuneSelf {
@@ -4243,7 +4186,6 @@ func (rs *runeSet6) indexAnyInString(s string) int {
 			}
 
 			lastMBStartIdx = invalidMBStartIdx
-			i++
 			continue
 		}
 
@@ -4272,13 +4214,11 @@ func (rs *runeSet6) indexAnyInString(s string) int {
 					case 0xF0:
 						// block over-longs
 						if b1 < 0x90 {
-							i++
 							continue
 						}
 					case 0xF4:
 						// would be outside the unicode plane above U+10FFFF
 						if b1 > 0x8F {
-							i++
 							continue
 						}
 					}
@@ -4293,13 +4233,11 @@ func (rs *runeSet6) indexAnyInString(s string) int {
 					case 0xE0:
 						// block over-longs
 						if b1 < 0xA0 {
-							i++
 							continue
 						}
 					case 0xED:
 						// block surrogates
 						if b1 > 0x9F {
-							i++
 							continue
 						}
 					}
@@ -4319,7 +4257,6 @@ func (rs *runeSet6) indexAnyInString(s string) int {
 				}
 			}
 
-			i++
 			continue
 		}
 
@@ -4330,32 +4267,29 @@ func (rs *runeSet6) indexAnyInString(s string) int {
 			if b <= startMBMax {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 3
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
 		case 3:
 			lastMBStartIdx = i
 			mbRuneIdxDiff = 2
+			continue
 		case 2:
 			if b >= startMB2ByteMin {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 1
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
-		default:
-			lastMBStartIdx = invalidMBStartIdx
 		}
 
-		i++
+		lastMBStartIdx = invalidMBStartIdx
 	}
 
 	return -1
 }
+
 func (rs *runeSet6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 	if rs.mbRuneCount == 0 {
+
 		for i, b := range p {
 			if /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0 {
 				return rune(b), 1, i
@@ -4365,11 +4299,9 @@ func (rs *runeSet6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 		return 0, 0, -1
 	}
 
-	inLen := len(p)
-	var i, mbRuneIdxDiff int
+	var mbRuneIdxDiff int
 	lastMBStartIdx := invalidMBStartIdx
-	for i < inLen {
-		b := p[i]
+	for i, b := range p {
 
 		if b < utf8.RuneSelf {
 			// matched ascii character
@@ -4379,7 +4311,6 @@ func (rs *runeSet6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 			}
 
 			lastMBStartIdx = invalidMBStartIdx
-			i++
 			continue
 		}
 
@@ -4409,13 +4340,11 @@ func (rs *runeSet6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 					case 0xF0:
 						// block over-longs
 						if b1 < 0x90 {
-							i++
 							continue
 						}
 					case 0xF4:
 						// would be outside the unicode plane above U+10FFFF
 						if b1 > 0x8F {
-							i++
 							continue
 						}
 					}
@@ -4431,13 +4360,11 @@ func (rs *runeSet6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 					case 0xE0:
 						// block over-longs
 						if b1 < 0xA0 {
-							i++
 							continue
 						}
 					case 0xED:
 						// block surrogates
 						if b1 > 0x9F {
-							i++
 							continue
 						}
 					}
@@ -4459,7 +4386,6 @@ func (rs *runeSet6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 				}
 			}
 
-			i++
 			continue
 		}
 
@@ -4470,30 +4396,26 @@ func (rs *runeSet6) indexAnyRuneLenInBytes(p []byte) (rune, uint8, int) {
 			if b <= startMBMax {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 3
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
 		case 3:
 			lastMBStartIdx = i
 			mbRuneIdxDiff = 2
+			continue
 		case 2:
 			if b >= startMB2ByteMin {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 1
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
-		default:
-			lastMBStartIdx = invalidMBStartIdx
 		}
 
-		i++
+		lastMBStartIdx = invalidMBStartIdx
 	}
 
 	return 0, 0, -1
 }
+
 func (rs *runeSet6) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 	if rs.mbRuneCount == 0 {
 		for i := range len(s) {
@@ -4506,10 +4428,9 @@ func (rs *runeSet6) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 		return 0, 0, -1
 	}
 
-	inLen := len(s)
-	var i, mbRuneIdxDiff int
+	var mbRuneIdxDiff int
 	lastMBStartIdx := invalidMBStartIdx
-	for i < inLen {
+	for i := range len(s) {
 		b := s[i]
 
 		if b < utf8.RuneSelf {
@@ -4520,7 +4441,6 @@ func (rs *runeSet6) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 			}
 
 			lastMBStartIdx = invalidMBStartIdx
-			i++
 			continue
 		}
 
@@ -4550,13 +4470,11 @@ func (rs *runeSet6) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 					case 0xF0:
 						// block over-longs
 						if b1 < 0x90 {
-							i++
 							continue
 						}
 					case 0xF4:
 						// would be outside the unicode plane above U+10FFFF
 						if b1 > 0x8F {
-							i++
 							continue
 						}
 					}
@@ -4572,13 +4490,11 @@ func (rs *runeSet6) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 					case 0xE0:
 						// block over-longs
 						if b1 < 0xA0 {
-							i++
 							continue
 						}
 					case 0xED:
 						// block surrogates
 						if b1 > 0x9F {
-							i++
 							continue
 						}
 					}
@@ -4600,7 +4516,6 @@ func (rs *runeSet6) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 				}
 			}
 
-			i++
 			continue
 		}
 
@@ -4611,26 +4526,21 @@ func (rs *runeSet6) indexAnyRuneLenInString(s string) (rune, uint8, int) {
 			if b <= startMBMax {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 3
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
 		case 3:
 			lastMBStartIdx = i
 			mbRuneIdxDiff = 2
+			continue
 		case 2:
 			if b >= startMB2ByteMin {
 				lastMBStartIdx = i
 				mbRuneIdxDiff = 1
-				break
+				continue
 			}
-
-			lastMBStartIdx = invalidMBStartIdx
-		default:
-			lastMBStartIdx = invalidMBStartIdx
 		}
 
-		i++
+		lastMBStartIdx = invalidMBStartIdx
 	}
 
 	return 0, 0, -1
