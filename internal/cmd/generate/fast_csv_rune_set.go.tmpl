@@ -160,38 +160,24 @@ func (rs *runeSet{{$MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .Ar
 	inLen := len({{if eq .ArgType "Bytes"}}p{{else}}s{{end}})
 	var i, mbRuneIdxDiff int
 	lastMBStartIdx := invalidMBStartIdx
-	for {
-		if i >= inLen {
-			return {{if eq .Name "RuneLen"}}0, 0, {{end}}-1
+	for i < inLen {
+		b := {{if eq .ArgType "Bytes"}}p{{else}}s{{end}}[i]
+
+		if b < utf8.RuneSelf {
+			// matched ascii character
+
+			if ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0) {
+				return {{if eq .Name "RuneLen"}}rune(b), 1, {{end}}i
+			}
+
+			lastMBStartIdx = invalidMBStartIdx
+			i++
+			continue
 		}
 
-		b := {{if eq .ArgType "Bytes"}}p{{else}}s{{end}}[i]
-	TOP_SWITCH:
-		switch {
-		case /* matched ascii character */ ( /* inlined call to containsSingleByteRune: */ (rs.singleBytes[b>>5] & (uint32(1) << (b & 31))) != 0):
-			return {{if eq .Name "RuneLen"}}rune(b), 1, {{end}}i
-		case /* matched start of multi-byte rune */ b >= startMBMin:
-			switch leadingOnes8(b) {
-			case 4:
-				if b <= startMBMax {
-					lastMBStartIdx = i
-					mbRuneIdxDiff = 3
-					break TOP_SWITCH
-				}
-			case 3:
-				lastMBStartIdx = i
-				mbRuneIdxDiff = 2
-				break TOP_SWITCH
-			case 2:
-				if b >= startMB2ByteMin {
-					lastMBStartIdx = i
-					mbRuneIdxDiff = 1
-					break TOP_SWITCH
-				}
-			}
-			// byte was not a valid utf8 start of multi-byte encoded rune value; reset the tracking state
-			lastMBStartIdx = invalidMBStartIdx
-		case /* matched continuation byte */ (b & contMBMask) == contMBVal:
+		if b < startMBMin {
+			// matched continuation byte
+
 			if (i-lastMBStartIdx) == mbRuneIdxDiff && ( /* inlined call to internalContainsMBEndByte: */ (rs.mbByteEnds[(b>>5)&1] & (uint32(1) << (b & 31))) != 0) {
 				// invariant: mbRuneIdxDiff is within [1,3] when this block is entered
 
@@ -217,12 +203,14 @@ func (rs *runeSet{{$MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .Ar
 					case 0xF0:
 						// block over-longs
 						if b1 < 0x90 {
-							break TOP_SWITCH
+							i++
+							continue
 						}
 					case 0xF4:
 						// would be outside the unicode plane above U+10FFFF
 						if b1 > 0x8F {
-							break TOP_SWITCH
+							i++
+							continue
 						}
 					}
 
@@ -239,12 +227,14 @@ func (rs *runeSet{{$MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .Ar
 					case 0xE0:
 						// block over-longs
 						if b1 < 0xA0 {
-							break TOP_SWITCH
+							i++
+							continue
 						}
 					case 0xED:
 						// block surrogates
 						if b1 > 0x9F {
-							break TOP_SWITCH
+							i++
+							continue
 						}
 					}
 
@@ -268,13 +258,41 @@ func (rs *runeSet{{$MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .Ar
 					return {{if eq .Name "RuneLen"}}r, n, {{end}}lastMBStartIdx
 				}
 			}
+
+			i++
+			continue
+		}
+
+		// matched start of multi-byte rune
+
+		switch leadingOnes8(b) {
+		case 4:
+			if b <= startMBMax {
+				lastMBStartIdx = i
+				mbRuneIdxDiff = 3
+				break
+			}
+
+			lastMBStartIdx = invalidMBStartIdx
+		case 3:
+			lastMBStartIdx = i
+			mbRuneIdxDiff = 2
+		case 2:
+			if b >= startMB2ByteMin {
+				lastMBStartIdx = i
+				mbRuneIdxDiff = 1
+				break
+			}
+
+			lastMBStartIdx = invalidMBStartIdx
 		default:
-			// byte was not a tracked ASCII rune and it was not above 0x80
 			lastMBStartIdx = invalidMBStartIdx
 		}
 
 		i++
 	}
+
+	return {{if eq .Name "RuneLen"}}0, 0, {{end}}-1
 }
 {{end}}
 

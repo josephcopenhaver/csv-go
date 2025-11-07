@@ -55,12 +55,6 @@ import (
 )
 
 const (
-	// contMBMask is the mask applied to a byte to see if it is a continuation byte in a utf8 encoded rune
-	contMBMask = 0xC0
-	// contMBVal is the value that indicates a byte is a continuation byte after the bit mask contMBMask has been applied
-	// should it equal this constant.
-	contMBVal = 0x80
-
 	// startMBMin marks the start of a multi-byte utf8 encoded rune should a byte be greater than or equal to it.
 	startMBMin = 0xC0
 
