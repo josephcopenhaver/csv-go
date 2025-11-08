@@ -137,19 +137,29 @@ func main() {
 	{
 		t := parse(tsWrite)
 
+		type methodCfg struct {
+			ArgType string
+		}
+
 		type cfg struct {
 			Memclear bool
+			Methods  []methodCfg
+		}
+
+		methods := []methodCfg{
+			{"Bytes"},
+			{"String"},
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{Memclear: false},
-			{Memclear: true},
+			{Memclear: false, Methods: methods},
+			{Memclear: true, Methods: methods},
 		})
 	}
 
-	// render write strategies
+	// render rune set strategies
 	{
 		t := parse(tsRuneSet)
 

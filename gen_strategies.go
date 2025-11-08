@@ -2346,94 +2346,6 @@ FIRST_FIELD_WRITTEN:
 	return n, err
 }
 
-// loadQF_memclearOff is called after a quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-// instance of quote or escape if applicable.
-//
-// It continues with appending the data up to a potentially additional quote or escape character, then
-// appends the escaped version of that character and continues repeating that process for the rest of
-// the field.
-//
-// Essentially the function does the same as the parent context except has no intent around overall
-// quoting the field or detecting runes outside of the quote + escape character.
-func (w *Writer) loadQF_memclearOff(src []byte, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInBytes(src[scanIdx:])
-	if i == -1 {
-		w.recordBuf = append(w.recordBuf, src...)
-		return
-	}
-	scanIdx += i
-
-	//
-	// found a control rune of some kind that must be escaped
-	//
-
-	w.recordBuf = append(w.recordBuf, src[:scanIdx]...)
-
-	for {
-		scanIdx += int(n)
-
-		if w.quote == r {
-			w.recordBuf = w.escapedQuoteSeq.appendText(w.recordBuf)
-		} else {
-			w.recordBuf = w.escapedEscapeSeq.appendText(w.recordBuf)
-		}
-
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInBytes(src[scanIdx:])
-		if i == -1 {
-			w.recordBuf = append(w.recordBuf, src[scanIdx:]...)
-			return
-		}
-
-		prevIdx := scanIdx
-		scanIdx += i
-		w.recordBuf = append(w.recordBuf, src[prevIdx:scanIdx]...)
-	}
-}
-
-// loadQFWithCheckUTF8_memclearOff performs the same duties as loadQField_memclearOff and in a much more expensive
-// scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQFWithCheckUTF8_memclearOff(src []byte, scanIdx int) error {
-	var loadIdx, n int
-	var r rune
-	for {
-		if scanIdx >= len(src) {
-			w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-			return nil
-		}
-
-		if b := src[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
-				scanIdx++
-				continue
-			}
-			r = rune(b)
-			n = 1
-		} else if r, n = utf8.DecodeRune(src[scanIdx:]); n == 1 {
-			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsMBRune(r) {
-			scanIdx += n
-			continue
-		}
-
-		//
-		// found a control rune of some kind that must be escaped
-		//
-
-		w.recordBuf = append(w.recordBuf, src[loadIdx:scanIdx]...)
-
-		scanIdx += n
-		loadIdx = scanIdx
-
-		if w.quote == r {
-			w.recordBuf = w.escapedQuoteSeq.appendText(w.recordBuf)
-			continue
-		}
-
-		w.recordBuf = w.escapedEscapeSeq.appendText(w.recordBuf)
-	}
-}
-
 func (w *Writer) writeStrRow_memclearOff(fields []string) (int, error) {
 	// write the first field
 	{
@@ -2599,16 +2511,100 @@ FIRST_FIELD_WRITTEN:
 	return n, err
 }
 
-// loadStrQF_memclearOff operates on strings and is called after a quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-// instance of quote or escape if applicable.
+// loadQF_memclearOff is called after a
+// quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and communicate to this function where to
+// start scanning in the source for characters to escape. The parent context will not write any part of
+// the source to the record staging zone.
 //
-// It continues with appending the data up to a potentially additional quote or escape character, then
-// appends the escaped version of that character and continues repeating that process for the rest of
-// the field.
+// Essentially the function picks up after the parent context starts a quoting process which the parent
+// will also complete.
+func (w *Writer) loadQF_memclearOff(p []byte, scanIdx int) {
+	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInBytes(p[scanIdx:])
+	if i == -1 {
+		w.recordBuf = append(w.recordBuf, p...)
+		return
+	}
+	scanIdx += i
+
+	//
+	// found a control rune of some kind that must be escaped
+	//
+
+	w.recordBuf = append(w.recordBuf, p[:scanIdx]...)
+
+	for {
+		scanIdx += int(n)
+
+		if w.quote == r {
+			w.recordBuf = w.escapedQuoteSeq.appendText(w.recordBuf)
+		} else {
+			w.recordBuf = w.escapedEscapeSeq.appendText(w.recordBuf)
+		}
+
+		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInBytes(p[scanIdx:])
+		if i == -1 {
+			w.recordBuf = append(w.recordBuf, p[scanIdx:]...)
+			return
+		}
+
+		prevIdx := scanIdx
+		scanIdx += i
+		w.recordBuf = append(w.recordBuf, p[prevIdx:scanIdx]...)
+	}
+}
+
+// loadQFWithCheckUTF8_memclearOff performs the same duties as loadQField_memclearOff and in a much more expensive
+// scan operation also validates that the field contents are valid utf8 sequences.
+func (w *Writer) loadQFWithCheckUTF8_memclearOff(p []byte, scanIdx int) error {
+	var loadIdx, n int
+	var r rune
+	for {
+		if scanIdx >= len(p) {
+			w.recordBuf = append(w.recordBuf, p[loadIdx:]...)
+			return nil
+		}
+
+		if b := p[scanIdx]; b < utf8.RuneSelf {
+			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
+				scanIdx++
+				continue
+			}
+			r = rune(b)
+			n = 1
+		} else if r, n = utf8.DecodeRune(p[scanIdx:]); n == 1 {
+			return ErrNonUTF8InRecord
+		} else if !w.escapeControlRuneScape.containsMBRune(r) {
+			scanIdx += n
+			continue
+		}
+
+		//
+		// found a control rune of some kind that must be escaped
+		//
+
+		w.recordBuf = append(w.recordBuf, p[loadIdx:scanIdx]...)
+
+		scanIdx += n
+		loadIdx = scanIdx
+
+		if w.quote == r {
+			w.recordBuf = w.escapedQuoteSeq.appendText(w.recordBuf)
+			continue
+		}
+
+		w.recordBuf = w.escapedEscapeSeq.appendText(w.recordBuf)
+	}
+}
+
+// loadStrQF_memclearOff is called after a
+// quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and communicate to this function where to
+// start scanning in the source for characters to escape. The parent context will not write any part of
+// the source to the record staging zone.
 //
-// Essentially the function does the same as the parent context except has no intent around overall
-// quoting the field or detecting runes outside of the quote + escape character.
+// Essentially the function picks up after the parent context starts a quoting process which the parent
+// will also complete.
 func (w *Writer) loadStrQF_memclearOff(s string, scanIdx int) {
 	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInString(s[scanIdx:])
 	if i == -1 {
@@ -2644,7 +2640,7 @@ func (w *Writer) loadStrQF_memclearOff(s string, scanIdx int) {
 	}
 }
 
-// loadStrQFWithCheckUTF8_memclearOff performs the same duties as loadQField_memclearOff but with strings and in a much more expensive
+// loadStrQFWithCheckUTF8_memclearOff performs the same duties as loadStrQField_memclearOff and in a much more expensive
 // scan operation also validates that the field contents are valid utf8 sequences.
 func (w *Writer) loadStrQFWithCheckUTF8_memclearOff(s string, scanIdx int) error {
 	var loadIdx, n int
@@ -2947,94 +2943,6 @@ FIRST_FIELD_WRITTEN:
 	return n, err
 }
 
-// loadQF_memclearOn is called after a quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-// instance of quote or escape if applicable.
-//
-// It continues with appending the data up to a potentially additional quote or escape character, then
-// appends the escaped version of that character and continues repeating that process for the rest of
-// the field.
-//
-// Essentially the function does the same as the parent context except has no intent around overall
-// quoting the field or detecting runes outside of the quote + escape character.
-func (w *Writer) loadQF_memclearOn(src []byte, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInBytes(src[scanIdx:])
-	if i == -1 {
-		w.appendRec(src)
-		return
-	}
-	scanIdx += i
-
-	//
-	// found a control rune of some kind that must be escaped
-	//
-
-	w.appendRec(src[:scanIdx])
-
-	for {
-		scanIdx += int(n)
-
-		if w.quote == r {
-			w.setRecordBuf(w.escapedQuoteSeq.appendText(w.recordBuf))
-		} else {
-			w.setRecordBuf(w.escapedEscapeSeq.appendText(w.recordBuf))
-		}
-
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInBytes(src[scanIdx:])
-		if i == -1 {
-			w.appendRec(src[scanIdx:])
-			return
-		}
-
-		prevIdx := scanIdx
-		scanIdx += i
-		w.appendRec(src[prevIdx:scanIdx])
-	}
-}
-
-// loadQFWithCheckUTF8_memclearOn performs the same duties as loadQField_memclearOn and in a much more expensive
-// scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQFWithCheckUTF8_memclearOn(src []byte, scanIdx int) error {
-	var loadIdx, n int
-	var r rune
-	for {
-		if scanIdx >= len(src) {
-			w.appendRec(src[loadIdx:])
-			return nil
-		}
-
-		if b := src[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
-				scanIdx++
-				continue
-			}
-			r = rune(b)
-			n = 1
-		} else if r, n = utf8.DecodeRune(src[scanIdx:]); n == 1 {
-			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsMBRune(r) {
-			scanIdx += n
-			continue
-		}
-
-		//
-		// found a control rune of some kind that must be escaped
-		//
-
-		w.appendRec(src[loadIdx:scanIdx])
-
-		scanIdx += n
-		loadIdx = scanIdx
-
-		if w.quote == r {
-			w.setRecordBuf(w.escapedQuoteSeq.appendText(w.recordBuf))
-			continue
-		}
-
-		w.setRecordBuf(w.escapedEscapeSeq.appendText(w.recordBuf))
-	}
-}
-
 func (w *Writer) writeStrRow_memclearOn(fields []string) (int, error) {
 	// write the first field
 	{
@@ -3200,16 +3108,100 @@ FIRST_FIELD_WRITTEN:
 	return n, err
 }
 
-// loadStrQF_memclearOn operates on strings and is called after a quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-// instance of quote or escape if applicable.
+// loadQF_memclearOn is called after a
+// quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and communicate to this function where to
+// start scanning in the source for characters to escape. The parent context will not write any part of
+// the source to the record staging zone.
 //
-// It continues with appending the data up to a potentially additional quote or escape character, then
-// appends the escaped version of that character and continues repeating that process for the rest of
-// the field.
+// Essentially the function picks up after the parent context starts a quoting process which the parent
+// will also complete.
+func (w *Writer) loadQF_memclearOn(p []byte, scanIdx int) {
+	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInBytes(p[scanIdx:])
+	if i == -1 {
+		w.appendRec(p)
+		return
+	}
+	scanIdx += i
+
+	//
+	// found a control rune of some kind that must be escaped
+	//
+
+	w.appendRec(p[:scanIdx])
+
+	for {
+		scanIdx += int(n)
+
+		if w.quote == r {
+			w.setRecordBuf(w.escapedQuoteSeq.appendText(w.recordBuf))
+		} else {
+			w.setRecordBuf(w.escapedEscapeSeq.appendText(w.recordBuf))
+		}
+
+		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInBytes(p[scanIdx:])
+		if i == -1 {
+			w.appendRec(p[scanIdx:])
+			return
+		}
+
+		prevIdx := scanIdx
+		scanIdx += i
+		w.appendRec(p[prevIdx:scanIdx])
+	}
+}
+
+// loadQFWithCheckUTF8_memclearOn performs the same duties as loadQField_memclearOn and in a much more expensive
+// scan operation also validates that the field contents are valid utf8 sequences.
+func (w *Writer) loadQFWithCheckUTF8_memclearOn(p []byte, scanIdx int) error {
+	var loadIdx, n int
+	var r rune
+	for {
+		if scanIdx >= len(p) {
+			w.appendRec(p[loadIdx:])
+			return nil
+		}
+
+		if b := p[scanIdx]; b < utf8.RuneSelf {
+			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
+				scanIdx++
+				continue
+			}
+			r = rune(b)
+			n = 1
+		} else if r, n = utf8.DecodeRune(p[scanIdx:]); n == 1 {
+			return ErrNonUTF8InRecord
+		} else if !w.escapeControlRuneScape.containsMBRune(r) {
+			scanIdx += n
+			continue
+		}
+
+		//
+		// found a control rune of some kind that must be escaped
+		//
+
+		w.appendRec(p[loadIdx:scanIdx])
+
+		scanIdx += n
+		loadIdx = scanIdx
+
+		if w.quote == r {
+			w.setRecordBuf(w.escapedQuoteSeq.appendText(w.recordBuf))
+			continue
+		}
+
+		w.setRecordBuf(w.escapedEscapeSeq.appendText(w.recordBuf))
+	}
+}
+
+// loadStrQF_memclearOn is called after a
+// quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and communicate to this function where to
+// start scanning in the source for characters to escape. The parent context will not write any part of
+// the source to the record staging zone.
 //
-// Essentially the function does the same as the parent context except has no intent around overall
-// quoting the field or detecting runes outside of the quote + escape character.
+// Essentially the function picks up after the parent context starts a quoting process which the parent
+// will also complete.
 func (w *Writer) loadStrQF_memclearOn(s string, scanIdx int) {
 	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInString(s[scanIdx:])
 	if i == -1 {
@@ -3245,7 +3237,7 @@ func (w *Writer) loadStrQF_memclearOn(s string, scanIdx int) {
 	}
 }
 
-// loadStrQFWithCheckUTF8_memclearOn performs the same duties as loadQField_memclearOn but with strings and in a much more expensive
+// loadStrQFWithCheckUTF8_memclearOn performs the same duties as loadStrQField_memclearOn and in a much more expensive
 // scan operation also validates that the field contents are valid utf8 sequences.
 func (w *Writer) loadStrQFWithCheckUTF8_memclearOn(s string, scanIdx int) error {
 	var loadIdx, n int

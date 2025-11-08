@@ -1,8 +1,9 @@
-{{- define "appendRec0"}}{{if .Memclear}}w.appendRec({{else}}w.recordBuf = append(w.recordBuf, {{end}}{{end}}
-{{define "appendStrRec0"}}{{if .Memclear}}w.appendStrRec({{else}}w.recordBuf = append(w.recordBuf, {{end}}{{end}}
-{{define "appendRec1"}}{{if .Memclear}}){{else}}...){{end}}{{end}}
-{{define "setRec0"}}{{if .Memclear}}w.setRecordBuf({{else}}w.recordBuf = {{end}}{{end}}
-{{define "setRec1"}}{{if .Memclear}}){{else}}{{end}}{{end -}}
+{{- $appendBytesRec0 := "" }}{{if .Memclear}}{{ $appendBytesRec0 = "w.appendRec(" }}{{else}}{{ $appendBytesRec0 = "w.recordBuf = append(w.recordBuf, " }}{{end}}
+{{ $appendStrRec0 := "" }}{{if .Memclear}}{{ $appendStrRec0 = "w.appendStrRec(" }}{{else}}{{ $appendStrRec0 = "w.recordBuf = append(w.recordBuf, " }}{{end}}
+{{ $appendRec0 := $appendBytesRec0 }}
+{{ $appendRec1 := "" }}{{if .Memclear}}{{ $appendRec1 = ")" }}{{else}}{{ $appendRec1 = "...)" }}{{end}}
+{{ $setRec0 := "" }}{{if .Memclear}}{{ $setRec0 = "w.setRecordBuf(" }}{{else}}{{ $setRec0 = "w.recordBuf = " }}{{end}}
+{{ $setRec1 := "" }}{{if .Memclear}}{{ $setRec1 = ")" }}{{- end}}
 
 func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []FieldWriter) (int, error) {
 	// write the first field
@@ -18,8 +19,8 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []F
 			src = f.bytes
 			if len(src) == 0 {
 				if len(fields) == 1 {
-					{{template "setRec0" .}}w.twoQuotesSeq.appendText(w.recordBuf){{template "setRec1" .}}
-					{{template "setRec0" .}}w.recordSepSeq.appendText(w.recordBuf){{template "setRec1" .}}
+					{{$setRec0}}w.twoQuotesSeq.appendText(w.recordBuf){{$setRec1}}
+					{{$setRec0}}w.recordSepSeq.appendText(w.recordBuf){{$setRec1}}
 
 					n, err := w.writer.Write(w.recordBuf)
 					if err != nil {
@@ -35,8 +36,8 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []F
 			s := f.str
 			if len(s) == 0 {
 				if len(fields) == 1 {
-					{{template "setRec0" .}}w.twoQuotesSeq.appendText(w.recordBuf){{template "setRec1" .}}
-					{{template "setRec0" .}}w.recordSepSeq.appendText(w.recordBuf){{template "setRec1" .}}
+					{{$setRec0}}w.twoQuotesSeq.appendText(w.recordBuf){{$setRec1}}
+					{{$setRec0}}w.recordSepSeq.appendText(w.recordBuf){{$setRec1}}
 
 					n, err := w.writer.Write(w.recordBuf)
 					if err != nil {
@@ -64,7 +65,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []F
 					return 0, err
 				}
 
-				{{template "setRec0" .}}src{{template "setRec1" .}}
+				{{$setRec0}}src{{$setRec1}}
 				goto FIRST_FIELD_WRITTEN
 			}
 
@@ -85,16 +86,16 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []F
 			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
 				i = w.controlRuneScape.indexAnyInBytes(src)
 				if i == -1 {
-					{{template "appendRec0" .}}src{{template "appendRec1" .}}
+					{{$appendRec0}}src{{$appendRec1}}
 					goto FIRST_FIELD_WRITTEN
 				}
 			}
 
-			{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 			w.loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src, i)
 
-			{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 			goto FIRST_FIELD_WRITTEN
 		}
@@ -107,7 +108,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []F
 		if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
 			for {
 				if i >= len(src) {
-					{{template "appendRec0" .}}src{{template "appendRec1" .}}
+					{{$appendRec0}}src{{$appendRec1}}
 					goto FIRST_FIELD_WRITTEN
 				}
 
@@ -132,20 +133,20 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []F
 		// found a control rune of some kind or was forced to quote first field
 		//
 
-		{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+		{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 		err = w.loadQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src, i)
 		if err != nil {
 			return 0, err
 		}
 
-		{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+		{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 	}
 
 FIRST_FIELD_WRITTEN:
 
 	for i := 1; i < len(fields); i++ {
-		{{template "setRec0" .}}w.fieldSepSeq.appendText(w.recordBuf){{template "setRec1" .}}
+		{{$setRec0}}w.fieldSepSeq.appendText(w.recordBuf){{$setRec1}}
 
 		f := &fields[i]
 
@@ -184,7 +185,7 @@ FIRST_FIELD_WRITTEN:
 					return 0, err
 				}
 
-				{{template "setRec0" .}}src{{template "setRec1" .}}
+				{{$setRec0}}src{{$setRec1}}
 				continue
 			}
 
@@ -203,15 +204,15 @@ FIRST_FIELD_WRITTEN:
 
 			i := w.controlRuneScape.indexAnyInBytes(src)
 			if i == -1 {
-				{{template "appendRec0" .}}src{{template "appendRec1" .}}
+				{{$appendRec0}}src{{$appendRec1}}
 				continue
 			}
 
-			{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 			w.loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src, i)
 
-			{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 			continue
 		}
@@ -223,7 +224,7 @@ FIRST_FIELD_WRITTEN:
 		var i int
 		for {
 			if i >= len(src) {
-				{{template "appendRec0" .}}src{{template "appendRec1" .}}
+				{{$appendRec0}}src{{$appendRec1}}
 				break
 			}
 			if b := src[i]; b < utf8.RuneSelf {
@@ -242,20 +243,20 @@ FIRST_FIELD_WRITTEN:
 			// found a control rune of some kind
 			//
 
-			{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 			err = w.loadQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src, i)
 			if err != nil {
 				return 0, err
 			}
 
-			{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 			break
 		}
 	}
 
-	{{template "setRec0" .}}w.recordSepSeq.appendText(w.recordBuf){{template "setRec1" .}}
+	{{$setRec0}}w.recordSepSeq.appendText(w.recordBuf){{$setRec1}}
 
 	n, err := w.writer.Write(w.recordBuf)
 	if err != nil {
@@ -264,102 +265,14 @@ FIRST_FIELD_WRITTEN:
 	return n, err
 }
 
-// loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}} is called after a quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-// instance of quote or escape if applicable.
-//
-// It continues with appending the data up to a potentially additional quote or escape character, then
-// appends the escaped version of that character and continues repeating that process for the rest of
-// the field.
-//
-// Essentially the function does the same as the parent context except has no intent around overall
-// quoting the field or detecting runes outside of the quote + escape character.
-func (w *Writer) loadQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src []byte, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInBytes(src[scanIdx:])
-	if i == -1 {
-		{{template "appendRec0" .}}src{{template "appendRec1" .}}
-		return
-	}
-	scanIdx += i
-
-	//
-	// found a control rune of some kind that must be escaped
-	//
-
-	{{template "appendRec0" .}}src[:scanIdx]{{template "appendRec1" .}}
-
-	for {
-		scanIdx += int(n)
-
-		if w.quote == r {
-			{{template "setRec0" .}}w.escapedQuoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
-		} else {
-			{{template "setRec0" .}}w.escapedEscapeSeq.appendText(w.recordBuf){{template "setRec1" .}}
-		}
-
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInBytes(src[scanIdx:])
-		if i == -1 {
-			{{template "appendRec0" .}}src[scanIdx:]{{template "appendRec1" .}}
-			return
-		}
-
-		prevIdx := scanIdx
-		scanIdx += i
-		{{template "appendRec0" .}}src[prevIdx:scanIdx]{{template "appendRec1" .}}
-	}
-}
-
-// loadQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}} performs the same duties as loadQField_memclearO{{if .Memclear}}n{{else}}ff{{end}} and in a much more expensive
-// scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}(src []byte, scanIdx int) error {
-	var loadIdx, n int
-	var r rune
-	for {
-		if scanIdx >= len(src) {
-			{{template "appendRec0" .}}src[loadIdx:]{{template "appendRec1" .}}
-			return nil
-		}
-
-		if b := src[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
-				scanIdx++
-				continue
-			}
-			r = rune(b)
-			n = 1
-		} else if r, n = utf8.DecodeRune(src[scanIdx:]); n == 1 {
-			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsMBRune(r) {
-			scanIdx += n
-			continue
-		}
-
-		//
-		// found a control rune of some kind that must be escaped
-		//
-
-		{{template "appendRec0" .}}src[loadIdx:scanIdx]{{template "appendRec1" .}}
-
-		scanIdx += n
-		loadIdx = scanIdx
-
-		if w.quote == r {
-			{{template "setRec0" .}}w.escapedQuoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
-			continue
-		}
-
-		{{template "setRec0" .}}w.escapedEscapeSeq.appendText(w.recordBuf){{template "setRec1" .}}
-	}
-}
-
 func (w *Writer) writeStrRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []string) (int, error) {
 	// write the first field
 	{
 		s := fields[0]
 		if len(s) == 0 {
 			if len(fields) == 1 {
-				{{template "setRec0" .}}w.twoQuotesSeq.appendText(w.recordBuf){{template "setRec1" .}}
-				{{template "setRec0" .}}w.recordSepSeq.appendText(w.recordBuf){{template "setRec1" .}}
+				{{$setRec0}}w.twoQuotesSeq.appendText(w.recordBuf){{$setRec1}}
+				{{$setRec0}}w.recordSepSeq.appendText(w.recordBuf){{$setRec1}}
 
 				n, err := w.writer.Write(w.recordBuf)
 				if err != nil {
@@ -381,16 +294,16 @@ func (w *Writer) writeStrRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields 
 			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
 				i = w.controlRuneScape.indexAnyInString(s)
 				if i == -1 {
-					{{template "appendStrRec0" .}}s{{template "appendRec1" .}}
+					{{$appendStrRec0}}s{{$appendRec1}}
 					goto FIRST_FIELD_WRITTEN
 				}
 			}
 
-			{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 			w.loadStrQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}(s, i)
 
-			{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 			goto FIRST_FIELD_WRITTEN
 		}
@@ -403,7 +316,7 @@ func (w *Writer) writeStrRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields 
 		if (w.bitFlags&wFlagForceQuoteFirstField) == 0 {
 			for {
 				if i >= len(s) {
-					{{template "appendStrRec0" .}}s{{template "appendRec1" .}}
+					{{$appendStrRec0}}s{{$appendRec1}}
 					goto FIRST_FIELD_WRITTEN
 				}
 
@@ -428,19 +341,19 @@ func (w *Writer) writeStrRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields 
 		// found a control rune of some kind or was forced to quote first field
 		//
 
-		{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+		{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 		if err := w.loadStrQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}(s, i); err != nil {
 			return 0, err
 		}
 
-		{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+		{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 	}
 
 FIRST_FIELD_WRITTEN:
 
 	for i := 1; i < len(fields); i++ {
-		{{template "setRec0" .}}w.fieldSepSeq.appendText(w.recordBuf){{template "setRec1" .}}
+		{{$setRec0}}w.fieldSepSeq.appendText(w.recordBuf){{$setRec1}}
 
 		s := fields[i]
 		if len(s) == 0 {
@@ -456,15 +369,15 @@ FIRST_FIELD_WRITTEN:
 
 			i := w.controlRuneScape.indexAnyInString(s)
 			if i == -1 {
-				{{template "appendStrRec0" .}}s{{template "appendRec1" .}}
+				{{$appendStrRec0}}s{{$appendRec1}}
 				continue
 			}
 
-			{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 			w.loadStrQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}(s, i)
 
-			{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 			continue
 		}
@@ -476,7 +389,7 @@ FIRST_FIELD_WRITTEN:
 		var i int
 		for {
 			if i >= len(s) {
-				{{template "appendStrRec0" .}}s{{template "appendRec1" .}}
+				{{$appendStrRec0}}s{{$appendRec1}}
 				break
 			}
 
@@ -496,19 +409,19 @@ FIRST_FIELD_WRITTEN:
 			// found a control rune of some kind or was forced to quote first field
 			//
 
-			{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 			if err := w.loadStrQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}(s, i); err != nil {
 				return 0, err
 			}
 
-			{{template "setRec0" .}}w.quoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.quoteSeq.appendText(w.recordBuf){{$setRec1}}
 
 			break
 		}
 	}
 
-	{{template "setRec0" .}}w.recordSepSeq.appendText(w.recordBuf){{template "setRec1" .}}
+	{{$setRec0}}w.recordSepSeq.appendText(w.recordBuf){{$setRec1}}
 
 	n, err := w.writer.Write(w.recordBuf)
 	if err != nil {
@@ -517,20 +430,20 @@ FIRST_FIELD_WRITTEN:
 	return n, err
 }
 
-// loadStrQF_memclearO{{if .Memclear}}n{{else}}ff{{end}} operates on strings and is called after a quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-// instance of quote or escape if applicable.
+{{range .Methods}}
+{{ $arg := "" }}{{if eq .ArgType "String"}}{{ $arg = "s" }}{{ $appendRec0 = $appendStrRec0 }}{{else}}{{ $arg = "p" }}{{ $appendRec0 = $appendBytesRec0 }}{{end}}
+// load{{if eq .ArgType "String"}}Str{{end}}QF_memclearO{{if $.Memclear}}n{{else}}ff{{end}} is called after a
+// quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and communicate to this function where to
+// start scanning in the source for characters to escape. The parent context will not write any part of
+// the source to the record staging zone.
 //
-// It continues with appending the data up to a potentially additional quote or escape character, then
-// appends the escaped version of that character and continues repeating that process for the rest of
-// the field.
-//
-// Essentially the function does the same as the parent context except has no intent around overall
-// quoting the field or detecting runes outside of the quote + escape character.
-func (w *Writer) loadStrQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}(s string, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInString(s[scanIdx:])
+// Essentially the function picks up after the parent context starts a quoting process which the parent
+// will also complete.
+func (w *Writer) load{{if eq .ArgType "String"}}Str{{end}}QF_memclearO{{if $.Memclear}}n{{else}}ff{{end}}({{$arg}} {{if eq .ArgType "String"}}string{{else}}[]byte{{end}}, scanIdx int) {
+	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenIn{{.ArgType}}({{$arg}}[scanIdx:])
 	if i == -1 {
-		{{template "appendStrRec0" .}}s{{template "appendRec1" .}}
+		{{$appendRec0}}{{$arg}}{{$appendRec1}}
 		return
 	}
 	scanIdx += i
@@ -539,48 +452,48 @@ func (w *Writer) loadStrQF_memclearO{{if .Memclear}}n{{else}}ff{{end}}(s string,
 	// found a control rune of some kind that must be escaped
 	//
 
-	{{template "appendStrRec0" .}}s[:scanIdx]{{template "appendRec1" .}}
+	{{$appendRec0}}{{$arg}}[:scanIdx]{{$appendRec1}}
 
 	for {
 		scanIdx += int(n)
 
 		if w.quote == r {
-			{{template "setRec0" .}}w.escapedQuoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.escapedQuoteSeq.appendText(w.recordBuf){{$setRec1}}
 		} else {
-			{{template "setRec0" .}}w.escapedEscapeSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.escapedEscapeSeq.appendText(w.recordBuf){{$setRec1}}
 		}
 
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInString(s[scanIdx:])
+		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenIn{{.ArgType}}({{$arg}}[scanIdx:])
 		if i == -1 {
-			{{template "appendStrRec0" .}}s[scanIdx:]{{template "appendRec1" .}}
+			{{$appendRec0}}{{$arg}}[scanIdx:]{{$appendRec1}}
 			return
 		}
 
 		prevIdx := scanIdx
 		scanIdx += i
-		{{template "appendStrRec0" .}}s[prevIdx:scanIdx]{{template "appendRec1" .}}
+		{{$appendRec0}}{{$arg}}[prevIdx:scanIdx]{{$appendRec1}}
 	}
 }
 
-// loadStrQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}} performs the same duties as loadQField_memclearO{{if .Memclear}}n{{else}}ff{{end}} but with strings and in a much more expensive
+// load{{if eq .ArgType "String"}}Str{{end}}QFWithCheckUTF8_memclearO{{if $.Memclear}}n{{else}}ff{{end}} performs the same duties as load{{if eq .ArgType "String"}}Str{{end}}QField_memclearO{{if $.Memclear}}n{{else}}ff{{end}} and in a much more expensive
 // scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadStrQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{end}}(s string, scanIdx int) error {
+func (w *Writer) load{{if eq .ArgType "String"}}Str{{end}}QFWithCheckUTF8_memclearO{{if $.Memclear}}n{{else}}ff{{end}}({{$arg}} {{if eq .ArgType "String"}}string{{else}}[]byte{{end}}, scanIdx int) error {
 	var loadIdx, n int
 	var r rune
 	for {
-		if scanIdx >= len(s) {
-			{{template "appendStrRec0" .}}s[loadIdx:]{{template "appendRec1" .}}
+		if scanIdx >= len({{$arg}}) {
+			{{$appendRec0}}{{$arg}}[loadIdx:]{{$appendRec1}}
 			return nil
 		}
 
-		if b := s[scanIdx]; b < utf8.RuneSelf {
+		if b := {{$arg}}[scanIdx]; b < utf8.RuneSelf {
 			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
 				scanIdx++
 				continue
 			}
 			r = rune(b)
 			n = 1
-		} else if r, n = utf8.DecodeRuneInString(s[scanIdx:]); n == 1 {
+		} else if r, n = utf8.DecodeRune{{if eq .ArgType "String"}}InString{{end}}({{$arg}}[scanIdx:]); n == 1 {
 			return ErrNonUTF8InRecord
 		} else if !w.escapeControlRuneScape.containsMBRune(r) {
 			scanIdx += n
@@ -591,16 +504,17 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearO{{if .Memclear}}n{{else}}ff{{en
 		// found a control rune of some kind that must be escaped
 		//
 
-		{{template "appendStrRec0" .}}s[loadIdx:scanIdx]{{template "appendRec1" .}}
+		{{$appendRec0}}{{$arg}}[loadIdx:scanIdx]{{$appendRec1}}
 
 		scanIdx += n
 		loadIdx = scanIdx
 
 		if w.quote == r {
-			{{template "setRec0" .}}w.escapedQuoteSeq.appendText(w.recordBuf){{template "setRec1" .}}
+			{{$setRec0}}w.escapedQuoteSeq.appendText(w.recordBuf){{$setRec1}}
 			continue
 		}
 
-		{{template "setRec0" .}}w.escapedEscapeSeq.appendText(w.recordBuf){{template "setRec1" .}}
+		{{$setRec0}}w.escapedEscapeSeq.appendText(w.recordBuf){{$setRec1}}
 	}
 }
+{{end}}

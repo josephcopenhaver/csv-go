@@ -140,7 +140,8 @@ func (rs *runeSet{{.MultiByteSize}}) addRuneUniqueUnchecked(r rune) {
 }
 
 {{range .Methods}}
-func (rs *runeSet{{$.MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .ArgType "Bytes"}}p []byte{{else}}s string{{end}}) {{.Returns}} {
+{{ $arg := "" }}{{if eq .ArgType "Bytes"}}{{ $arg = "p" }}{{else}}{{ $arg = "s" }}{{end}}
+func (rs *runeSet{{$.MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{$arg}} {{if eq .ArgType "Bytes"}}[]byte{{else}}string{{end}}) {{.Returns}} {
 	if rs.mbRuneCount == 0 {
 		{{if eq .ArgType "Bytes"}}
 		for i, b := range p {
@@ -199,7 +200,7 @@ func (rs *runeSet{{$.MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .A
 				switch mbRuneIdxDiff {
 				case 3:
 					// Invariants: b0 in [0xF0..0xF4]; b1,b2,b3 are 0b10xxxxxx.
-					b0, b1 := {{if eq .ArgType "Bytes"}}p{{else}}s{{end}}[i-3], {{if eq .ArgType "Bytes"}}p{{else}}s{{end}}[i-2]
+					b0, b1 := {{$arg}}[i-3], {{$arg}}[i-2]
 					switch b0 {
 					case 0xF0:
 						// block over-longs
@@ -215,13 +216,13 @@ func (rs *runeSet{{$.MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .A
 
 					// assemble the full 4-byte rune value
 
-					r = (rune(b0&0x07)<<18 | rune(b1&0x3F)<<12 | rune({{if eq .ArgType "Bytes"}}p{{else}}s{{end}}[i-1]&0x3F)<<6 | rune(b&0x3F))
+					r = (rune(b0&0x07)<<18 | rune(b1&0x3F)<<12 | rune({{$arg}}[i-1]&0x3F)<<6 | rune(b&0x3F))
 					{{- if eq .Name "RuneLen"}}
 					n = 4
 					{{- end}}
 				case 2:
 					// Invariants: b0 in [0xE0..0xEF]; b1,b2 are 0b10xxxxxx.
-					b0, b1 := {{if eq .ArgType "Bytes"}}p{{else}}s{{end}}[i-2], {{if eq .ArgType "Bytes"}}p{{else}}s{{end}}[i-1]
+					b0, b1 := {{$arg}}[i-2], {{$arg}}[i-1]
 					switch b0 {
 					case 0xE0:
 						// block over-longs
@@ -245,7 +246,7 @@ func (rs *runeSet{{$.MultiByteSize}}) indexAny{{.Name}}In{{.ArgType}}({{if eq .A
 
 					// assemble the full 2-byte rune value
 
-					r = rune({{if eq .ArgType "Bytes"}}p{{else}}s{{end}}[i-1]&0x1F)<<6 | rune(b&0x3F)
+					r = rune({{$arg}}[i-1]&0x1F)<<6 | rune(b&0x3F)
 					{{- if eq .Name "RuneLen"}}
 					n = 2
 					{{- end}}
