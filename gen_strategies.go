@@ -81,7 +81,7 @@ func (r *fastReader) prepareRow() bool {
 							// a byte or more truncated from the end
 							//
 							// so search the last three bytes backwards for one that begins with
-							// 11xxxxxx (0xC0)
+							// 11xxxxxx (0xC0) a.k.a. `x >= startMBMin`
 							//
 							// if found, it could be the start of a utf8 rune that is truncated
 							// so hide it and the other bytes after it if they exist
@@ -92,7 +92,7 @@ func (r *fastReader) prepareRow() bool {
 							// "byte level" rather than the "rune level"
 
 							for i := 1; i <= rMaxOverflowNumBytes; i++ {
-								if (r.rawBuf[len(r.rawBuf)-i] & 0xC0) == 0xC0 {
+								if r.rawBuf[len(r.rawBuf)-i] >= startMBMin {
 									r.rawNumHiddenBytes = uint8(i)
 									r.rawBuf = r.rawBuf[:len(r.rawBuf)-i]
 									break
@@ -1080,7 +1080,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 							// a byte or more truncated from the end
 							//
 							// so search the last three bytes backwards for one that begins with
-							// 11xxxxxx (0xC0)
+							// 11xxxxxx (0xC0) a.k.a. `x >= startMBMin`
 							//
 							// if found, it could be the start of a utf8 rune that is truncated
 							// so hide it and the other bytes after it if they exist
@@ -1091,7 +1091,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 							// "byte level" rather than the "rune level"
 
 							for i := 1; i <= rMaxOverflowNumBytes; i++ {
-								if (r.rawBuf[len(r.rawBuf)-i] & 0xC0) == 0xC0 {
+								if r.rawBuf[len(r.rawBuf)-i] >= startMBMin {
 									r.rawNumHiddenBytes = uint8(i)
 									r.rawBuf = r.rawBuf[:len(r.rawBuf)-i]
 									break
