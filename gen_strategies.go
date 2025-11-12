@@ -168,7 +168,7 @@ func (r *fastReader) prepareRow() bool {
 						return false
 					}
 
-					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
 					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
@@ -349,7 +349,7 @@ func (r *fastReader) prepareRow() bool {
 						return false
 					}
 
-					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
 					// HANDLING: r.escape
@@ -586,7 +586,7 @@ func (r *fastReader) prepareRow() bool {
 								return false
 							}
 
-							// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+							// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 							fallthrough
 						case rStateStartOfRecord, rStateStartOfField:
 							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
@@ -1167,7 +1167,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 						return false
 					}
 
-					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
 					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
@@ -1366,7 +1366,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 						return false
 					}
 
-					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
 					// HANDLING: r.escape
@@ -1629,7 +1629,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 								return false
 							}
 
-							// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+							// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 							fallthrough
 						case rStateStartOfRecord, rStateStartOfField:
 							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
