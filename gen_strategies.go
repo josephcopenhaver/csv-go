@@ -32,6 +32,9 @@ func (r *fastReader) prepareRow() bool {
 				lastProcessedByte = r.rawBuf[r.rawIndex-1]
 			}
 
+			// If performance testing points you to this copy operation as unreasonably hot, then see
+			// "NOTE_ON_CHARACTER_SPLIT_HANDLING" and consider opening an issue / discussion for your case.
+
 			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
 			r.rawBuf = r.rawBuf[:len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
 			r.rawIndex = 0
@@ -90,6 +93,29 @@ func (r *fastReader) prepareRow() bool {
 							// are reliably found and handled even if there are utf8 encoding errors
 							// present in blocks of data bytes that have been "csv" encoded at the
 							// "byte level" rather than the "rune level"
+
+							// NOTE_ON_CHARACTER_SPLIT_HANDLING:
+							//
+							// While this loop operation could aim for precision and optimize for having
+							// the buffer as full as possible - it's realistically only up to 3 bytes
+							// that will get hidden and immediately processed the next iteration or when
+							// EOF is signaled. For the algorithm's purposes false positives are not
+							// going to have a noticeable impact so using the simplest logic possible
+							// is going to translate to speed. The buffer size is most likely going to
+							// be vastly larger than 7 bytes as well so up to 3 bytes moving around is
+							// going to be nothing in the grand scheme unless the buffer is far too large
+							// and the copy operation crosses CPU cache zones.
+							//
+							// False negatives on the other hand would be devastating to the state
+							// machine and must not be possible.
+							//
+							// Perhaps in the future we'll terminate the look-back early when an ascii
+							// range value is found or the rune appears to be within an invalid code
+							// range for utf8 encodings. If performance testing points you to here I
+							// would love to know more about your case! We must always be willing to
+							// reserve some bytes should a utf8 character byte sequence have been
+							// split when reading a chunk, so if you land here it might be that your
+							// data is best expressed in another format.
 
 							for i := 1; i <= rMaxOverflowNumBytes; i++ {
 								if r.rawBuf[len(r.rawBuf)-i] >= startMBMin {
@@ -1031,6 +1057,9 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				lastProcessedByte = r.rawBuf[r.rawIndex-1]
 			}
 
+			// If performance testing points you to this copy operation as unreasonably hot, then see
+			// "NOTE_ON_CHARACTER_SPLIT_HANDLING" and consider opening an issue / discussion for your case.
+
 			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
 			r.rawBuf = r.rawBuf[:len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
 			r.rawIndex = 0
@@ -1089,6 +1118,29 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 							// are reliably found and handled even if there are utf8 encoding errors
 							// present in blocks of data bytes that have been "csv" encoded at the
 							// "byte level" rather than the "rune level"
+
+							// NOTE_ON_CHARACTER_SPLIT_HANDLING:
+							//
+							// While this loop operation could aim for precision and optimize for having
+							// the buffer as full as possible - it's realistically only up to 3 bytes
+							// that will get hidden and immediately processed the next iteration or when
+							// EOF is signaled. For the algorithm's purposes false positives are not
+							// going to have a noticeable impact so using the simplest logic possible
+							// is going to translate to speed. The buffer size is most likely going to
+							// be vastly larger than 7 bytes as well so up to 3 bytes moving around is
+							// going to be nothing in the grand scheme unless the buffer is far too large
+							// and the copy operation crosses CPU cache zones.
+							//
+							// False negatives on the other hand would be devastating to the state
+							// machine and must not be possible.
+							//
+							// Perhaps in the future we'll terminate the look-back early when an ascii
+							// range value is found or the rune appears to be within an invalid code
+							// range for utf8 encodings. If performance testing points you to here I
+							// would love to know more about your case! We must always be willing to
+							// reserve some bytes should a utf8 character byte sequence have been
+							// split when reading a chunk, so if you land here it might be that your
+							// data is best expressed in another format.
 
 							for i := 1; i <= rMaxOverflowNumBytes; i++ {
 								if r.rawBuf[len(r.rawBuf)-i] >= startMBMin {
