@@ -720,9 +720,9 @@ type rCfg struct {
 }
 
 type fastReader struct {
-	controlRuneScape runeSet6
-	rawBuf           []byte
-	rawIndex         int
+	controlRuneSet runeSet6
+	rawBuf         []byte
+	rawIndex       int
 	//
 	readErr error
 	scanErr error
@@ -1033,27 +1033,27 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 	// - in-quoted-field
 	// - in-escape
 
-	var controlRuneScape runeSet6
-	controlRuneScape.addRuneUniqueUnchecked(cfg.fieldSeparator)
+	var controlRuneSet runeSet6
+	controlRuneSet.addRuneUniqueUnchecked(cfg.fieldSeparator)
 
 	var bitFlags rFlag
 	if cfg.trsEmitsRecord {
 		bitFlags |= rFlagTRSEmitsRecord
 	}
 	if cfg.quoteSet {
-		controlRuneScape.addRuneUniqueUnchecked(cfg.quote)
+		controlRuneSet.addRuneUniqueUnchecked(cfg.quote)
 		bitFlags |= rFlagQuote
 	} else {
 		cfg.quote = invalidControlRune
 	}
 	if cfg.escapeSet {
-		controlRuneScape.addRuneUniqueUnchecked(cfg.escape)
+		controlRuneSet.addRuneUniqueUnchecked(cfg.escape)
 		bitFlags |= rFlagEscape
 	} else {
 		cfg.escape = invalidControlRune
 	}
 	if cfg.commentSet {
-		controlRuneScape.addRuneUniqueUnchecked(cfg.comment)
+		controlRuneSet.addRuneUniqueUnchecked(cfg.comment)
 		bitFlags |= rFlagComment
 	} else {
 		cfg.comment = invalidControlRune
@@ -1072,21 +1072,21 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 	}
 
 	if cfg.recordSepRuneLen != 0 {
-		controlRuneScape.addRuneUniqueUnchecked(cfg.recordSepStartRune)
+		controlRuneSet.addRuneUniqueUnchecked(cfg.recordSepStartRune)
 	} else {
-		controlRuneScape.addByte(asciiCarriageReturn)
-		controlRuneScape.addByte(asciiLineFeed)
-		controlRuneScape.addByte(asciiVerticalTab)
-		controlRuneScape.addByte(asciiFormFeed)
-		controlRuneScape.addMBRune(utf8NextLine)
-		controlRuneScape.addMBRune(utf8LineSeparator)
+		controlRuneSet.addByte(asciiCarriageReturn)
+		controlRuneSet.addByte(asciiLineFeed)
+		controlRuneSet.addByte(asciiVerticalTab)
+		controlRuneSet.addByte(asciiFormFeed)
+		controlRuneSet.addMBRune(utf8NextLine)
+		controlRuneSet.addMBRune(utf8LineSeparator)
 	}
 
 	if cfg.errOnNewlineInUnquotedField {
 		bitFlags |= rFlagErrOnNLInUF
 
-		controlRuneScape.addByte(asciiCarriageReturn)
-		controlRuneScape.addByte(asciiLineFeed)
+		controlRuneSet.addByte(asciiCarriageReturn)
+		controlRuneSet.addByte(asciiLineFeed)
 	}
 
 	var rowBuf []string
@@ -1094,7 +1094,7 @@ func internalNewReader(options ...ReaderOption) (Reader, internalReader, error) 
 		rowBuf = make([]string, cfg.numFields)
 	}
 
-	r, r2 := newReader(cfg, controlRuneScape, headers, rowBuf, bitFlags)
+	r, r2 := newReader(cfg, controlRuneSet, headers, rowBuf, bitFlags)
 	return r, r2, nil
 }
 
@@ -1685,12 +1685,12 @@ type Reader interface {
 
 type internalReader any
 
-func newReader(cfg rCfg, controlRuneScape runeSet6, headers []string, rowBuf []string, bitFlags rFlag) (Reader, internalReader) {
+func newReader(cfg rCfg, controlRuneSet runeSet6, headers []string, rowBuf []string, bitFlags rFlag) (Reader, internalReader) {
 
 	r := &readerStrat{}
 
 	fr := &fastReader{
-		controlRuneScape:   controlRuneScape,
+		controlRuneSet:     controlRuneSet,
 		rawBuf:             cfg.rawBuf[0:0:len(cfg.rawBuf)],
 		reader:             cfg.reader,
 		quote:              cfg.quote,

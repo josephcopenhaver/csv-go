@@ -32,6 +32,9 @@ func (r *fastReader) prepareRow() bool {
 				lastProcessedByte = r.rawBuf[r.rawIndex-1]
 			}
 
+			// If performance testing points you to this copy operation as unreasonably hot, then see
+			// "NOTE_ON_CHARACTER_SPLIT_HANDLING" and consider opening an issue / discussion for your case.
+
 			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
 			r.rawBuf = r.rawBuf[:len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
 			r.rawIndex = 0
@@ -81,7 +84,7 @@ func (r *fastReader) prepareRow() bool {
 							// a byte or more truncated from the end
 							//
 							// so search the last three bytes backwards for one that begins with
-							// 11xxxxxx (0xC0)
+							// 11xxxxxx (0xC0) a.k.a. `x >= startMBMin`
 							//
 							// if found, it could be the start of a utf8 rune that is truncated
 							// so hide it and the other bytes after it if they exist
@@ -91,8 +94,31 @@ func (r *fastReader) prepareRow() bool {
 							// present in blocks of data bytes that have been "csv" encoded at the
 							// "byte level" rather than the "rune level"
 
+							// NOTE_ON_CHARACTER_SPLIT_HANDLING:
+							//
+							// While this loop operation could aim for precision and optimize for having
+							// the buffer as full as possible - it's realistically only up to 3 bytes
+							// that will get hidden and immediately processed the next iteration or when
+							// EOF is signaled. For the algorithm's purposes false positives are not
+							// going to have a noticeable impact so using the simplest logic possible
+							// is going to translate to speed. The buffer size is most likely going to
+							// be vastly larger than 7 bytes as well so up to 3 bytes moving around is
+							// going to be nothing in the grand scheme unless the buffer is far too large
+							// and the copy operation crosses CPU cache zones.
+							//
+							// False negatives on the other hand would be devastating to the state
+							// machine and must not be possible.
+							//
+							// Perhaps in the future we'll terminate the look-back early when an ascii
+							// range value is found or the rune appears to be within an invalid code
+							// range for utf8 encodings. If performance testing points you to here I
+							// would love to know more about your case! We must always be willing to
+							// reserve some bytes should a utf8 character byte sequence have been
+							// split when reading a chunk, so if you land here it might be that your
+							// data is best expressed in another format.
+
 							for i := 1; i <= rMaxOverflowNumBytes; i++ {
-								if (r.rawBuf[len(r.rawBuf)-i] & 0xC0) == 0xC0 {
+								if r.rawBuf[len(r.rawBuf)-i] >= startMBMin {
 									r.rawNumHiddenBytes = uint8(i)
 									r.rawBuf = r.rawBuf[:len(r.rawBuf)-i]
 									break
@@ -143,7 +169,7 @@ func (r *fastReader) prepareRow() bool {
 
 	CHUNK_PROCESSOR:
 		for {
-			c, size, di := r.controlRuneScape.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
+			c, size, di := r.controlRuneSet.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
 			if di == -1 {
 				// consume it all without adjustment
 
@@ -168,7 +194,7 @@ func (r *fastReader) prepareRow() bool {
 						return false
 					}
 
-					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
 					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
@@ -349,7 +375,7 @@ func (r *fastReader) prepareRow() bool {
 						return false
 					}
 
-					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
 					// HANDLING: r.escape
@@ -586,7 +612,7 @@ func (r *fastReader) prepareRow() bool {
 								return false
 							}
 
-							// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+							// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 							fallthrough
 						case rStateStartOfRecord, rStateStartOfField:
 							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
@@ -959,28 +985,28 @@ func (r *fastReader) prepareRow() bool {
 					}
 
 					// preserve field separator
-					var controlRuneScape runeSet6
-					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
-					controlRuneScape.addRuneUniqueUnchecked(c)
+					var controlRuneSet runeSet6
+					controlRuneSet.addRuneUniqueUnchecked(r.fieldSeparator)
+					controlRuneSet.addRuneUniqueUnchecked(c)
 
 					if (r.bitFlags & rFlagQuote) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.quote)
+						controlRuneSet.addRuneUniqueUnchecked(r.quote)
 					}
 					if (r.bitFlags & rFlagEscape) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.escape)
+						controlRuneSet.addRuneUniqueUnchecked(r.escape)
 					}
 					if (r.bitFlags & rFlagComment) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.comment)
+						controlRuneSet.addRuneUniqueUnchecked(r.comment)
 					}
 
 					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 						// error on newline in unquoted field block
 
-						controlRuneScape.addByte(asciiCarriageReturn)
-						controlRuneScape.addByte(asciiLineFeed)
+						controlRuneSet.addByte(asciiCarriageReturn)
+						controlRuneSet.addByte(asciiLineFeed)
 					}
 
-					r.controlRuneScape = controlRuneScape
+					r.controlRuneSet = controlRuneSet
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedField:
@@ -1031,6 +1057,9 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 				lastProcessedByte = r.rawBuf[r.rawIndex-1]
 			}
 
+			// If performance testing points you to this copy operation as unreasonably hot, then see
+			// "NOTE_ON_CHARACTER_SPLIT_HANDLING" and consider opening an issue / discussion for your case.
+
 			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
 			r.rawBuf = r.rawBuf[:len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
 			r.rawIndex = 0
@@ -1080,7 +1109,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 							// a byte or more truncated from the end
 							//
 							// so search the last three bytes backwards for one that begins with
-							// 11xxxxxx (0xC0)
+							// 11xxxxxx (0xC0) a.k.a. `x >= startMBMin`
 							//
 							// if found, it could be the start of a utf8 rune that is truncated
 							// so hide it and the other bytes after it if they exist
@@ -1090,8 +1119,31 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 							// present in blocks of data bytes that have been "csv" encoded at the
 							// "byte level" rather than the "rune level"
 
+							// NOTE_ON_CHARACTER_SPLIT_HANDLING:
+							//
+							// While this loop operation could aim for precision and optimize for having
+							// the buffer as full as possible - it's realistically only up to 3 bytes
+							// that will get hidden and immediately processed the next iteration or when
+							// EOF is signaled. For the algorithm's purposes false positives are not
+							// going to have a noticeable impact so using the simplest logic possible
+							// is going to translate to speed. The buffer size is most likely going to
+							// be vastly larger than 7 bytes as well so up to 3 bytes moving around is
+							// going to be nothing in the grand scheme unless the buffer is far too large
+							// and the copy operation crosses CPU cache zones.
+							//
+							// False negatives on the other hand would be devastating to the state
+							// machine and must not be possible.
+							//
+							// Perhaps in the future we'll terminate the look-back early when an ascii
+							// range value is found or the rune appears to be within an invalid code
+							// range for utf8 encodings. If performance testing points you to here I
+							// would love to know more about your case! We must always be willing to
+							// reserve some bytes should a utf8 character byte sequence have been
+							// split when reading a chunk, so if you land here it might be that your
+							// data is best expressed in another format.
+
 							for i := 1; i <= rMaxOverflowNumBytes; i++ {
-								if (r.rawBuf[len(r.rawBuf)-i] & 0xC0) == 0xC0 {
+								if r.rawBuf[len(r.rawBuf)-i] >= startMBMin {
 									r.rawNumHiddenBytes = uint8(i)
 									r.rawBuf = r.rawBuf[:len(r.rawBuf)-i]
 									break
@@ -1142,7 +1194,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 	CHUNK_PROCESSOR:
 		for {
-			c, size, di := r.controlRuneScape.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
+			c, size, di := r.controlRuneSet.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
 			if di == -1 {
 				// consume it all without adjustment
 
@@ -1167,7 +1219,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 						return false
 					}
 
-					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
 					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
@@ -1366,7 +1418,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 						return false
 					}
 
-					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
 					// HANDLING: r.escape
@@ -1629,7 +1681,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 								return false
 							}
 
-							// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+							// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 							fallthrough
 						case rStateStartOfRecord, rStateStartOfField:
 							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
@@ -2035,28 +2087,28 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					}
 
 					// preserve field separator
-					var controlRuneScape runeSet6
-					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
-					controlRuneScape.addRuneUniqueUnchecked(c)
+					var controlRuneSet runeSet6
+					controlRuneSet.addRuneUniqueUnchecked(r.fieldSeparator)
+					controlRuneSet.addRuneUniqueUnchecked(c)
 
 					if (r.bitFlags & rFlagQuote) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.quote)
+						controlRuneSet.addRuneUniqueUnchecked(r.quote)
 					}
 					if (r.bitFlags & rFlagEscape) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.escape)
+						controlRuneSet.addRuneUniqueUnchecked(r.escape)
 					}
 					if (r.bitFlags & rFlagComment) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.comment)
+						controlRuneSet.addRuneUniqueUnchecked(r.comment)
 					}
 
 					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 						// error on newline in unquoted field block
 
-						controlRuneScape.addByte(asciiCarriageReturn)
-						controlRuneScape.addByte(asciiLineFeed)
+						controlRuneSet.addByte(asciiCarriageReturn)
+						controlRuneSet.addByte(asciiLineFeed)
 					}
 
-					r.controlRuneScape = controlRuneScape
+					r.controlRuneSet = controlRuneSet
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedField:
@@ -2165,7 +2217,7 @@ func (w *Writer) writeRow_memclearOff(fields []FieldWriter) (int, error) {
 
 			var i int
 			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
-				i = w.controlRuneScape.indexAnyInBytes(src)
+				i = w.controlRuneSet.indexAnyInBytes(src)
 				if i == -1 {
 					w.recordBuf = append(w.recordBuf, src...)
 					goto FIRST_FIELD_WRITTEN
@@ -2195,13 +2247,13 @@ func (w *Writer) writeRow_memclearOff(fields []FieldWriter) (int, error) {
 
 				b := src[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsSingleByteRune(b) {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsMBRune(r) {
+				} else if !w.controlRuneSet.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -2283,7 +2335,7 @@ FIRST_FIELD_WRITTEN:
 		if !scanForNonUTF8 || (w.bitFlags&wFlagErrOnNonUTF8) == 0 {
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
-			i := w.controlRuneScape.indexAnyInBytes(src)
+			i := w.controlRuneSet.indexAnyInBytes(src)
 			if i == -1 {
 				w.recordBuf = append(w.recordBuf, src...)
 				continue
@@ -2309,13 +2361,13 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 			if b := src[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsSingleByteRune(b) {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsMBRune(r) {
+			} else if !w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -2346,94 +2398,6 @@ FIRST_FIELD_WRITTEN:
 	return n, err
 }
 
-// loadQF_memclearOff is called after a quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-// instance of quote or escape if applicable.
-//
-// It continues with appending the data up to a potentially additional quote or escape character, then
-// appends the escaped version of that character and continues repeating that process for the rest of
-// the field.
-//
-// Essentially the function does the same as the parent context except has no intent around overall
-// quoting the field or detecting runes outside of the quote + escape character.
-func (w *Writer) loadQF_memclearOff(src []byte, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInBytes(src[scanIdx:])
-	if i == -1 {
-		w.recordBuf = append(w.recordBuf, src...)
-		return
-	}
-	scanIdx += i
-
-	//
-	// found a control rune of some kind that must be escaped
-	//
-
-	w.recordBuf = append(w.recordBuf, src[:scanIdx]...)
-
-	for {
-		scanIdx += int(n)
-
-		if w.quote == r {
-			w.recordBuf = w.escapedQuoteSeq.appendText(w.recordBuf)
-		} else {
-			w.recordBuf = w.escapedEscapeSeq.appendText(w.recordBuf)
-		}
-
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInBytes(src[scanIdx:])
-		if i == -1 {
-			w.recordBuf = append(w.recordBuf, src[scanIdx:]...)
-			return
-		}
-
-		prevIdx := scanIdx
-		scanIdx += i
-		w.recordBuf = append(w.recordBuf, src[prevIdx:scanIdx]...)
-	}
-}
-
-// loadQFWithCheckUTF8_memclearOff performs the same duties as loadQField_memclearOff and in a much more expensive
-// scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQFWithCheckUTF8_memclearOff(src []byte, scanIdx int) error {
-	var loadIdx, n int
-	var r rune
-	for {
-		if scanIdx >= len(src) {
-			w.recordBuf = append(w.recordBuf, src[loadIdx:]...)
-			return nil
-		}
-
-		if b := src[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
-				scanIdx++
-				continue
-			}
-			r = rune(b)
-			n = 1
-		} else if r, n = utf8.DecodeRune(src[scanIdx:]); n == 1 {
-			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsMBRune(r) {
-			scanIdx += n
-			continue
-		}
-
-		//
-		// found a control rune of some kind that must be escaped
-		//
-
-		w.recordBuf = append(w.recordBuf, src[loadIdx:scanIdx]...)
-
-		scanIdx += n
-		loadIdx = scanIdx
-
-		if w.quote == r {
-			w.recordBuf = w.escapedQuoteSeq.appendText(w.recordBuf)
-			continue
-		}
-
-		w.recordBuf = w.escapedEscapeSeq.appendText(w.recordBuf)
-	}
-}
-
 func (w *Writer) writeStrRow_memclearOff(fields []string) (int, error) {
 	// write the first field
 	{
@@ -2461,7 +2425,7 @@ func (w *Writer) writeStrRow_memclearOff(fields []string) (int, error) {
 
 			var i int
 			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
-				i = w.controlRuneScape.indexAnyInString(s)
+				i = w.controlRuneSet.indexAnyInString(s)
 				if i == -1 {
 					w.recordBuf = append(w.recordBuf, s...)
 					goto FIRST_FIELD_WRITTEN
@@ -2491,13 +2455,13 @@ func (w *Writer) writeStrRow_memclearOff(fields []string) (int, error) {
 
 				b := s[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsSingleByteRune(b) {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsMBRune(r) {
+				} else if !w.controlRuneSet.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -2536,7 +2500,7 @@ FIRST_FIELD_WRITTEN:
 		if (w.bitFlags & wFlagErrOnNonUTF8) == 0 {
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
-			i := w.controlRuneScape.indexAnyInString(s)
+			i := w.controlRuneSet.indexAnyInString(s)
 			if i == -1 {
 				w.recordBuf = append(w.recordBuf, s...)
 				continue
@@ -2563,13 +2527,13 @@ FIRST_FIELD_WRITTEN:
 			}
 
 			if b := s[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsSingleByteRune(b) {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsMBRune(r) {
+			} else if !w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -2599,18 +2563,102 @@ FIRST_FIELD_WRITTEN:
 	return n, err
 }
 
-// loadStrQF_memclearOff operates on strings and is called after a quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-// instance of quote or escape if applicable.
+// loadQF_memclearOff is called after a
+// quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and communicate to this function where to
+// start scanning in the source for characters to escape. The parent context will not write any part of
+// the source to the record staging zone.
 //
-// It continues with appending the data up to a potentially additional quote or escape character, then
-// appends the escaped version of that character and continues repeating that process for the rest of
-// the field.
+// Essentially the function picks up after the parent context starts a quoting process which the parent
+// will also complete.
+func (w *Writer) loadQF_memclearOff(p []byte, scanIdx int) {
+	r, n, i := w.escapeControlRuneSet.indexAnyRuneLenInBytes(p[scanIdx:])
+	if i == -1 {
+		w.recordBuf = append(w.recordBuf, p...)
+		return
+	}
+	scanIdx += i
+
+	//
+	// found a control rune of some kind that must be escaped
+	//
+
+	w.recordBuf = append(w.recordBuf, p[:scanIdx]...)
+
+	for {
+		scanIdx += int(n)
+
+		if w.quote == r {
+			w.recordBuf = w.escapedQuoteSeq.appendText(w.recordBuf)
+		} else {
+			w.recordBuf = w.escapedEscapeSeq.appendText(w.recordBuf)
+		}
+
+		r, n, i = w.escapeControlRuneSet.indexAnyRuneLenInBytes(p[scanIdx:])
+		if i == -1 {
+			w.recordBuf = append(w.recordBuf, p[scanIdx:]...)
+			return
+		}
+
+		prevIdx := scanIdx
+		scanIdx += i
+		w.recordBuf = append(w.recordBuf, p[prevIdx:scanIdx]...)
+	}
+}
+
+// loadQFWithCheckUTF8_memclearOff performs the same duties as loadQField_memclearOff and in a much more expensive
+// scan operation also validates that the field contents are valid utf8 sequences.
+func (w *Writer) loadQFWithCheckUTF8_memclearOff(p []byte, scanIdx int) error {
+	var loadIdx, n int
+	var r rune
+	for {
+		if scanIdx >= len(p) {
+			w.recordBuf = append(w.recordBuf, p[loadIdx:]...)
+			return nil
+		}
+
+		if b := p[scanIdx]; b < utf8.RuneSelf {
+			if !w.escapeControlRuneSet.containsSingleByteRune(b) {
+				scanIdx++
+				continue
+			}
+			r = rune(b)
+			n = 1
+		} else if r, n = utf8.DecodeRune(p[scanIdx:]); n == 1 {
+			return ErrNonUTF8InRecord
+		} else if !w.escapeControlRuneSet.containsMBRune(r) {
+			scanIdx += n
+			continue
+		}
+
+		//
+		// found a control rune of some kind that must be escaped
+		//
+
+		w.recordBuf = append(w.recordBuf, p[loadIdx:scanIdx]...)
+
+		scanIdx += n
+		loadIdx = scanIdx
+
+		if w.quote == r {
+			w.recordBuf = w.escapedQuoteSeq.appendText(w.recordBuf)
+			continue
+		}
+
+		w.recordBuf = w.escapedEscapeSeq.appendText(w.recordBuf)
+	}
+}
+
+// loadStrQF_memclearOff is called after a
+// quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and communicate to this function where to
+// start scanning in the source for characters to escape. The parent context will not write any part of
+// the source to the record staging zone.
 //
-// Essentially the function does the same as the parent context except has no intent around overall
-// quoting the field or detecting runes outside of the quote + escape character.
+// Essentially the function picks up after the parent context starts a quoting process which the parent
+// will also complete.
 func (w *Writer) loadStrQF_memclearOff(s string, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInString(s[scanIdx:])
+	r, n, i := w.escapeControlRuneSet.indexAnyRuneLenInString(s[scanIdx:])
 	if i == -1 {
 		w.recordBuf = append(w.recordBuf, s...)
 		return
@@ -2632,7 +2680,7 @@ func (w *Writer) loadStrQF_memclearOff(s string, scanIdx int) {
 			w.recordBuf = w.escapedEscapeSeq.appendText(w.recordBuf)
 		}
 
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInString(s[scanIdx:])
+		r, n, i = w.escapeControlRuneSet.indexAnyRuneLenInString(s[scanIdx:])
 		if i == -1 {
 			w.recordBuf = append(w.recordBuf, s[scanIdx:]...)
 			return
@@ -2644,7 +2692,7 @@ func (w *Writer) loadStrQF_memclearOff(s string, scanIdx int) {
 	}
 }
 
-// loadStrQFWithCheckUTF8_memclearOff performs the same duties as loadQField_memclearOff but with strings and in a much more expensive
+// loadStrQFWithCheckUTF8_memclearOff performs the same duties as loadStrQField_memclearOff and in a much more expensive
 // scan operation also validates that the field contents are valid utf8 sequences.
 func (w *Writer) loadStrQFWithCheckUTF8_memclearOff(s string, scanIdx int) error {
 	var loadIdx, n int
@@ -2656,7 +2704,7 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOff(s string, scanIdx int) error
 		}
 
 		if b := s[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
+			if !w.escapeControlRuneSet.containsSingleByteRune(b) {
 				scanIdx++
 				continue
 			}
@@ -2664,7 +2712,7 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOff(s string, scanIdx int) error
 			n = 1
 		} else if r, n = utf8.DecodeRuneInString(s[scanIdx:]); n == 1 {
 			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsMBRune(r) {
+		} else if !w.escapeControlRuneSet.containsMBRune(r) {
 			scanIdx += n
 			continue
 		}
@@ -2766,7 +2814,7 @@ func (w *Writer) writeRow_memclearOn(fields []FieldWriter) (int, error) {
 
 			var i int
 			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
-				i = w.controlRuneScape.indexAnyInBytes(src)
+				i = w.controlRuneSet.indexAnyInBytes(src)
 				if i == -1 {
 					w.appendRec(src)
 					goto FIRST_FIELD_WRITTEN
@@ -2796,13 +2844,13 @@ func (w *Writer) writeRow_memclearOn(fields []FieldWriter) (int, error) {
 
 				b := src[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsSingleByteRune(b) {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsMBRune(r) {
+				} else if !w.controlRuneSet.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -2884,7 +2932,7 @@ FIRST_FIELD_WRITTEN:
 		if !scanForNonUTF8 || (w.bitFlags&wFlagErrOnNonUTF8) == 0 {
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
-			i := w.controlRuneScape.indexAnyInBytes(src)
+			i := w.controlRuneSet.indexAnyInBytes(src)
 			if i == -1 {
 				w.appendRec(src)
 				continue
@@ -2910,13 +2958,13 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 			if b := src[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsSingleByteRune(b) {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsMBRune(r) {
+			} else if !w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -2947,94 +2995,6 @@ FIRST_FIELD_WRITTEN:
 	return n, err
 }
 
-// loadQF_memclearOn is called after a quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-// instance of quote or escape if applicable.
-//
-// It continues with appending the data up to a potentially additional quote or escape character, then
-// appends the escaped version of that character and continues repeating that process for the rest of
-// the field.
-//
-// Essentially the function does the same as the parent context except has no intent around overall
-// quoting the field or detecting runes outside of the quote + escape character.
-func (w *Writer) loadQF_memclearOn(src []byte, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInBytes(src[scanIdx:])
-	if i == -1 {
-		w.appendRec(src)
-		return
-	}
-	scanIdx += i
-
-	//
-	// found a control rune of some kind that must be escaped
-	//
-
-	w.appendRec(src[:scanIdx])
-
-	for {
-		scanIdx += int(n)
-
-		if w.quote == r {
-			w.setRecordBuf(w.escapedQuoteSeq.appendText(w.recordBuf))
-		} else {
-			w.setRecordBuf(w.escapedEscapeSeq.appendText(w.recordBuf))
-		}
-
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInBytes(src[scanIdx:])
-		if i == -1 {
-			w.appendRec(src[scanIdx:])
-			return
-		}
-
-		prevIdx := scanIdx
-		scanIdx += i
-		w.appendRec(src[prevIdx:scanIdx])
-	}
-}
-
-// loadQFWithCheckUTF8_memclearOn performs the same duties as loadQField_memclearOn and in a much more expensive
-// scan operation also validates that the field contents are valid utf8 sequences.
-func (w *Writer) loadQFWithCheckUTF8_memclearOn(src []byte, scanIdx int) error {
-	var loadIdx, n int
-	var r rune
-	for {
-		if scanIdx >= len(src) {
-			w.appendRec(src[loadIdx:])
-			return nil
-		}
-
-		if b := src[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
-				scanIdx++
-				continue
-			}
-			r = rune(b)
-			n = 1
-		} else if r, n = utf8.DecodeRune(src[scanIdx:]); n == 1 {
-			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsMBRune(r) {
-			scanIdx += n
-			continue
-		}
-
-		//
-		// found a control rune of some kind that must be escaped
-		//
-
-		w.appendRec(src[loadIdx:scanIdx])
-
-		scanIdx += n
-		loadIdx = scanIdx
-
-		if w.quote == r {
-			w.setRecordBuf(w.escapedQuoteSeq.appendText(w.recordBuf))
-			continue
-		}
-
-		w.setRecordBuf(w.escapedEscapeSeq.appendText(w.recordBuf))
-	}
-}
-
 func (w *Writer) writeStrRow_memclearOn(fields []string) (int, error) {
 	// write the first field
 	{
@@ -3062,7 +3022,7 @@ func (w *Writer) writeStrRow_memclearOn(fields []string) (int, error) {
 
 			var i int
 			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
-				i = w.controlRuneScape.indexAnyInString(s)
+				i = w.controlRuneSet.indexAnyInString(s)
 				if i == -1 {
 					w.appendStrRec(s)
 					goto FIRST_FIELD_WRITTEN
@@ -3092,13 +3052,13 @@ func (w *Writer) writeStrRow_memclearOn(fields []string) (int, error) {
 
 				b := s[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsSingleByteRune(b) {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsMBRune(r) {
+				} else if !w.controlRuneSet.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -3137,7 +3097,7 @@ FIRST_FIELD_WRITTEN:
 		if (w.bitFlags & wFlagErrOnNonUTF8) == 0 {
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
-			i := w.controlRuneScape.indexAnyInString(s)
+			i := w.controlRuneSet.indexAnyInString(s)
 			if i == -1 {
 				w.appendStrRec(s)
 				continue
@@ -3164,13 +3124,13 @@ FIRST_FIELD_WRITTEN:
 			}
 
 			if b := s[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsSingleByteRune(b) {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsMBRune(r) {
+			} else if !w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -3200,18 +3160,102 @@ FIRST_FIELD_WRITTEN:
 	return n, err
 }
 
-// loadStrQF_memclearOn operates on strings and is called after a quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and handle escaped replacing of the first
-// instance of quote or escape if applicable.
+// loadQF_memclearOn is called after a
+// quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and communicate to this function where to
+// start scanning in the source for characters to escape. The parent context will not write any part of
+// the source to the record staging zone.
 //
-// It continues with appending the data up to a potentially additional quote or escape character, then
-// appends the escaped version of that character and continues repeating that process for the rest of
-// the field.
+// Essentially the function picks up after the parent context starts a quoting process which the parent
+// will also complete.
+func (w *Writer) loadQF_memclearOn(p []byte, scanIdx int) {
+	r, n, i := w.escapeControlRuneSet.indexAnyRuneLenInBytes(p[scanIdx:])
+	if i == -1 {
+		w.appendRec(p)
+		return
+	}
+	scanIdx += i
+
+	//
+	// found a control rune of some kind that must be escaped
+	//
+
+	w.appendRec(p[:scanIdx])
+
+	for {
+		scanIdx += int(n)
+
+		if w.quote == r {
+			w.setRecordBuf(w.escapedQuoteSeq.appendText(w.recordBuf))
+		} else {
+			w.setRecordBuf(w.escapedEscapeSeq.appendText(w.recordBuf))
+		}
+
+		r, n, i = w.escapeControlRuneSet.indexAnyRuneLenInBytes(p[scanIdx:])
+		if i == -1 {
+			w.appendRec(p[scanIdx:])
+			return
+		}
+
+		prevIdx := scanIdx
+		scanIdx += i
+		w.appendRec(p[prevIdx:scanIdx])
+	}
+}
+
+// loadQFWithCheckUTF8_memclearOn performs the same duties as loadQField_memclearOn and in a much more expensive
+// scan operation also validates that the field contents are valid utf8 sequences.
+func (w *Writer) loadQFWithCheckUTF8_memclearOn(p []byte, scanIdx int) error {
+	var loadIdx, n int
+	var r rune
+	for {
+		if scanIdx >= len(p) {
+			w.appendRec(p[loadIdx:])
+			return nil
+		}
+
+		if b := p[scanIdx]; b < utf8.RuneSelf {
+			if !w.escapeControlRuneSet.containsSingleByteRune(b) {
+				scanIdx++
+				continue
+			}
+			r = rune(b)
+			n = 1
+		} else if r, n = utf8.DecodeRune(p[scanIdx:]); n == 1 {
+			return ErrNonUTF8InRecord
+		} else if !w.escapeControlRuneSet.containsMBRune(r) {
+			scanIdx += n
+			continue
+		}
+
+		//
+		// found a control rune of some kind that must be escaped
+		//
+
+		w.appendRec(p[loadIdx:scanIdx])
+
+		scanIdx += n
+		loadIdx = scanIdx
+
+		if w.quote == r {
+			w.setRecordBuf(w.escapedQuoteSeq.appendText(w.recordBuf))
+			continue
+		}
+
+		w.setRecordBuf(w.escapedEscapeSeq.appendText(w.recordBuf))
+	}
+}
+
+// loadStrQF_memclearOn is called after a
+// quote, escape, or csv format sensitive character is found in the field data.
+// The parent context will handle wrapping the field in quotes and communicate to this function where to
+// start scanning in the source for characters to escape. The parent context will not write any part of
+// the source to the record staging zone.
 //
-// Essentially the function does the same as the parent context except has no intent around overall
-// quoting the field or detecting runes outside of the quote + escape character.
+// Essentially the function picks up after the parent context starts a quoting process which the parent
+// will also complete.
 func (w *Writer) loadStrQF_memclearOn(s string, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInString(s[scanIdx:])
+	r, n, i := w.escapeControlRuneSet.indexAnyRuneLenInString(s[scanIdx:])
 	if i == -1 {
 		w.appendStrRec(s)
 		return
@@ -3233,7 +3277,7 @@ func (w *Writer) loadStrQF_memclearOn(s string, scanIdx int) {
 			w.setRecordBuf(w.escapedEscapeSeq.appendText(w.recordBuf))
 		}
 
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInString(s[scanIdx:])
+		r, n, i = w.escapeControlRuneSet.indexAnyRuneLenInString(s[scanIdx:])
 		if i == -1 {
 			w.appendStrRec(s[scanIdx:])
 			return
@@ -3245,7 +3289,7 @@ func (w *Writer) loadStrQF_memclearOn(s string, scanIdx int) {
 	}
 }
 
-// loadStrQFWithCheckUTF8_memclearOn performs the same duties as loadQField_memclearOn but with strings and in a much more expensive
+// loadStrQFWithCheckUTF8_memclearOn performs the same duties as loadStrQField_memclearOn and in a much more expensive
 // scan operation also validates that the field contents are valid utf8 sequences.
 func (w *Writer) loadStrQFWithCheckUTF8_memclearOn(s string, scanIdx int) error {
 	var loadIdx, n int
@@ -3257,7 +3301,7 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOn(s string, scanIdx int) error 
 		}
 
 		if b := s[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
+			if !w.escapeControlRuneSet.containsSingleByteRune(b) {
 				scanIdx++
 				continue
 			}
@@ -3265,7 +3309,7 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOn(s string, scanIdx int) error 
 			n = 1
 		} else if r, n = utf8.DecodeRuneInString(s[scanIdx:]); n == 1 {
 			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsMBRune(r) {
+		} else if !w.escapeControlRuneSet.containsMBRune(r) {
 			scanIdx += n
 			continue
 		}

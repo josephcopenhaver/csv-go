@@ -21,6 +21,9 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 				lastProcessedByte = r.rawBuf[r.rawIndex-1]
 			}
 
+			// If performance testing points you to this copy operation as unreasonably hot, then see
+			// "NOTE_ON_CHARACTER_SPLIT_HANDLING" and consider opening an issue / discussion for your case.
+
 			copy(r.rawBuf[0:cap(r.rawBuf)], r.rawBuf[r.rawIndex:len(r.rawBuf)+int(r.rawNumHiddenBytes)])
 			r.rawBuf = r.rawBuf[: len(r.rawBuf)+int(r.rawNumHiddenBytes)-r.rawIndex]
 			r.rawIndex = 0
@@ -70,7 +73,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 							// a byte or more truncated from the end
 							//
 							// so search the last three bytes backwards for one that begins with
-							// 11xxxxxx (0xC0)
+							// 11xxxxxx (0xC0) a.k.a. `x >= startMBMin`
 							//
 							// if found, it could be the start of a utf8 rune that is truncated
 							// so hide it and the other bytes after it if they exist
@@ -80,8 +83,31 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 							// present in blocks of data bytes that have been "csv" encoded at the
 							// "byte level" rather than the "rune level"
 
+							// NOTE_ON_CHARACTER_SPLIT_HANDLING:
+							//
+							// While this loop operation could aim for precision and optimize for having
+							// the buffer as full as possible - it's realistically only up to 3 bytes
+							// that will get hidden and immediately processed the next iteration or when
+							// EOF is signaled. For the algorithm's purposes false positives are not
+							// going to have a noticeable impact so using the simplest logic possible
+							// is going to translate to speed. The buffer size is most likely going to
+							// be vastly larger than 7 bytes as well so up to 3 bytes moving around is
+							// going to be nothing in the grand scheme unless the buffer is far too large
+							// and the copy operation crosses CPU cache zones.
+							//
+							// False negatives on the other hand would be devastating to the state
+							// machine and must not be possible.
+							//
+							// Perhaps in the future we'll terminate the look-back early when an ascii
+							// range value is found or the rune appears to be within an invalid code
+							// range for utf8 encodings. If performance testing points you to here I
+							// would love to know more about your case! We must always be willing to
+							// reserve some bytes should a utf8 character byte sequence have been
+							// split when reading a chunk, so if you land here it might be that your
+							// data is best expressed in another format.
+
 							for i := 1; i <= rMaxOverflowNumBytes; i++ {
-								if (r.rawBuf[len(r.rawBuf)-i] & 0xC0) == 0xC0 {
+								if r.rawBuf[len(r.rawBuf)-i] >= startMBMin {
 									r.rawNumHiddenBytes = uint8(i)
 									r.rawBuf = r.rawBuf[: len(r.rawBuf)-i]
 									break
@@ -132,7 +158,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 	CHUNK_PROCESSOR:
 		for {
-			c, size, di := r.controlRuneScape.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
+			c, size, di := r.controlRuneSet.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
 			if di == -1 {
 				// consume it all without adjustment
 
@@ -157,7 +183,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 						return false
 					}
 
-					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
 					// HANDLING: DATA_BLOCK_WITHOUT_CONTROL_RUNES
@@ -340,7 +366,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 						return false
 					}
 
-					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+					// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 					fallthrough
 				case rStateStartOfRecord, rStateStartOfField:
 					// HANDLING: r.escape
@@ -579,7 +605,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 								return false
 							}
 
-							// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases
+							// r.state = rStateStartOfRecord // removable bc next case clearly sets state to another value in all cases except for already fully covered record append failures while in StartOfRecord and the precursor states of it.
 							fallthrough
 						case rStateStartOfRecord, rStateStartOfField:
 							// HANDLING: (CR+EOF or CR+(!LF)) as data given recordSep=CRLF
@@ -959,28 +985,28 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					}
 
 					// preserve field separator
-					var controlRuneScape runeSet6
-					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
-					controlRuneScape.addRuneUniqueUnchecked(c)
+					var controlRuneSet runeSet6
+					controlRuneSet.addRuneUniqueUnchecked(r.fieldSeparator)
+					controlRuneSet.addRuneUniqueUnchecked(c)
 
 					{{if not .NotQuotePossible}}if (r.bitFlags & rFlagQuote) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.quote)
+						controlRuneSet.addRuneUniqueUnchecked(r.quote)
 					}
 					if (r.bitFlags & rFlagEscape) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.escape)
+						controlRuneSet.addRuneUniqueUnchecked(r.escape)
 					}
 					{{end}}if (r.bitFlags & rFlagComment) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.comment)
+						controlRuneSet.addRuneUniqueUnchecked(r.comment)
 					}
 
 					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 						// error on newline in unquoted field block
 
-						controlRuneScape.addByte(asciiCarriageReturn)
-						controlRuneScape.addByte(asciiLineFeed)
+						controlRuneSet.addByte(asciiCarriageReturn)
+						controlRuneSet.addByte(asciiLineFeed)
 					}
 
-					r.controlRuneScape = controlRuneScape
+					r.controlRuneSet = controlRuneSet
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedField:

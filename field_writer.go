@@ -15,7 +15,7 @@ var (
 )
 
 const (
-	u64signBitMask uint64 = 0x8000000000000000
+	u64signBitMask = (uint64(1) << 63)
 
 	maxLenSerializedTime    = 35
 	maxLenSerializedBool    = 1
