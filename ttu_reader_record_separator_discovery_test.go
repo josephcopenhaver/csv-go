@@ -94,21 +94,21 @@ func TestUnitReaderDiscoverRecordSeparator(t *testing.T) {
 
 					// verify control runes initialized as expected
 					{
-						var expControlRuneScape runeSet6
+						var expControlRuneSet runeSet6
 
-						expControlRuneScape.addRuneUniqueUnchecked(cri.fieldSeparator)
-						expControlRuneScape.addRuneUniqueUnchecked(cri.quote)
-						expControlRuneScape.addRuneUniqueUnchecked(cri.escape)
-						expControlRuneScape.addRuneUniqueUnchecked(cri.comment)
-						expControlRuneScape.addRuneUniqueUnchecked(utf8NextLine)
-						expControlRuneScape.addRuneUniqueUnchecked(utf8LineSeparator)
+						expControlRuneSet.addRuneUniqueUnchecked(cri.fieldSeparator)
+						expControlRuneSet.addRuneUniqueUnchecked(cri.quote)
+						expControlRuneSet.addRuneUniqueUnchecked(cri.escape)
+						expControlRuneSet.addRuneUniqueUnchecked(cri.comment)
+						expControlRuneSet.addRuneUniqueUnchecked(utf8NextLine)
+						expControlRuneSet.addRuneUniqueUnchecked(utf8LineSeparator)
 
-						expControlRuneScape.addByte(asciiCarriageReturn)
-						expControlRuneScape.addByte(asciiLineFeed)
-						expControlRuneScape.addByte(asciiVerticalTab)
-						expControlRuneScape.addByte(asciiFormFeed)
+						expControlRuneSet.addByte(asciiCarriageReturn)
+						expControlRuneSet.addByte(asciiLineFeed)
+						expControlRuneSet.addByte(asciiVerticalTab)
+						expControlRuneSet.addByte(asciiFormFeed)
 
-						is.Equal(expControlRuneScape, cri.controlRuneScape)
+						is.Equal(expControlRuneSet, cri.controlRuneSet)
 					}
 
 					is.Nil(cr.Row())
@@ -128,21 +128,21 @@ func TestUnitReaderDiscoverRecordSeparator(t *testing.T) {
 
 					// verify control runes changed to a subset as expected
 					{
-						var expControlRuneScape runeSet6
+						var expControlRuneSet runeSet6
 
-						expControlRuneScape.addRuneUniqueUnchecked(cri.fieldSeparator)
+						expControlRuneSet.addRuneUniqueUnchecked(cri.fieldSeparator)
 						{
 							r, _ := utf8.DecodeRuneInString(recSep[1])
-							expControlRuneScape.addRuneUniqueUnchecked(r)
+							expControlRuneSet.addRuneUniqueUnchecked(r)
 						}
-						expControlRuneScape.addRuneUniqueUnchecked(cri.quote)
-						expControlRuneScape.addRuneUniqueUnchecked(cri.escape)
-						expControlRuneScape.addRuneUniqueUnchecked(cri.comment)
+						expControlRuneSet.addRuneUniqueUnchecked(cri.quote)
+						expControlRuneSet.addRuneUniqueUnchecked(cri.escape)
+						expControlRuneSet.addRuneUniqueUnchecked(cri.comment)
 
-						expControlRuneScape.addByte(asciiCarriageReturn)
-						expControlRuneScape.addByte(asciiLineFeed)
+						expControlRuneSet.addByte(asciiCarriageReturn)
+						expControlRuneSet.addByte(asciiLineFeed)
 
-						is.Equal(expControlRuneScape, cri.controlRuneScape)
+						is.Equal(expControlRuneSet, cri.controlRuneSet)
 					}
 
 					is.Nil(cr.Close())

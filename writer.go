@@ -352,8 +352,8 @@ func (cfg *wCfg) validate() error {
 type Writer struct {
 	fieldWriterBuf         [boundedFieldWritersMaxByteLen]byte
 	recordBuf              []byte
-	controlRuneScape       runeSet4
-	escapeControlRuneScape runeSet4
+	controlRuneSet         runeSet4
+	escapeControlRuneSet   runeSet4
 	twoQuotesSeq           twoRuneEncoder
 	escapedQuoteSeq        twoRuneEncoder
 	escapedEscapeSeq       twoRuneEncoder
@@ -414,22 +414,22 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	}
 
 	var recordSepSeq runeEncoder
-	var controlRuneScape, escapeControlRuneScape runeSet4
+	var controlRuneSet, escapeControlRuneSet runeSet4
 
-	escapeControlRuneScape.addRuneUniqueUnchecked(cfg.quote)
-	controlRuneScape.addRuneUniqueUnchecked(cfg.quote)
-	controlRuneScape.addRuneUniqueUnchecked(cfg.fieldSeparator)
+	escapeControlRuneSet.addRuneUniqueUnchecked(cfg.quote)
+	controlRuneSet.addRuneUniqueUnchecked(cfg.quote)
+	controlRuneSet.addRuneUniqueUnchecked(cfg.fieldSeparator)
 	switch cfg.recordSep[0] {
 	case '\r', '\n':
-		controlRuneScape.addRuneUniqueUnchecked('\r')
-		controlRuneScape.addRuneUniqueUnchecked('\n')
+		controlRuneSet.addRuneUniqueUnchecked('\r')
+		controlRuneSet.addRuneUniqueUnchecked('\n')
 		if cfg.recordSepRuneLen == 2 {
 			recordSepSeq = runeEncoder{2, [...]byte{'\r', '\n', 0, 0}}
 			break
 		}
 		recordSepSeq = newRuneEncoder(cfg.recordSep[0])
 	default:
-		controlRuneScape.addRuneUniqueUnchecked(cfg.recordSep[0])
+		controlRuneSet.addRuneUniqueUnchecked(cfg.recordSep[0])
 		recordSepSeq = newRuneEncoder(cfg.recordSep[0])
 	}
 
@@ -447,8 +447,8 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 		escape = cfg.escape
 		escapedQuoteSeq = newTwoRuneEncoder(cfg.escape, cfg.quote)
 		escapedEscapeSeq = newTwoRuneEncoder(cfg.escape, cfg.escape)
-		escapeControlRuneScape.addRuneUniqueUnchecked(escape)
-		controlRuneScape.addRuneUniqueUnchecked(escape)
+		escapeControlRuneSet.addRuneUniqueUnchecked(escape)
+		controlRuneSet.addRuneUniqueUnchecked(escape)
 	}
 
 	var comment rune
@@ -459,21 +459,21 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	}
 
 	w := &Writer{
-		numFields:              cfg.numFields,
-		writer:                 cfg.writer,
-		controlRuneScape:       controlRuneScape,
-		escapeControlRuneScape: escapeControlRuneScape,
-		twoQuotesSeq:           twoQuotesSeq,
-		escapedQuoteSeq:        escapedQuoteSeq,
-		escapedEscapeSeq:       escapedEscapeSeq,
-		fieldSepSeq:            fieldSepSeq,
-		recordSepSeq:           recordSepSeq,
-		quoteSeq:               quoteSeq,
-		comment:                comment,
-		quote:                  cfg.quote,
-		escape:                 escape,
-		recordBuf:              recordBuf,
-		bitFlags:               bitFlags,
+		numFields:            cfg.numFields,
+		writer:               cfg.writer,
+		controlRuneSet:       controlRuneSet,
+		escapeControlRuneSet: escapeControlRuneSet,
+		twoQuotesSeq:         twoQuotesSeq,
+		escapedQuoteSeq:      escapedQuoteSeq,
+		escapedEscapeSeq:     escapedEscapeSeq,
+		fieldSepSeq:          fieldSepSeq,
+		recordSepSeq:         recordSepSeq,
+		quoteSeq:             quoteSeq,
+		comment:              comment,
+		quote:                cfg.quote,
+		escape:               escape,
+		recordBuf:            recordBuf,
+		bitFlags:             bitFlags,
 	}
 
 	return w, nil
@@ -781,13 +781,13 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 			linePrefix = recSepAndLinePrefix[w.recordSepSeq.n:]
 		}
 
-		// note, could technically use a runeScape2 here - but that's overkill for a small
+		// note, could technically use a runeSet2 here - but that's overkill for a small
 		// and unlikely to be highly reused aspect
 		//
 		// I am open to a PR should that behavior be more desirable.
-		var newlineForWriteRuneScape runeSet4
+		var newlineForWriteRuneSet runeSet4
 		for _, r := range newlineRunesForWrite {
-			newlineForWriteRuneScape.addRuneUniqueUnchecked(r)
+			newlineForWriteRuneSet.addRuneUniqueUnchecked(r)
 		}
 
 		for i := range cfg.commentLines {
@@ -828,7 +828,7 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 
 					scanIdx := 0
 					for {
-						_, runeSize, di := newlineForWriteRuneScape.indexAnyRuneLenInBytes(line[scanIdx:])
+						_, runeSize, di := newlineForWriteRuneSet.indexAnyRuneLenInBytes(line[scanIdx:])
 						if di == -1 {
 							if scanIdx != len(line) {
 								n, err = w.writer.Write(line[scanIdx:])

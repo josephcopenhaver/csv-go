@@ -169,7 +169,7 @@ func (r *fastReader) prepareRow() bool {
 
 	CHUNK_PROCESSOR:
 		for {
-			c, size, di := r.controlRuneScape.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
+			c, size, di := r.controlRuneSet.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
 			if di == -1 {
 				// consume it all without adjustment
 
@@ -985,28 +985,28 @@ func (r *fastReader) prepareRow() bool {
 					}
 
 					// preserve field separator
-					var controlRuneScape runeSet6
-					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
-					controlRuneScape.addRuneUniqueUnchecked(c)
+					var controlRuneSet runeSet6
+					controlRuneSet.addRuneUniqueUnchecked(r.fieldSeparator)
+					controlRuneSet.addRuneUniqueUnchecked(c)
 
 					if (r.bitFlags & rFlagQuote) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.quote)
+						controlRuneSet.addRuneUniqueUnchecked(r.quote)
 					}
 					if (r.bitFlags & rFlagEscape) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.escape)
+						controlRuneSet.addRuneUniqueUnchecked(r.escape)
 					}
 					if (r.bitFlags & rFlagComment) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.comment)
+						controlRuneSet.addRuneUniqueUnchecked(r.comment)
 					}
 
 					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 						// error on newline in unquoted field block
 
-						controlRuneScape.addByte(asciiCarriageReturn)
-						controlRuneScape.addByte(asciiLineFeed)
+						controlRuneSet.addByte(asciiCarriageReturn)
+						controlRuneSet.addByte(asciiLineFeed)
 					}
 
-					r.controlRuneScape = controlRuneScape
+					r.controlRuneSet = controlRuneSet
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedField:
@@ -1194,7 +1194,7 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 
 	CHUNK_PROCESSOR:
 		for {
-			c, size, di := r.controlRuneScape.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
+			c, size, di := r.controlRuneSet.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
 			if di == -1 {
 				// consume it all without adjustment
 
@@ -2087,28 +2087,28 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 					}
 
 					// preserve field separator
-					var controlRuneScape runeSet6
-					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
-					controlRuneScape.addRuneUniqueUnchecked(c)
+					var controlRuneSet runeSet6
+					controlRuneSet.addRuneUniqueUnchecked(r.fieldSeparator)
+					controlRuneSet.addRuneUniqueUnchecked(c)
 
 					if (r.bitFlags & rFlagQuote) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.quote)
+						controlRuneSet.addRuneUniqueUnchecked(r.quote)
 					}
 					if (r.bitFlags & rFlagEscape) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.escape)
+						controlRuneSet.addRuneUniqueUnchecked(r.escape)
 					}
 					if (r.bitFlags & rFlagComment) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.comment)
+						controlRuneSet.addRuneUniqueUnchecked(r.comment)
 					}
 
 					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 						// error on newline in unquoted field block
 
-						controlRuneScape.addByte(asciiCarriageReturn)
-						controlRuneScape.addByte(asciiLineFeed)
+						controlRuneSet.addByte(asciiCarriageReturn)
+						controlRuneSet.addByte(asciiLineFeed)
 					}
 
-					r.controlRuneScape = controlRuneScape
+					r.controlRuneSet = controlRuneSet
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedField:
@@ -2217,7 +2217,7 @@ func (w *Writer) writeRow_memclearOff(fields []FieldWriter) (int, error) {
 
 			var i int
 			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
-				i = w.controlRuneScape.indexAnyInBytes(src)
+				i = w.controlRuneSet.indexAnyInBytes(src)
 				if i == -1 {
 					w.recordBuf = append(w.recordBuf, src...)
 					goto FIRST_FIELD_WRITTEN
@@ -2247,13 +2247,13 @@ func (w *Writer) writeRow_memclearOff(fields []FieldWriter) (int, error) {
 
 				b := src[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsSingleByteRune(b) {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsMBRune(r) {
+				} else if !w.controlRuneSet.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -2335,7 +2335,7 @@ FIRST_FIELD_WRITTEN:
 		if !scanForNonUTF8 || (w.bitFlags&wFlagErrOnNonUTF8) == 0 {
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
-			i := w.controlRuneScape.indexAnyInBytes(src)
+			i := w.controlRuneSet.indexAnyInBytes(src)
 			if i == -1 {
 				w.recordBuf = append(w.recordBuf, src...)
 				continue
@@ -2361,13 +2361,13 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 			if b := src[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsSingleByteRune(b) {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsMBRune(r) {
+			} else if !w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -2425,7 +2425,7 @@ func (w *Writer) writeStrRow_memclearOff(fields []string) (int, error) {
 
 			var i int
 			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
-				i = w.controlRuneScape.indexAnyInString(s)
+				i = w.controlRuneSet.indexAnyInString(s)
 				if i == -1 {
 					w.recordBuf = append(w.recordBuf, s...)
 					goto FIRST_FIELD_WRITTEN
@@ -2455,13 +2455,13 @@ func (w *Writer) writeStrRow_memclearOff(fields []string) (int, error) {
 
 				b := s[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsSingleByteRune(b) {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsMBRune(r) {
+				} else if !w.controlRuneSet.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -2500,7 +2500,7 @@ FIRST_FIELD_WRITTEN:
 		if (w.bitFlags & wFlagErrOnNonUTF8) == 0 {
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
-			i := w.controlRuneScape.indexAnyInString(s)
+			i := w.controlRuneSet.indexAnyInString(s)
 			if i == -1 {
 				w.recordBuf = append(w.recordBuf, s...)
 				continue
@@ -2527,13 +2527,13 @@ FIRST_FIELD_WRITTEN:
 			}
 
 			if b := s[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsSingleByteRune(b) {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsMBRune(r) {
+			} else if !w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -2572,7 +2572,7 @@ FIRST_FIELD_WRITTEN:
 // Essentially the function picks up after the parent context starts a quoting process which the parent
 // will also complete.
 func (w *Writer) loadQF_memclearOff(p []byte, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInBytes(p[scanIdx:])
+	r, n, i := w.escapeControlRuneSet.indexAnyRuneLenInBytes(p[scanIdx:])
 	if i == -1 {
 		w.recordBuf = append(w.recordBuf, p...)
 		return
@@ -2594,7 +2594,7 @@ func (w *Writer) loadQF_memclearOff(p []byte, scanIdx int) {
 			w.recordBuf = w.escapedEscapeSeq.appendText(w.recordBuf)
 		}
 
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInBytes(p[scanIdx:])
+		r, n, i = w.escapeControlRuneSet.indexAnyRuneLenInBytes(p[scanIdx:])
 		if i == -1 {
 			w.recordBuf = append(w.recordBuf, p[scanIdx:]...)
 			return
@@ -2618,7 +2618,7 @@ func (w *Writer) loadQFWithCheckUTF8_memclearOff(p []byte, scanIdx int) error {
 		}
 
 		if b := p[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
+			if !w.escapeControlRuneSet.containsSingleByteRune(b) {
 				scanIdx++
 				continue
 			}
@@ -2626,7 +2626,7 @@ func (w *Writer) loadQFWithCheckUTF8_memclearOff(p []byte, scanIdx int) error {
 			n = 1
 		} else if r, n = utf8.DecodeRune(p[scanIdx:]); n == 1 {
 			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsMBRune(r) {
+		} else if !w.escapeControlRuneSet.containsMBRune(r) {
 			scanIdx += n
 			continue
 		}
@@ -2658,7 +2658,7 @@ func (w *Writer) loadQFWithCheckUTF8_memclearOff(p []byte, scanIdx int) error {
 // Essentially the function picks up after the parent context starts a quoting process which the parent
 // will also complete.
 func (w *Writer) loadStrQF_memclearOff(s string, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInString(s[scanIdx:])
+	r, n, i := w.escapeControlRuneSet.indexAnyRuneLenInString(s[scanIdx:])
 	if i == -1 {
 		w.recordBuf = append(w.recordBuf, s...)
 		return
@@ -2680,7 +2680,7 @@ func (w *Writer) loadStrQF_memclearOff(s string, scanIdx int) {
 			w.recordBuf = w.escapedEscapeSeq.appendText(w.recordBuf)
 		}
 
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInString(s[scanIdx:])
+		r, n, i = w.escapeControlRuneSet.indexAnyRuneLenInString(s[scanIdx:])
 		if i == -1 {
 			w.recordBuf = append(w.recordBuf, s[scanIdx:]...)
 			return
@@ -2704,7 +2704,7 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOff(s string, scanIdx int) error
 		}
 
 		if b := s[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
+			if !w.escapeControlRuneSet.containsSingleByteRune(b) {
 				scanIdx++
 				continue
 			}
@@ -2712,7 +2712,7 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOff(s string, scanIdx int) error
 			n = 1
 		} else if r, n = utf8.DecodeRuneInString(s[scanIdx:]); n == 1 {
 			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsMBRune(r) {
+		} else if !w.escapeControlRuneSet.containsMBRune(r) {
 			scanIdx += n
 			continue
 		}
@@ -2814,7 +2814,7 @@ func (w *Writer) writeRow_memclearOn(fields []FieldWriter) (int, error) {
 
 			var i int
 			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
-				i = w.controlRuneScape.indexAnyInBytes(src)
+				i = w.controlRuneSet.indexAnyInBytes(src)
 				if i == -1 {
 					w.appendRec(src)
 					goto FIRST_FIELD_WRITTEN
@@ -2844,13 +2844,13 @@ func (w *Writer) writeRow_memclearOn(fields []FieldWriter) (int, error) {
 
 				b := src[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsSingleByteRune(b) {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsMBRune(r) {
+				} else if !w.controlRuneSet.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -2932,7 +2932,7 @@ FIRST_FIELD_WRITTEN:
 		if !scanForNonUTF8 || (w.bitFlags&wFlagErrOnNonUTF8) == 0 {
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
-			i := w.controlRuneScape.indexAnyInBytes(src)
+			i := w.controlRuneSet.indexAnyInBytes(src)
 			if i == -1 {
 				w.appendRec(src)
 				continue
@@ -2958,13 +2958,13 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 			if b := src[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsSingleByteRune(b) {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsMBRune(r) {
+			} else if !w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -3022,7 +3022,7 @@ func (w *Writer) writeStrRow_memclearOn(fields []string) (int, error) {
 
 			var i int
 			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
-				i = w.controlRuneScape.indexAnyInString(s)
+				i = w.controlRuneSet.indexAnyInString(s)
 				if i == -1 {
 					w.appendStrRec(s)
 					goto FIRST_FIELD_WRITTEN
@@ -3052,13 +3052,13 @@ func (w *Writer) writeStrRow_memclearOn(fields []string) (int, error) {
 
 				b := s[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsSingleByteRune(b) {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsMBRune(r) {
+				} else if !w.controlRuneSet.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -3097,7 +3097,7 @@ FIRST_FIELD_WRITTEN:
 		if (w.bitFlags & wFlagErrOnNonUTF8) == 0 {
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
-			i := w.controlRuneScape.indexAnyInString(s)
+			i := w.controlRuneSet.indexAnyInString(s)
 			if i == -1 {
 				w.appendStrRec(s)
 				continue
@@ -3124,13 +3124,13 @@ FIRST_FIELD_WRITTEN:
 			}
 
 			if b := s[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsSingleByteRune(b) {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsMBRune(r) {
+			} else if !w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -3169,7 +3169,7 @@ FIRST_FIELD_WRITTEN:
 // Essentially the function picks up after the parent context starts a quoting process which the parent
 // will also complete.
 func (w *Writer) loadQF_memclearOn(p []byte, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInBytes(p[scanIdx:])
+	r, n, i := w.escapeControlRuneSet.indexAnyRuneLenInBytes(p[scanIdx:])
 	if i == -1 {
 		w.appendRec(p)
 		return
@@ -3191,7 +3191,7 @@ func (w *Writer) loadQF_memclearOn(p []byte, scanIdx int) {
 			w.setRecordBuf(w.escapedEscapeSeq.appendText(w.recordBuf))
 		}
 
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInBytes(p[scanIdx:])
+		r, n, i = w.escapeControlRuneSet.indexAnyRuneLenInBytes(p[scanIdx:])
 		if i == -1 {
 			w.appendRec(p[scanIdx:])
 			return
@@ -3215,7 +3215,7 @@ func (w *Writer) loadQFWithCheckUTF8_memclearOn(p []byte, scanIdx int) error {
 		}
 
 		if b := p[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
+			if !w.escapeControlRuneSet.containsSingleByteRune(b) {
 				scanIdx++
 				continue
 			}
@@ -3223,7 +3223,7 @@ func (w *Writer) loadQFWithCheckUTF8_memclearOn(p []byte, scanIdx int) error {
 			n = 1
 		} else if r, n = utf8.DecodeRune(p[scanIdx:]); n == 1 {
 			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsMBRune(r) {
+		} else if !w.escapeControlRuneSet.containsMBRune(r) {
 			scanIdx += n
 			continue
 		}
@@ -3255,7 +3255,7 @@ func (w *Writer) loadQFWithCheckUTF8_memclearOn(p []byte, scanIdx int) error {
 // Essentially the function picks up after the parent context starts a quoting process which the parent
 // will also complete.
 func (w *Writer) loadStrQF_memclearOn(s string, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenInString(s[scanIdx:])
+	r, n, i := w.escapeControlRuneSet.indexAnyRuneLenInString(s[scanIdx:])
 	if i == -1 {
 		w.appendStrRec(s)
 		return
@@ -3277,7 +3277,7 @@ func (w *Writer) loadStrQF_memclearOn(s string, scanIdx int) {
 			w.setRecordBuf(w.escapedEscapeSeq.appendText(w.recordBuf))
 		}
 
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenInString(s[scanIdx:])
+		r, n, i = w.escapeControlRuneSet.indexAnyRuneLenInString(s[scanIdx:])
 		if i == -1 {
 			w.appendStrRec(s[scanIdx:])
 			return
@@ -3301,7 +3301,7 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOn(s string, scanIdx int) error 
 		}
 
 		if b := s[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
+			if !w.escapeControlRuneSet.containsSingleByteRune(b) {
 				scanIdx++
 				continue
 			}
@@ -3309,7 +3309,7 @@ func (w *Writer) loadStrQFWithCheckUTF8_memclearOn(s string, scanIdx int) error 
 			n = 1
 		} else if r, n = utf8.DecodeRuneInString(s[scanIdx:]); n == 1 {
 			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsMBRune(r) {
+		} else if !w.escapeControlRuneSet.containsMBRune(r) {
 			scanIdx += n
 			continue
 		}

@@ -158,7 +158,7 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 
 	CHUNK_PROCESSOR:
 		for {
-			c, size, di := r.controlRuneScape.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
+			c, size, di := r.controlRuneSet.indexAnyRuneLenInBytes(r.rawBuf[r.rawIndex:])
 			if di == -1 {
 				// consume it all without adjustment
 
@@ -985,28 +985,28 @@ func (r *{{.Struct}}) prepareRow{{.NameSuffix}}() bool {
 					}
 
 					// preserve field separator
-					var controlRuneScape runeSet6
-					controlRuneScape.addRuneUniqueUnchecked(r.fieldSeparator)
-					controlRuneScape.addRuneUniqueUnchecked(c)
+					var controlRuneSet runeSet6
+					controlRuneSet.addRuneUniqueUnchecked(r.fieldSeparator)
+					controlRuneSet.addRuneUniqueUnchecked(c)
 
 					{{if not .NotQuotePossible}}if (r.bitFlags & rFlagQuote) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.quote)
+						controlRuneSet.addRuneUniqueUnchecked(r.quote)
 					}
 					if (r.bitFlags & rFlagEscape) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.escape)
+						controlRuneSet.addRuneUniqueUnchecked(r.escape)
 					}
 					{{end}}if (r.bitFlags & rFlagComment) != 0 {
-						controlRuneScape.addRuneUniqueUnchecked(r.comment)
+						controlRuneSet.addRuneUniqueUnchecked(r.comment)
 					}
 
 					if (r.bitFlags & rFlagErrOnNLInUF) != 0 {
 						// error on newline in unquoted field block
 
-						controlRuneScape.addByte(asciiCarriageReturn)
-						controlRuneScape.addByte(asciiLineFeed)
+						controlRuneSet.addByte(asciiCarriageReturn)
+						controlRuneSet.addByte(asciiLineFeed)
 					}
 
-					r.controlRuneScape = controlRuneScape
+					r.controlRuneSet = controlRuneSet
 
 					// r.state = ... (unchanged)
 				case rStateInQuotedField:

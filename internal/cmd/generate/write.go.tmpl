@@ -84,7 +84,7 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []F
 
 			var i int
 			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
-				i = w.controlRuneScape.indexAnyInBytes(src)
+				i = w.controlRuneSet.indexAnyInBytes(src)
 				if i == -1 {
 					{{$appendRec0}}src{{$appendRec1}}
 					goto FIRST_FIELD_WRITTEN
@@ -114,13 +114,13 @@ func (w *Writer) writeRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields []F
 
 				b := src[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsSingleByteRune(b) {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsMBRune(r) {
+				} else if !w.controlRuneSet.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -202,7 +202,7 @@ FIRST_FIELD_WRITTEN:
 		if !scanForNonUTF8 || (w.bitFlags & wFlagErrOnNonUTF8) == 0 {
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
-			i := w.controlRuneScape.indexAnyInBytes(src)
+			i := w.controlRuneSet.indexAnyInBytes(src)
 			if i == -1 {
 				{{$appendRec0}}src{{$appendRec1}}
 				continue
@@ -228,13 +228,13 @@ FIRST_FIELD_WRITTEN:
 				break
 			}
 			if b := src[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsSingleByteRune(b) {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsMBRune(r) {
+			} else if !w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -292,7 +292,7 @@ func (w *Writer) writeStrRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields 
 
 			var i int
 			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
-				i = w.controlRuneScape.indexAnyInString(s)
+				i = w.controlRuneSet.indexAnyInString(s)
 				if i == -1 {
 					{{$appendStrRec0}}s{{$appendRec1}}
 					goto FIRST_FIELD_WRITTEN
@@ -322,13 +322,13 @@ func (w *Writer) writeStrRow_memclearO{{if .Memclear}}n{{else}}ff{{end}}(fields 
 
 				b := s[i]
 				if b < utf8.RuneSelf {
-					if !w.controlRuneScape.containsSingleByteRune(b) {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
 						i++
 						continue
 					}
 				} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 					return 0, ErrNonUTF8InRecord
-				} else if !w.controlRuneScape.containsMBRune(r) {
+				} else if !w.controlRuneSet.containsMBRune(r) {
 					i += n
 					continue
 				}
@@ -367,7 +367,7 @@ FIRST_FIELD_WRITTEN:
 		if (w.bitFlags & wFlagErrOnNonUTF8) == 0 {
 			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
-			i := w.controlRuneScape.indexAnyInString(s)
+			i := w.controlRuneSet.indexAnyInString(s)
 			if i == -1 {
 				{{$appendStrRec0}}s{{$appendRec1}}
 				continue
@@ -394,13 +394,13 @@ FIRST_FIELD_WRITTEN:
 			}
 
 			if b := s[i]; b < utf8.RuneSelf {
-				if !w.controlRuneScape.containsSingleByteRune(b) {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
 					i++
 					continue
 				}
 			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
 				return 0, ErrNonUTF8InRecord
-			} else if !w.controlRuneScape.containsMBRune(r) {
+			} else if !w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
 			}
@@ -441,7 +441,7 @@ FIRST_FIELD_WRITTEN:
 // Essentially the function picks up after the parent context starts a quoting process which the parent
 // will also complete.
 func (w *Writer) load{{if eq .ArgType "String"}}Str{{end}}QF_memclearO{{if $.Memclear}}n{{else}}ff{{end}}({{$arg}} {{if eq .ArgType "String"}}string{{else}}[]byte{{end}}, scanIdx int) {
-	r, n, i := w.escapeControlRuneScape.indexAnyRuneLenIn{{.ArgType}}({{$arg}}[scanIdx:])
+	r, n, i := w.escapeControlRuneSet.indexAnyRuneLenIn{{.ArgType}}({{$arg}}[scanIdx:])
 	if i == -1 {
 		{{$appendRec0}}{{$arg}}{{$appendRec1}}
 		return
@@ -463,7 +463,7 @@ func (w *Writer) load{{if eq .ArgType "String"}}Str{{end}}QF_memclearO{{if $.Mem
 			{{$setRec0}}w.escapedEscapeSeq.appendText(w.recordBuf){{$setRec1}}
 		}
 
-		r, n, i = w.escapeControlRuneScape.indexAnyRuneLenIn{{.ArgType}}({{$arg}}[scanIdx:])
+		r, n, i = w.escapeControlRuneSet.indexAnyRuneLenIn{{.ArgType}}({{$arg}}[scanIdx:])
 		if i == -1 {
 			{{$appendRec0}}{{$arg}}[scanIdx:]{{$appendRec1}}
 			return
@@ -487,7 +487,7 @@ func (w *Writer) load{{if eq .ArgType "String"}}Str{{end}}QFWithCheckUTF8_memcle
 		}
 
 		if b := {{$arg}}[scanIdx]; b < utf8.RuneSelf {
-			if !w.escapeControlRuneScape.containsSingleByteRune(b) {
+			if !w.escapeControlRuneSet.containsSingleByteRune(b) {
 				scanIdx++
 				continue
 			}
@@ -495,7 +495,7 @@ func (w *Writer) load{{if eq .ArgType "String"}}Str{{end}}QFWithCheckUTF8_memcle
 			n = 1
 		} else if r, n = utf8.DecodeRune{{if eq .ArgType "String"}}InString{{end}}({{$arg}}[scanIdx:]); n == 1 {
 			return ErrNonUTF8InRecord
-		} else if !w.escapeControlRuneScape.containsMBRune(r) {
+		} else if !w.escapeControlRuneSet.containsMBRune(r) {
 			scanIdx += n
 			continue
 		}
