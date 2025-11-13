@@ -168,7 +168,7 @@ func (w *FieldWriter) MarshalText() ([]byte, error) {
 		input := w._64_bits
 		var signAdjustment int
 		if input&u64signBitMask != 0 {
-			input = uint64(-int64(w._64_bits))
+			input = uint64(-int64(input))
 			signAdjustment = 1
 		}
 		base10ByteLen := decLenU64(input) + signAdjustment
@@ -198,6 +198,12 @@ func (w *FieldWriter) MarshalText() ([]byte, error) {
 
 type FieldWriterFactory struct{}
 
+// Bytes creates a concrete FieldWriter that serializes
+// the provided byte slice as a UTF-8 string.
+//
+// WARNING: This method is likely to lead to additional allocations if the input
+// data is not already on the heap due to how the Go compiler handles escape analysis.
+// (consider using the fluent API on RecordWriter instead to avoid this issue)
 func (FieldWriterFactory) Bytes(p []byte) FieldWriter {
 	return FieldWriter{
 		kind:  wfkBytes,
@@ -211,6 +217,12 @@ func (FieldWriterFactory) Bytes(p []byte) FieldWriter {
 // Please consider this to be a micro optimization and prefer Bytes
 // instead should there be any uncertainty in the encoding of the
 // byte contents.
+//
+// WARNING: Using this method with invalid UTF-8 data will produce invalid CSV output.
+//
+// WARNING: This method is likely to lead to additional allocations if the input
+// data is not already on the heap due to how the Go compiler handles escape analysis.
+// (consider using the fluent API on RecordWriter instead to avoid this issue)
 func (FieldWriterFactory) UncheckedUTF8Bytes(p []byte) FieldWriter {
 	return FieldWriter{
 		kind:     wfkBytes,
@@ -232,6 +244,8 @@ func (FieldWriterFactory) String(s string) FieldWriter {
 // Please consider this to be a micro optimization and prefer String
 // instead should there be any uncertainty in the encoding of the
 // byte contents.
+//
+// WARNING: Using this method with invalid UTF-8 data will produce invalid CSV output.
 func (FieldWriterFactory) UncheckedUTF8String(s string) FieldWriter {
 	return FieldWriter{
 		kind:     wfkString,

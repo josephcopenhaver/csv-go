@@ -24,12 +24,15 @@ var (
 	ErrHeaderWritten             = errors.New("header already written")
 	ErrInvalidFieldCountInRecord = errors.New("invalid field count in record")
 	ErrInvalidRune               = errors.New("invalid rune")
+	// ErrWriterNotReady describes the state when a writer is locked for use by an external writing implement such as a RecordWriter.
+	ErrWriterNotReady = errors.New("writer not ready")
 )
 
 type wFlag uint8
 
 const (
-	wFlagFirstRecordWritten wFlag = 1 << iota
+	wFlagRecordBuffCheckedOut wFlag = 1 << iota
+	wFlagFirstRecordWritten
 	wFlagErrOnNonUTF8
 	wFlagControlRuneOverlap
 	wFlagForceQuoteFirstField
@@ -350,21 +353,18 @@ func (cfg *wCfg) validate() error {
 }
 
 type Writer struct {
-	fieldWriterBuf         [boundedFieldWritersMaxByteLen]byte
-	recordBuf              []byte
-	controlRuneSet         runeSet4
-	escapeControlRuneSet   runeSet4
-	twoQuotesSeq           twoRuneEncoder
-	escapedQuoteSeq        twoRuneEncoder
-	escapedEscapeSeq       twoRuneEncoder
-	fieldSepSeq            runeEncoder
-	recordSepSeq           runeEncoder
-	quoteSeq               runeEncoder
-	numFields              int
-	writer                 io.Writer
-	err                    error
-	quote, escape, comment rune
-	bitFlags               wFlag
+	fieldWriterBuf [boundedFieldWritersMaxByteLen]byte
+	writeBuffer
+	controlRuneSet  runeSet4
+	twoQuotesSeq    twoRuneEncoder
+	fieldSepSeq     runeEncoder
+	recordSepSeq    runeEncoder
+	quoteSeq        runeEncoder
+	numFields       int
+	writer          io.Writer
+	err             error
+	escape, comment rune
+	bitFlags        wFlag
 }
 
 // NewWriter creates a new instance of a CSV writer which is not safe for concurrent reads.
@@ -459,21 +459,23 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	}
 
 	w := &Writer{
-		numFields:            cfg.numFields,
-		writer:               cfg.writer,
-		controlRuneSet:       controlRuneSet,
-		escapeControlRuneSet: escapeControlRuneSet,
-		twoQuotesSeq:         twoQuotesSeq,
-		escapedQuoteSeq:      escapedQuoteSeq,
-		escapedEscapeSeq:     escapedEscapeSeq,
-		fieldSepSeq:          fieldSepSeq,
-		recordSepSeq:         recordSepSeq,
-		quoteSeq:             quoteSeq,
-		comment:              comment,
-		quote:                cfg.quote,
-		escape:               escape,
-		recordBuf:            recordBuf,
-		bitFlags:             bitFlags,
+		writeBuffer: writeBuffer{
+			recordBuf:            recordBuf,
+			escapeControlRuneSet: escapeControlRuneSet,
+			escapedQuoteSeq:      escapedQuoteSeq,
+			escapedEscapeSeq:     escapedEscapeSeq,
+			quote:                cfg.quote,
+		},
+		numFields:      cfg.numFields,
+		writer:         cfg.writer,
+		controlRuneSet: controlRuneSet,
+		twoQuotesSeq:   twoQuotesSeq,
+		fieldSepSeq:    fieldSepSeq,
+		recordSepSeq:   recordSepSeq,
+		quoteSeq:       quoteSeq,
+		comment:        comment,
+		escape:         escape,
+		bitFlags:       bitFlags,
 	}
 
 	return w, nil
@@ -554,34 +556,6 @@ func (w *Writer) Close() error {
 	}
 
 	return nil
-}
-
-func (w *Writer) appendRec(p []byte) {
-	appendAndClear(&w.recordBuf, p)
-}
-
-func (w *Writer) appendStrRec(s string) {
-	appendStrAndClear(&w.recordBuf, s)
-}
-
-// setRecordBuf should only be called when the record buf has been appended to
-// and might have been reallocated as a result and clear mem on free is enabled.
-//
-// This function will clear the old buffer if it is no longer being utilized.
-func (w *Writer) setRecordBuf(p []byte) {
-	old := w.recordBuf
-	w.recordBuf = p
-
-	if cap(old) == 0 {
-		return
-	}
-	old = old[:cap(old)]
-
-	if &old[0] == &p[0] {
-		return
-	}
-
-	clear(old)
 }
 
 type whCfg struct {
@@ -724,6 +698,10 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 	var result int
 	if err := w.err; err != nil {
 		return result, err
+	}
+
+	if (w.bitFlags & wFlagRecordBuffCheckedOut) != 0 {
+		return result, ErrWriterNotReady
 	}
 
 	if (w.bitFlags & wFlagHeaderWritten) != 0 {
@@ -956,10 +934,20 @@ func (w *Writer) WriteFieldRowBorrowed(row []FieldWriter) (int, error) {
 	return w.writeRow(row)
 }
 
-func (w *Writer) writeRowPreflightCheck(n int) (_err error) {
+func (w *Writer) writeRowPreflightCheck(n int) error {
 	// check if prior iterations left the writer in an errored state
 	if err := w.err; err != nil {
 		return err
+	}
+
+	// check if the record buffer is checked out
+	if (w.bitFlags & wFlagRecordBuffCheckedOut) != 0 {
+
+		// a row write was attempted so even on the error path we
+		// must not allow another write header attempt in any way
+		w.bitFlags |= wFlagHeaderWritten
+
+		return ErrWriterNotReady
 	}
 
 	// check if the number of fields to write is zero
@@ -1031,51 +1019,4 @@ func isValidComment(comment, quote, fieldSep, escape rune, escapeSet bool) error
 	}
 
 	return nil
-}
-
-// appendAndClear should be small enough to always be inlined
-func appendAndClear(dst *[]byte, p []byte) {
-	n := len(p)
-	if n == 0 {
-		return
-	}
-
-	s := *dst
-	sCap := cap(s)
-	sFree := sCap - len(s)
-
-	*dst = append(s, p...)
-
-	if sFree >= n {
-		// no reallocation occurred
-		return
-	}
-
-	// a reallocation definitely occurred
-	// clear the old contents within `s`
-
-	clear(s[:sCap])
-}
-
-func appendStrAndClear(dst *[]byte, str string) {
-	n := len(str)
-	if n == 0 {
-		return
-	}
-
-	s := *dst
-	sCap := cap(s)
-	sFree := sCap - len(s)
-
-	*dst = append(s, str...)
-
-	if sFree >= n {
-		// no reallocation occurred
-		return
-	}
-
-	// a reallocation definitely occurred
-	// clear the old contents within `s`
-
-	clear(s[:sCap])
 }

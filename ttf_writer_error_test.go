@@ -344,6 +344,18 @@ func TestFunctionalWriterErrorPaths(t *testing.T) {
 				{r: []string{"hello", "dave"}, errIs: []error{csv.ErrIO, io.ErrClosedPipe}, errStr: csv.ErrIO.Error() + ": " + io.ErrClosedPipe.Error()},
 			},
 		},
+		{
+			when: "writer is locked by a RecordWriter and attempting to use non-fluent Write",
+			afterInitWriter: func(t *testing.T, w *csv.Writer) {
+				t.Helper()
+
+				// leaves the writer locked by the external RecordWriter
+				_ = w.MustNewRecord()
+			},
+			wrs: []wr{
+				{r: []string{"hello", "dave"}, errIs: []error{csv.ErrWriterNotReady}, errStr: csv.ErrWriterNotReady.Error()},
+			},
+		},
 	}
 
 	for _, tc := range tcs {
