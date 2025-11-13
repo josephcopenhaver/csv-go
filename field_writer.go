@@ -45,6 +45,27 @@ const (
 	wfkFloat64
 )
 
+// DEV NOTE:
+//
+// Escape analysis is very conservative right now which prohibits me from making the
+// FieldWriter struct smaller without impacting allocation rates per field write.
+//
+// I have tried to coerce each of the fields bytes, time, and str into a reusable form
+// for the union of types only to be met with disappointment. It seems as AppendText
+// gets more complex the more likely escape analysis is to give up. And trying to isolate
+// complexity to helper functions leads to the compiler assuming escapes occur though
+// a strong reader would be able to confirm they would not.
+//
+// In addition safely storing the *time.Location of time is NOT leading to escapes -
+// except when calling a time.Time's `In(<*time.Location>) time.Time` function. Which
+// we turn around and throw away after calling the append text function of time.Time
+// So re-implementing all that logic is not worth it - and hacking together something that
+// uses the current interfaces is more likely to lead to increased latency from the top
+// level perspective of things.
+//
+// To make field writer smaller we'd need to remove supported types. It's more likely that
+// I'd offer a way to stream field writes instead of ever removing anything.
+
 type FieldWriter struct {
 	kind  wFieldKind
 	bytes []byte
