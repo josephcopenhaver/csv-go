@@ -168,7 +168,7 @@ func (w *FieldWriter) MarshalText() ([]byte, error) {
 		input := w._64_bits
 		var signAdjustment int
 		if input&u64signBitMask != 0 {
-			input = uint64(-int64(w._64_bits))
+			input = uint64(-int64(input))
 			signAdjustment = 1
 		}
 		base10ByteLen := decLenU64(input) + signAdjustment
