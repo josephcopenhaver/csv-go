@@ -22,6 +22,9 @@ var tsWrite string
 //go:embed fast_csv_rune_set.go.tmpl
 var tsRuneSet string
 
+//go:embed record_writer.go.tmpl
+var tsRecordWriter string
+
 func parse(s string) *template.Template {
 	t, err := template.New("").Option("missingkey=error").Parse(s)
 	if err != nil {
@@ -191,6 +194,22 @@ func main() {
 				{"RuneLen", "Bytes", "(rune, uint8, int)"},
 				{"RuneLen", "String", "(rune, uint8, int)"},
 			}},
+		})
+	}
+
+	// render record writer strategies
+	{
+		t := parse(tsRecordWriter)
+
+		type cfg struct {
+			Memclear bool
+		}
+
+		render := renderer[cfg](&buf)
+
+		render(t, []cfg{
+			{false},
+			{true},
 		})
 	}
 

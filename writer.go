@@ -3,6 +3,7 @@ package csv
 import (
 	"errors"
 	"io"
+	"math"
 	"strings"
 	"unicode/utf8"
 	"unsafe"
@@ -480,53 +481,157 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 }
 
 func (w *Writer) writeRow(row []FieldWriter) (int, error) {
-	if (w.bitFlags & wFlagFirstRecordWritten) == 0 {
-		w.bitFlags |= (wFlagFirstRecordWritten | wFlagHeaderWritten)
+	rw := w.NewRecord()
 
-		if w.comment != invalidControlRune {
-			// detect if the first field begins with a comment sequence
-			// and if so, set that the first field should be quoted
-			// regardless of its type or content
+	if (w.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+		for i := range row {
+			f := &row[i]
+			switch f.kind {
+			case wfkBytes:
+				if f._64_bits == 0 {
+					rw.bytes_memclearOff(f.bytes)
+					continue
+				}
 
-			if row[0].startsWithRune(w.fieldWriterBuf[:0], w.comment) {
-				w.bitFlags |= wFlagForceQuoteFirstField
-				defer func() {
-					w.bitFlags &= ^wFlagForceQuoteFirstField
-				}()
+				prev := w.bitFlags & wFlagErrOnNonUTF8
+				w.bitFlags &= ^wFlagErrOnNonUTF8
+				rw.bytes_memclearOff(f.bytes)
+				w.bitFlags |= prev
+			case wfkString:
+				if f._64_bits == 0 {
+					rw.string_memclearOff(f.str)
+					continue
+				}
+
+				prev := w.bitFlags & wFlagErrOnNonUTF8
+				w.bitFlags &= ^wFlagErrOnNonUTF8
+				rw.string_memclearOff(f.str)
+				w.bitFlags |= prev
+			case wfkInt, wfkInt64, wfkDuration:
+				rw.int64_memclearOff(int64(f._64_bits))
+			case wfkUint64:
+				rw.uint64_memclearOff(f._64_bits)
+			case wfkTime:
+				rw.time_memclearOff(f.time)
+			case wfkRune:
+				if !rw.preflightCheck_memclearOff() {
+					continue
+				}
+
+				b, err := f.runeAppendText(w.fieldWriterBuf[:0])
+				if err != nil {
+					rw.err = err
+					continue
+				}
+
+				rw.unsafeAppendUTF8FieldBytes_memclearOff(b)
+			case wfkBool:
+				if !rw.preflightCheck_memclearOff() {
+					continue
+				}
+
+				w.fieldWriterBuf[0] = byte('0') + byte(f._64_bits)
+				rw.unsafeAppendUTF8FieldBytes_memclearOff(w.fieldWriterBuf[:1])
+			case wfkFloat64:
+				rw.float64_memclearOff(math.Float64frombits(f._64_bits))
+			default:
+				rw.Abort()
+				return 0, ErrInvalidFieldWriter
 			}
+		}
+
+		n, err := rw.write_memclearOff()
+		if err != nil {
+			rw.Abort()
+		}
+		return n, err
+	}
+
+	for i := range row {
+		f := &row[i]
+		switch f.kind {
+		case wfkBytes:
+			if f._64_bits == 0 {
+				rw.bytes_memclearOn(f.bytes)
+				continue
+			}
+
+			prev := w.bitFlags & wFlagErrOnNonUTF8
+			w.bitFlags &= ^wFlagErrOnNonUTF8
+			rw.bytes_memclearOn(f.bytes)
+			w.bitFlags |= prev
+		case wfkString:
+			if f._64_bits == 0 {
+				rw.string_memclearOn(f.str)
+				continue
+			}
+
+			prev := w.bitFlags & wFlagErrOnNonUTF8
+			w.bitFlags &= ^wFlagErrOnNonUTF8
+			rw.string_memclearOn(f.str)
+			w.bitFlags |= prev
+		case wfkInt, wfkInt64, wfkDuration:
+			rw.int64_memclearOn(int64(f._64_bits))
+		case wfkUint64:
+			rw.uint64_memclearOn(f._64_bits)
+		case wfkTime:
+			rw.time_memclearOn(f.time)
+		case wfkRune:
+			if !rw.preflightCheck_memclearOn() {
+				continue
+			}
+
+			b, err := f.runeAppendText(w.fieldWriterBuf[:0])
+			if err != nil {
+				rw.err = err
+				continue
+			}
+
+			rw.unsafeAppendUTF8FieldBytes_memclearOn(b)
+		case wfkBool:
+			if !rw.preflightCheck_memclearOn() {
+				continue
+			}
+
+			w.fieldWriterBuf[0] = byte('0') + byte(f._64_bits)
+			rw.unsafeAppendUTF8FieldBytes_memclearOn(w.fieldWriterBuf[:1])
+		case wfkFloat64:
+			rw.float64_memclearOn(math.Float64frombits(f._64_bits))
+		default:
+			rw.Abort()
+			return 0, ErrInvalidFieldWriter
 		}
 	}
 
-	if (w.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		return w.writeRow_memclearOff(row)
+	n, err := rw.write_memclearOn()
+	if err != nil {
+		rw.Abort()
 	}
-
-	return w.writeRow_memclearOn(row)
+	return n, err
 }
 
 func (w *Writer) writeStrRow(row []string) (int, error) {
-	if (w.bitFlags & wFlagFirstRecordWritten) == 0 {
-		w.bitFlags |= (wFlagFirstRecordWritten | wFlagHeaderWritten)
+	rw := w.NewRecord()
 
-		if w.comment != invalidControlRune {
-			// detect if the first field begins with a comment sequence
-			// and if so, set that the first field should be quoted
-			// regardless of its type or content
-
-			if strings.HasPrefix(row[0], string(w.comment)) {
-				w.bitFlags |= wFlagForceQuoteFirstField
-				defer func() {
-					w.bitFlags &= ^wFlagForceQuoteFirstField
-				}()
-			}
-		}
-	}
-
+	var f func(s string) *RecordWriter
+	var write func() (int, error)
 	if (w.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		return w.writeStrRow_memclearOff(row)
+		f = rw.string_memclearOff
+		write = rw.write_memclearOff
+	} else {
+		f = rw.string_memclearOn
+		write = rw.write_memclearOn
 	}
 
-	return w.writeStrRow_memclearOn(row)
+	for _, v := range row {
+		f(v)
+	}
+
+	n, err := write()
+	if err != nil {
+		rw.Abort()
+	}
+	return n, err
 }
 
 // Close should be called after writing all rows
@@ -915,12 +1020,6 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 //
 // Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the same slice length.
 func (w *Writer) WriteRow(row ...string) (int, error) {
-	if err := w.writeRowPreflightCheck(len(row)); err != nil {
-		return 0, err
-	}
-
-	w.recordBuf = w.recordBuf[:0]
-
 	return w.writeStrRow(row)
 }
 
@@ -933,12 +1032,6 @@ func (w *Writer) WriteRow(row ...string) (int, error) {
 // If the calling context maintains a reused slice of field writers per write iteration then consider instead using WriteFieldRowBorrowed
 // if performance testing indicates that FieldWriter slice copying is a major contributing bottleneck for your case.
 func (w *Writer) WriteFieldRow(row ...FieldWriter) (int, error) {
-	if err := w.writeRowPreflightCheck(len(row)); err != nil {
-		return 0, err
-	}
-
-	w.recordBuf = w.recordBuf[:0]
-
 	return w.writeRow(row)
 }
 
@@ -947,45 +1040,7 @@ func (w *Writer) WriteFieldRow(row ...FieldWriter) (int, error) {
 //
 // Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the same slice length.
 func (w *Writer) WriteFieldRowBorrowed(row []FieldWriter) (int, error) {
-	if err := w.writeRowPreflightCheck(len(row)); err != nil {
-		return 0, err
-	}
-
-	w.recordBuf = w.recordBuf[:0]
-
 	return w.writeRow(row)
-}
-
-func (w *Writer) writeRowPreflightCheck(n int) (_err error) {
-	// check if prior iterations left the writer in an errored state
-	if err := w.err; err != nil {
-		return err
-	}
-
-	// check if the number of fields to write is zero
-	if n == 0 {
-		// short circuit to return an error
-
-		// a row write was attempted so even on the error path we
-		// must not allow another write header attempt in any way
-		w.bitFlags |= wFlagHeaderWritten
-
-		return ErrRowNilOrEmpty
-	}
-
-	if v := w.numFields; v != n {
-		if v != -1 {
-
-			// a row write was attempted so even on the error path we
-			// must not allow another write header attempt in any way
-			w.bitFlags |= wFlagHeaderWritten
-
-			return ErrInvalidFieldCountInRecord
-		}
-		w.numFields = n
-	}
-
-	return nil
 }
 
 func (w *Writer) setErr(err error) {
