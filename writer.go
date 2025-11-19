@@ -3,7 +3,6 @@ package csv
 import (
 	"errors"
 	"io"
-	"math"
 	"strings"
 	"unicode/utf8"
 	"unsafe"
@@ -351,21 +350,18 @@ func (cfg *wCfg) validate() error {
 }
 
 type Writer struct {
-	fieldWriterBuf         [boundedFieldWritersMaxByteLen]byte
-	recordBuf              []byte
-	controlRuneSet         runeSet4
-	escapeControlRuneSet   runeSet4
-	twoQuotesSeq           twoRuneEncoder
-	escapedQuoteSeq        twoRuneEncoder
-	escapedEscapeSeq       twoRuneEncoder
-	fieldSepSeq            runeEncoder
-	recordSepSeq           runeEncoder
-	quoteSeq               runeEncoder
-	numFields              int
-	writer                 io.Writer
-	err                    error
-	quote, escape, comment rune
-	bitFlags               wFlag
+	fieldWriterBuf [boundedFieldWritersMaxByteLen]byte
+	writeBuffer
+	controlRuneSet  runeSet4
+	twoQuotesSeq    twoRuneEncoder
+	fieldSepSeq     runeEncoder
+	recordSepSeq    runeEncoder
+	quoteSeq        runeEncoder
+	numFields       int
+	writer          io.Writer
+	err             error
+	escape, comment rune
+	bitFlags        wFlag
 }
 
 // NewWriter creates a new instance of a CSV writer which is not safe for concurrent reads.
@@ -460,178 +456,76 @@ func NewWriter(options ...WriterOption) (*Writer, error) {
 	}
 
 	w := &Writer{
-		numFields:            cfg.numFields,
-		writer:               cfg.writer,
-		controlRuneSet:       controlRuneSet,
-		escapeControlRuneSet: escapeControlRuneSet,
-		twoQuotesSeq:         twoQuotesSeq,
-		escapedQuoteSeq:      escapedQuoteSeq,
-		escapedEscapeSeq:     escapedEscapeSeq,
-		fieldSepSeq:          fieldSepSeq,
-		recordSepSeq:         recordSepSeq,
-		quoteSeq:             quoteSeq,
-		comment:              comment,
-		quote:                cfg.quote,
-		escape:               escape,
-		recordBuf:            recordBuf,
-		bitFlags:             bitFlags,
+		writeBuffer: writeBuffer{
+			recordBuf:            recordBuf,
+			escapeControlRuneSet: escapeControlRuneSet,
+			escapedQuoteSeq:      escapedQuoteSeq,
+			escapedEscapeSeq:     escapedEscapeSeq,
+			quote:                cfg.quote,
+		},
+		numFields:      cfg.numFields,
+		writer:         cfg.writer,
+		controlRuneSet: controlRuneSet,
+		twoQuotesSeq:   twoQuotesSeq,
+		fieldSepSeq:    fieldSepSeq,
+		recordSepSeq:   recordSepSeq,
+		quoteSeq:       quoteSeq,
+		comment:        comment,
+		escape:         escape,
+		bitFlags:       bitFlags,
 	}
 
 	return w, nil
 }
 
 func (w *Writer) writeRow(row []FieldWriter) (int, error) {
-	rw := w.NewRecord()
+	if (w.bitFlags & wFlagFirstRecordWritten) == 0 {
+		w.bitFlags |= (wFlagFirstRecordWritten | wFlagHeaderWritten)
+
+		if w.comment != invalidControlRune {
+			// detect if the first field begins with a comment sequence
+			// and if so, set that the first field should be quoted
+			// regardless of its type or content
+
+			if row[0].startsWithRune(w.fieldWriterBuf[:0], w.comment) {
+				w.bitFlags |= wFlagForceQuoteFirstField
+				defer func() {
+					w.bitFlags &= ^wFlagForceQuoteFirstField
+				}()
+			}
+		}
+	}
 
 	if (w.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		for i := range row {
-			f := &row[i]
-			switch f.kind {
-			case wfkBytes:
-				if f._64_bits == 0 {
-					rw.bytes_memclearOff(f.bytes)
-					continue
-				}
-
-				prev := w.bitFlags & wFlagErrOnNonUTF8
-				w.bitFlags &= ^wFlagErrOnNonUTF8
-				rw.bytes_memclearOff(f.bytes)
-				w.bitFlags |= prev
-			case wfkString:
-				if f._64_bits == 0 {
-					rw.string_memclearOff(f.str)
-					continue
-				}
-
-				prev := w.bitFlags & wFlagErrOnNonUTF8
-				w.bitFlags &= ^wFlagErrOnNonUTF8
-				rw.string_memclearOff(f.str)
-				w.bitFlags |= prev
-			case wfkInt, wfkInt64, wfkDuration:
-				rw.int64_memclearOff(int64(f._64_bits))
-			case wfkUint64:
-				rw.uint64_memclearOff(f._64_bits)
-			case wfkTime:
-				rw.time_memclearOff(f.time)
-			case wfkRune:
-				if !rw.preflightCheck_memclearOff() {
-					continue
-				}
-
-				b, err := f.runeAppendText(w.fieldWriterBuf[:0])
-				if err != nil {
-					rw.err = err
-					continue
-				}
-
-				rw.unsafeAppendUTF8FieldBytes_memclearOff(b)
-			case wfkBool:
-				if !rw.preflightCheck_memclearOff() {
-					continue
-				}
-
-				w.fieldWriterBuf[0] = byte('0') + byte(f._64_bits)
-				rw.unsafeAppendUTF8FieldBytes_memclearOff(w.fieldWriterBuf[:1])
-			case wfkFloat64:
-				rw.float64_memclearOff(math.Float64frombits(f._64_bits))
-			default:
-				rw.Abort()
-				return 0, ErrInvalidFieldWriter
-			}
-		}
-
-		n, err := rw.write_memclearOff()
-		if err != nil {
-			rw.Abort()
-		}
-		return n, err
+		return w.writeRow_memclearOff(row)
 	}
 
-	for i := range row {
-		f := &row[i]
-		switch f.kind {
-		case wfkBytes:
-			if f._64_bits == 0 {
-				rw.bytes_memclearOn(f.bytes)
-				continue
-			}
-
-			prev := w.bitFlags & wFlagErrOnNonUTF8
-			w.bitFlags &= ^wFlagErrOnNonUTF8
-			rw.bytes_memclearOn(f.bytes)
-			w.bitFlags |= prev
-		case wfkString:
-			if f._64_bits == 0 {
-				rw.string_memclearOn(f.str)
-				continue
-			}
-
-			prev := w.bitFlags & wFlagErrOnNonUTF8
-			w.bitFlags &= ^wFlagErrOnNonUTF8
-			rw.string_memclearOn(f.str)
-			w.bitFlags |= prev
-		case wfkInt, wfkInt64, wfkDuration:
-			rw.int64_memclearOn(int64(f._64_bits))
-		case wfkUint64:
-			rw.uint64_memclearOn(f._64_bits)
-		case wfkTime:
-			rw.time_memclearOn(f.time)
-		case wfkRune:
-			if !rw.preflightCheck_memclearOn() {
-				continue
-			}
-
-			b, err := f.runeAppendText(w.fieldWriterBuf[:0])
-			if err != nil {
-				rw.err = err
-				continue
-			}
-
-			rw.unsafeAppendUTF8FieldBytes_memclearOn(b)
-		case wfkBool:
-			if !rw.preflightCheck_memclearOn() {
-				continue
-			}
-
-			w.fieldWriterBuf[0] = byte('0') + byte(f._64_bits)
-			rw.unsafeAppendUTF8FieldBytes_memclearOn(w.fieldWriterBuf[:1])
-		case wfkFloat64:
-			rw.float64_memclearOn(math.Float64frombits(f._64_bits))
-		default:
-			rw.Abort()
-			return 0, ErrInvalidFieldWriter
-		}
-	}
-
-	n, err := rw.write_memclearOn()
-	if err != nil {
-		rw.Abort()
-	}
-	return n, err
+	return w.writeRow_memclearOn(row)
 }
 
 func (w *Writer) writeStrRow(row []string) (int, error) {
-	rw := w.NewRecord()
+	if (w.bitFlags & wFlagFirstRecordWritten) == 0 {
+		w.bitFlags |= (wFlagFirstRecordWritten | wFlagHeaderWritten)
 
-	var f func(s string) *RecordWriter
-	var write func() (int, error)
+		if w.comment != invalidControlRune {
+			// detect if the first field begins with a comment sequence
+			// and if so, set that the first field should be quoted
+			// regardless of its type or content
+
+			if strings.HasPrefix(row[0], string(w.comment)) {
+				w.bitFlags |= wFlagForceQuoteFirstField
+				defer func() {
+					w.bitFlags &= ^wFlagForceQuoteFirstField
+				}()
+			}
+		}
+	}
+
 	if (w.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		f = rw.string_memclearOff
-		write = rw.write_memclearOff
-	} else {
-		f = rw.string_memclearOn
-		write = rw.write_memclearOn
+		return w.writeStrRow_memclearOff(row)
 	}
 
-	for _, v := range row {
-		f(v)
-	}
-
-	n, err := write()
-	if err != nil {
-		rw.Abort()
-	}
-	return n, err
+	return w.writeStrRow_memclearOn(row)
 }
 
 // Close should be called after writing all rows
@@ -659,34 +553,6 @@ func (w *Writer) Close() error {
 	}
 
 	return nil
-}
-
-func (w *Writer) appendRec(p []byte) {
-	appendAndClear(&w.recordBuf, p)
-}
-
-func (w *Writer) appendStrRec(s string) {
-	appendStrAndClear(&w.recordBuf, s)
-}
-
-// setRecordBuf should only be called when the record buf has been appended to
-// and might have been reallocated as a result and clear mem on free is enabled.
-//
-// This function will clear the old buffer if it is no longer being utilized.
-func (w *Writer) setRecordBuf(p []byte) {
-	old := w.recordBuf
-	w.recordBuf = p
-
-	if cap(old) == 0 {
-		return
-	}
-	old = old[:cap(old)]
-
-	if &old[0] == &p[0] {
-		return
-	}
-
-	clear(old)
 }
 
 type whCfg struct {
@@ -1020,6 +886,12 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 //
 // Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the same slice length.
 func (w *Writer) WriteRow(row ...string) (int, error) {
+	if err := w.writeRowPreflightCheck(len(row)); err != nil {
+		return 0, err
+	}
+
+	w.recordBuf = w.recordBuf[:0]
+
 	return w.writeStrRow(row)
 }
 
@@ -1032,6 +904,12 @@ func (w *Writer) WriteRow(row ...string) (int, error) {
 // If the calling context maintains a reused slice of field writers per write iteration then consider instead using WriteFieldRowBorrowed
 // if performance testing indicates that FieldWriter slice copying is a major contributing bottleneck for your case.
 func (w *Writer) WriteFieldRow(row ...FieldWriter) (int, error) {
+	if err := w.writeRowPreflightCheck(len(row)); err != nil {
+		return 0, err
+	}
+
+	w.recordBuf = w.recordBuf[:0]
+
 	return w.writeRow(row)
 }
 
@@ -1040,7 +918,45 @@ func (w *Writer) WriteFieldRow(row ...FieldWriter) (int, error) {
 //
 // Each subsequent call to WriteRow, WriteFieldRow, or WriteFieldRowBorrowed should have the same slice length.
 func (w *Writer) WriteFieldRowBorrowed(row []FieldWriter) (int, error) {
+	if err := w.writeRowPreflightCheck(len(row)); err != nil {
+		return 0, err
+	}
+
+	w.recordBuf = w.recordBuf[:0]
+
 	return w.writeRow(row)
+}
+
+func (w *Writer) writeRowPreflightCheck(n int) (_err error) {
+	// check if prior iterations left the writer in an errored state
+	if err := w.err; err != nil {
+		return err
+	}
+
+	// check if the number of fields to write is zero
+	if n == 0 {
+		// short circuit to return an error
+
+		// a row write was attempted so even on the error path we
+		// must not allow another write header attempt in any way
+		w.bitFlags |= wFlagHeaderWritten
+
+		return ErrRowNilOrEmpty
+	}
+
+	if v := w.numFields; v != n {
+		if v != -1 {
+
+			// a row write was attempted so even on the error path we
+			// must not allow another write header attempt in any way
+			w.bitFlags |= wFlagHeaderWritten
+
+			return ErrInvalidFieldCountInRecord
+		}
+		w.numFields = n
+	}
+
+	return nil
 }
 
 func (w *Writer) setErr(err error) {
@@ -1086,51 +1002,4 @@ func isValidComment(comment, quote, fieldSep, escape rune, escapeSet bool) error
 	}
 
 	return nil
-}
-
-// appendAndClear should be small enough to always be inlined
-func appendAndClear(dst *[]byte, p []byte) {
-	n := len(p)
-	if n == 0 {
-		return
-	}
-
-	s := *dst
-	sCap := cap(s)
-	sFree := sCap - len(s)
-
-	*dst = append(s, p...)
-
-	if sFree >= n {
-		// no reallocation occurred
-		return
-	}
-
-	// a reallocation definitely occurred
-	// clear the old contents within `s`
-
-	clear(s[:sCap])
-}
-
-func appendStrAndClear(dst *[]byte, str string) {
-	n := len(str)
-	if n == 0 {
-		return
-	}
-
-	s := *dst
-	sCap := cap(s)
-	sFree := sCap - len(s)
-
-	*dst = append(s, str...)
-
-	if sFree >= n {
-		// no reallocation occurred
-		return
-	}
-
-	// a reallocation definitely occurred
-	// clear the old contents within `s`
-
-	clear(s[:sCap])
 }

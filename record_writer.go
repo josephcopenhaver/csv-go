@@ -11,19 +11,23 @@ type RecordWriter struct {
 	nextField int
 	numFields int
 	bitFlags  wFlag
-	recordBuf []byte
-	w         *Writer
+	writeBuffer
+	w *Writer
 }
 
 func (w *Writer) NewRecord() *RecordWriter {
-	recordBuf := w.recordBuf
+	wb := w.writeBuffer
 	w.recordBuf = nil
 
+	if (w.bitFlags & wFlagForceQuoteFirstField) != 0 {
+		panic("improper concurrent access detected on record creation")
+	}
+
 	return &RecordWriter{
-		err:       w.err,
-		bitFlags:  w.bitFlags,
-		recordBuf: recordBuf,
-		w:         w,
+		err:         w.err,
+		bitFlags:    w.bitFlags,
+		writeBuffer: wb,
+		w:           w,
 	}
 }
 
@@ -36,8 +40,8 @@ func (rw *RecordWriter) Abort() bool {
 		rw.nextField = 0
 		rw.bitFlags |= wFlagClosed
 		rw.err = nil
-		if recordBuf := rw.recordBuf; recordBuf != nil {
-			rw.recordBuf = nil
+		if recordBuf := rw.writeBuffer.recordBuf; recordBuf != nil {
+			rw.writeBuffer.recordBuf = nil
 			rw.w.recordBuf, recordBuf = recordBuf, rw.w.recordBuf
 			if recordBuf != nil {
 				if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
@@ -54,18 +58,34 @@ func (rw *RecordWriter) Abort() bool {
 
 func (rw *RecordWriter) Bytes(p []byte) *RecordWriter {
 	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		return rw.bytes_memclearOff(p)
+		return rw.bytes_memclearOff(p, rw.bitFlags)
 	}
 
-	return rw.bytes_memclearOn(p)
+	return rw.bytes_memclearOn(p, rw.bitFlags)
+}
+
+func (rw *RecordWriter) UncheckedUTF8Bytes(p []byte) *RecordWriter {
+	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+		return rw.bytes_memclearOff(p, rw.bitFlags&(^wFlagErrOnNonUTF8))
+	}
+
+	return rw.bytes_memclearOn(p, rw.bitFlags&(^wFlagErrOnNonUTF8))
 }
 
 func (rw *RecordWriter) String(s string) *RecordWriter {
 	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		return rw.string_memclearOff(s)
+		return rw.string_memclearOff(s, rw.bitFlags)
 	}
 
-	return rw.string_memclearOn(s)
+	return rw.string_memclearOn(s, rw.bitFlags)
+}
+
+func (rw *RecordWriter) UncheckedUTF8String(s string) *RecordWriter {
+	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+		return rw.string_memclearOff(s, rw.bitFlags&(^wFlagErrOnNonUTF8))
+	}
+
+	return rw.string_memclearOn(s, rw.bitFlags&(^wFlagErrOnNonUTF8))
 }
 
 func (rw *RecordWriter) Int64(i int64) *RecordWriter {
@@ -118,6 +138,14 @@ func (rw *RecordWriter) Float64(f float64) *RecordWriter {
 
 func (rw *RecordWriter) Rune(r rune) *RecordWriter {
 	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+		return rw.rune_withCheckUTF8_memclearOff(r)
+	}
+
+	return rw.rune_withCheckUTF8_memclearOn(r)
+}
+
+func (rw *RecordWriter) UncheckedUTF8Rune(r rune) *RecordWriter {
+	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
 		return rw.rune_memclearOff(r)
 	}
 
@@ -133,28 +161,4 @@ func (rw *RecordWriter) Write() (int, error) {
 	}
 
 	return rw.write_memclearOn()
-}
-
-func (rw *RecordWriter) setRecordBuf(p []byte) {
-	old := rw.recordBuf
-	rw.recordBuf = p
-
-	if cap(old) == 0 {
-		return
-	}
-	old = old[:cap(old)]
-
-	if &old[0] == &p[0] {
-		return
-	}
-
-	clear(old)
-}
-
-func (rw *RecordWriter) appendStrRec(s string) {
-	appendStrAndClear(&rw.recordBuf, s)
-}
-
-func (rw *RecordWriter) appendRec(p []byte) {
-	appendAndClear(&rw.recordBuf, p)
 }

@@ -140,25 +140,15 @@ func main() {
 	{
 		t := parse(tsWrite)
 
-		type methodCfg struct {
-			ArgType string
-		}
-
 		type cfg struct {
 			Memclear bool
-			Methods  []methodCfg
-		}
-
-		methods := []methodCfg{
-			{"Bytes"},
-			{"String"},
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{Memclear: false, Methods: methods},
-			{Memclear: true, Methods: methods},
+			{false},
+			{true},
 		})
 	}
 
@@ -201,15 +191,25 @@ func main() {
 	{
 		t := parse(tsRecordWriter)
 
+		type methodCfg struct {
+			ArgType string
+		}
+
 		type cfg struct {
 			Memclear bool
+			Methods  []methodCfg
+		}
+
+		methods := []methodCfg{
+			{"Bytes"},
+			{"String"},
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{false},
-			{true},
+			{false, methods},
+			{true, methods},
 		})
 	}
 

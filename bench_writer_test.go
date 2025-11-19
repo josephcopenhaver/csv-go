@@ -201,6 +201,47 @@ func BenchmarkWritePostInitFieldWriterStrings(b *testing.B) {
 	_ = cw.Close()
 }
 
+func BenchmarkWritePostInitFieldWriterAllTypes(b *testing.B) {
+	b.ReportAllocs()
+
+	cw, err := csv.NewWriter(
+		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().InitialRecordBufferSize(4096),
+		csv.WriterOpts().ErrorOnNonUTF8(false),
+	)
+	if err != nil {
+		panic(err)
+	}
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	now := time.Now()
+
+	fwf := csv.FieldWriters()
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := cw.WriteFieldRow(
+			fwf.String("-1"),
+			fwf.Int(-1),
+			fwf.Bool(true),
+			fwf.Bytes([]byte{'a'}),
+			fwf.Duration(time.Second),
+			fwf.Float64(0.0123),
+			fwf.Int64(-1),
+			fwf.Rune('N'),
+			fwf.Time(now),
+			fwf.Uint64(math.MaxUint),
+		)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// stopping the timer because STD does not have an equivalent purpose Close call
+	b.StopTimer()
+	_ = cw.Close()
+}
+
 func BenchmarkWritePostInitRecordWriterStrings(b *testing.B) {
 	b.ReportAllocs()
 
@@ -252,7 +293,7 @@ func BenchmarkWritePostInitRecordWriterAllTypes(b *testing.B) {
 			String("-1").
 			Int(-1).
 			Bool(true).
-			Bytes([]byte{'a'}).
+			Bytes([]byte{'a'}). // NOTE: this Bytes writer type leads to allocations - to avoid them entirely switch to using NewRecord() and the returned *RecordWriter.
 			Duration(time.Second).
 			Float64(0.0123).
 			Int64(-1).

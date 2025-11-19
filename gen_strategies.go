@@ -7,9 +7,9 @@ import (
 	"errors"
 	"io"
 	"strconv"
-	"strings"
 	"time"
 	"unicode/utf8"
+	"unsafe"
 )
 
 func (r *fastReader) prepareRow() bool {
@@ -2141,348 +2141,854 @@ func (r *secOpReader) prepareRow_memclearOn() bool {
 	}
 }
 
-// loadQF_memclearOff is called after a
-// quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and communicate to this function where to
-// start scanning in the source for characters to escape. The parent context will not write any part of
-// the source to the record staging zone.
-//
-// Essentially the function picks up after the parent context starts a quoting process which the parent
-// will also complete.
-func (rw *RecordWriter) loadQF_memclearOff(p []byte, scanIdx int) {
-	r, n, i := rw.w.escapeControlRuneSet.indexAnyRuneLenInBytes(p[scanIdx:])
-	if i == -1 {
-		rw.recordBuf = append(rw.recordBuf, p...)
-		return
+func (w *Writer) writeRow_memclearOff(fields []FieldWriter) (int, error) {
+	// write the first field
+	{
+		f := &fields[0]
+
+		var scanForNonUTF8 bool
+		var src []byte
+		var err error
+
+		switch f.kind {
+		case wfkBytes:
+			src = f.bytes
+			if len(src) == 0 {
+				if len(fields) == 1 {
+					w.recordBuf = w.twoQuotesSeq.appendText(w.recordBuf)
+					w.recordBuf = w.recordSepSeq.appendText(w.recordBuf)
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
+					}
+					return n, err
+				}
+				goto FIRST_FIELD_WRITTEN
+			}
+
+			scanForNonUTF8 = (f._64_bits == 0)
+		case wfkString:
+			s := f.str
+			if len(s) == 0 {
+				if len(fields) == 1 {
+					w.recordBuf = w.twoQuotesSeq.appendText(w.recordBuf)
+					w.recordBuf = w.recordSepSeq.appendText(w.recordBuf)
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
+					}
+					return n, err
+				}
+				goto FIRST_FIELD_WRITTEN
+			}
+
+			scanForNonUTF8 = (f._64_bits == 0)
+			src = unsafe.Slice(unsafe.StringData(s), len(s))
+		case wfkRune:
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
+			if err != nil {
+				return 0, err
+			}
+
+			// src is now guaranteed to be a utf8 encoded non-empty byte sequence
+			// so scanForNonUTF8 will remain false here intentionally
+		default:
+			if (w.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
+				src, err = f.AppendText(w.recordBuf)
+				if err != nil {
+					return 0, err
+				}
+
+				w.recordBuf = src
+				goto FIRST_FIELD_WRITTEN
+			}
+
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
+			if err != nil {
+				return 0, err
+			}
+		}
+
+		//
+		// process src buf
+		//
+
+		if !scanForNonUTF8 || (w.bitFlags&wFlagErrOnNonUTF8) == 0 {
+			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
+
+			var i int
+			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
+				i = w.controlRuneSet.indexAnyInBytes(src)
+				if i == -1 {
+					w.recordBuf = append(w.recordBuf, src...)
+					goto FIRST_FIELD_WRITTEN
+				}
+			}
+
+			w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+			w.loadQF_memclearOff(src, i)
+
+			w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+			goto FIRST_FIELD_WRITTEN
+		}
+
+		// for each decoded rune, check if that rune fails to decode and if so then return an error
+		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+		// continue loading
+
+		var i int
+		if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
+			for {
+				if i >= len(src) {
+					w.recordBuf = append(w.recordBuf, src...)
+					goto FIRST_FIELD_WRITTEN
+				}
+
+				b := src[i]
+				if b < utf8.RuneSelf {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
+						i++
+						continue
+					}
+				} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
+					return 0, ErrNonUTF8InRecord
+				} else if !w.controlRuneSet.containsMBRune(r) {
+					i += n
+					continue
+				}
+
+				break
+			}
+		}
+
+		//
+		// found a control rune of some kind or was forced to quote first field
+		//
+
+		w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+		err = w.loadQFWithCheckUTF8_memclearOff(src, i)
+		if err != nil {
+			return 0, err
+		}
+
+		w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
 	}
-	scanIdx += i
 
-	//
-	// found a control rune of some kind that must be escaped
-	//
+FIRST_FIELD_WRITTEN:
 
-	rw.recordBuf = append(rw.recordBuf, p[:scanIdx]...)
+	for i := 1; i < len(fields); i++ {
+		w.recordBuf = w.fieldSepSeq.appendText(w.recordBuf)
 
-	for {
-		scanIdx += int(n)
+		f := &fields[i]
 
-		if rw.w.quote == r {
-			rw.recordBuf = rw.w.escapedQuoteSeq.appendText(rw.recordBuf)
-		} else {
-			rw.recordBuf = rw.w.escapedEscapeSeq.appendText(rw.recordBuf)
-		}
+		var scanForNonUTF8 bool
+		var src []byte
+		var err error
 
-		r, n, i = rw.w.escapeControlRuneSet.indexAnyRuneLenInBytes(p[scanIdx:])
-		if i == -1 {
-			rw.recordBuf = append(rw.recordBuf, p[scanIdx:]...)
-			return
-		}
-
-		prevIdx := scanIdx
-		scanIdx += i
-		rw.recordBuf = append(rw.recordBuf, p[prevIdx:scanIdx]...)
-	}
-}
-
-// loadQFWithCheckUTF8_memclearOff performs the same duties as loadQField_memclearOff and in a much more expensive
-// scan operation also validates that the field contents are valid utf8 sequences.
-func (rw *RecordWriter) loadQFWithCheckUTF8_memclearOff(p []byte, scanIdx int) error {
-	var loadIdx, n int
-	var r rune
-	for {
-		if scanIdx >= len(p) {
-			rw.recordBuf = append(rw.recordBuf, p[loadIdx:]...)
-			return nil
-		}
-
-		if b := p[scanIdx]; b < utf8.RuneSelf {
-			if !rw.w.escapeControlRuneSet.containsSingleByteRune(b) {
-				scanIdx++
+		switch f.kind {
+		case wfkBytes:
+			src = f.bytes
+			if len(src) == 0 {
 				continue
 			}
-			r = rune(b)
-			n = 1
-		} else if r, n = utf8.DecodeRune(p[scanIdx:]); n == 1 {
-			return ErrNonUTF8InRecord
-		} else if !rw.w.escapeControlRuneSet.containsMBRune(r) {
-			scanIdx += n
-			continue
-		}
 
-		//
-		// found a control rune of some kind that must be escaped
-		//
-
-		rw.recordBuf = append(rw.recordBuf, p[loadIdx:scanIdx]...)
-
-		scanIdx += n
-		loadIdx = scanIdx
-
-		if rw.w.quote == r {
-			rw.recordBuf = rw.w.escapedQuoteSeq.appendText(rw.recordBuf)
-			continue
-		}
-
-		rw.recordBuf = rw.w.escapedEscapeSeq.appendText(rw.recordBuf)
-	}
-}
-
-// loadStrQF_memclearOff is called after a
-// quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and communicate to this function where to
-// start scanning in the source for characters to escape. The parent context will not write any part of
-// the source to the record staging zone.
-//
-// Essentially the function picks up after the parent context starts a quoting process which the parent
-// will also complete.
-func (rw *RecordWriter) loadStrQF_memclearOff(s string, scanIdx int) {
-	r, n, i := rw.w.escapeControlRuneSet.indexAnyRuneLenInString(s[scanIdx:])
-	if i == -1 {
-		rw.recordBuf = append(rw.recordBuf, s...)
-		return
-	}
-	scanIdx += i
-
-	//
-	// found a control rune of some kind that must be escaped
-	//
-
-	rw.recordBuf = append(rw.recordBuf, s[:scanIdx]...)
-
-	for {
-		scanIdx += int(n)
-
-		if rw.w.quote == r {
-			rw.recordBuf = rw.w.escapedQuoteSeq.appendText(rw.recordBuf)
-		} else {
-			rw.recordBuf = rw.w.escapedEscapeSeq.appendText(rw.recordBuf)
-		}
-
-		r, n, i = rw.w.escapeControlRuneSet.indexAnyRuneLenInString(s[scanIdx:])
-		if i == -1 {
-			rw.recordBuf = append(rw.recordBuf, s[scanIdx:]...)
-			return
-		}
-
-		prevIdx := scanIdx
-		scanIdx += i
-		rw.recordBuf = append(rw.recordBuf, s[prevIdx:scanIdx]...)
-	}
-}
-
-// loadStrQFWithCheckUTF8_memclearOff performs the same duties as loadStrQField_memclearOff and in a much more expensive
-// scan operation also validates that the field contents are valid utf8 sequences.
-func (rw *RecordWriter) loadStrQFWithCheckUTF8_memclearOff(s string, scanIdx int) error {
-	var loadIdx, n int
-	var r rune
-	for {
-		if scanIdx >= len(s) {
-			rw.recordBuf = append(rw.recordBuf, s[loadIdx:]...)
-			return nil
-		}
-
-		if b := s[scanIdx]; b < utf8.RuneSelf {
-			if !rw.w.escapeControlRuneSet.containsSingleByteRune(b) {
-				scanIdx++
+			scanForNonUTF8 = (f._64_bits == 0)
+		case wfkString:
+			s := f.str
+			if len(s) == 0 {
 				continue
 			}
-			r = rune(b)
-			n = 1
-		} else if r, n = utf8.DecodeRuneInString(s[scanIdx:]); n == 1 {
-			return ErrNonUTF8InRecord
-		} else if !rw.w.escapeControlRuneSet.containsMBRune(r) {
-			scanIdx += n
-			continue
-		}
 
-		//
-		// found a control rune of some kind that must be escaped
-		//
+			scanForNonUTF8 = (f._64_bits == 0)
+			src = unsafe.Slice(unsafe.StringData(s), len(s))
+		case wfkRune:
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
+			if err != nil {
+				return 0, err
+			}
 
-		rw.recordBuf = append(rw.recordBuf, s[loadIdx:scanIdx]...)
+			// src is now guaranteed to be a utf8 encoded non-empty byte sequence
+			// so scanForNonUTF8 will remain false here intentionally
+		default:
+			if (w.bitFlags & wFlagControlRuneOverlap) == 0 {
+				src, err = f.AppendText(w.recordBuf)
+				if err != nil {
+					return 0, err
+				}
 
-		scanIdx += n
-		loadIdx = scanIdx
-
-		if rw.w.quote == r {
-			rw.recordBuf = rw.w.escapedQuoteSeq.appendText(rw.recordBuf)
-			continue
-		}
-
-		rw.recordBuf = rw.w.escapedEscapeSeq.appendText(rw.recordBuf)
-	}
-}
-
-// loadQF_memclearOn is called after a
-// quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and communicate to this function where to
-// start scanning in the source for characters to escape. The parent context will not write any part of
-// the source to the record staging zone.
-//
-// Essentially the function picks up after the parent context starts a quoting process which the parent
-// will also complete.
-func (rw *RecordWriter) loadQF_memclearOn(p []byte, scanIdx int) {
-	r, n, i := rw.w.escapeControlRuneSet.indexAnyRuneLenInBytes(p[scanIdx:])
-	if i == -1 {
-		rw.appendRec(p)
-		return
-	}
-	scanIdx += i
-
-	//
-	// found a control rune of some kind that must be escaped
-	//
-
-	rw.appendRec(p[:scanIdx])
-
-	for {
-		scanIdx += int(n)
-
-		if rw.w.quote == r {
-			rw.setRecordBuf(rw.w.escapedQuoteSeq.appendText(rw.recordBuf))
-		} else {
-			rw.setRecordBuf(rw.w.escapedEscapeSeq.appendText(rw.recordBuf))
-		}
-
-		r, n, i = rw.w.escapeControlRuneSet.indexAnyRuneLenInBytes(p[scanIdx:])
-		if i == -1 {
-			rw.appendRec(p[scanIdx:])
-			return
-		}
-
-		prevIdx := scanIdx
-		scanIdx += i
-		rw.appendRec(p[prevIdx:scanIdx])
-	}
-}
-
-// loadQFWithCheckUTF8_memclearOn performs the same duties as loadQField_memclearOn and in a much more expensive
-// scan operation also validates that the field contents are valid utf8 sequences.
-func (rw *RecordWriter) loadQFWithCheckUTF8_memclearOn(p []byte, scanIdx int) error {
-	var loadIdx, n int
-	var r rune
-	for {
-		if scanIdx >= len(p) {
-			rw.appendRec(p[loadIdx:])
-			return nil
-		}
-
-		if b := p[scanIdx]; b < utf8.RuneSelf {
-			if !rw.w.escapeControlRuneSet.containsSingleByteRune(b) {
-				scanIdx++
+				w.recordBuf = src
 				continue
 			}
-			r = rune(b)
-			n = 1
-		} else if r, n = utf8.DecodeRune(p[scanIdx:]); n == 1 {
-			return ErrNonUTF8InRecord
-		} else if !rw.w.escapeControlRuneSet.containsMBRune(r) {
-			scanIdx += n
-			continue
+
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
+			if err != nil {
+				return 0, err
+			}
 		}
 
 		//
-		// found a control rune of some kind that must be escaped
+		// process src buf
 		//
 
-		rw.appendRec(p[loadIdx:scanIdx])
+		if !scanForNonUTF8 || (w.bitFlags&wFlagErrOnNonUTF8) == 0 {
+			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
-		scanIdx += n
-		loadIdx = scanIdx
-
-		if rw.w.quote == r {
-			rw.setRecordBuf(rw.w.escapedQuoteSeq.appendText(rw.recordBuf))
-			continue
-		}
-
-		rw.setRecordBuf(rw.w.escapedEscapeSeq.appendText(rw.recordBuf))
-	}
-}
-
-// loadStrQF_memclearOn is called after a
-// quote, escape, or csv format sensitive character is found in the field data.
-// The parent context will handle wrapping the field in quotes and communicate to this function where to
-// start scanning in the source for characters to escape. The parent context will not write any part of
-// the source to the record staging zone.
-//
-// Essentially the function picks up after the parent context starts a quoting process which the parent
-// will also complete.
-func (rw *RecordWriter) loadStrQF_memclearOn(s string, scanIdx int) {
-	r, n, i := rw.w.escapeControlRuneSet.indexAnyRuneLenInString(s[scanIdx:])
-	if i == -1 {
-		rw.appendStrRec(s)
-		return
-	}
-	scanIdx += i
-
-	//
-	// found a control rune of some kind that must be escaped
-	//
-
-	rw.appendStrRec(s[:scanIdx])
-
-	for {
-		scanIdx += int(n)
-
-		if rw.w.quote == r {
-			rw.setRecordBuf(rw.w.escapedQuoteSeq.appendText(rw.recordBuf))
-		} else {
-			rw.setRecordBuf(rw.w.escapedEscapeSeq.appendText(rw.recordBuf))
-		}
-
-		r, n, i = rw.w.escapeControlRuneSet.indexAnyRuneLenInString(s[scanIdx:])
-		if i == -1 {
-			rw.appendStrRec(s[scanIdx:])
-			return
-		}
-
-		prevIdx := scanIdx
-		scanIdx += i
-		rw.appendStrRec(s[prevIdx:scanIdx])
-	}
-}
-
-// loadStrQFWithCheckUTF8_memclearOn performs the same duties as loadStrQField_memclearOn and in a much more expensive
-// scan operation also validates that the field contents are valid utf8 sequences.
-func (rw *RecordWriter) loadStrQFWithCheckUTF8_memclearOn(s string, scanIdx int) error {
-	var loadIdx, n int
-	var r rune
-	for {
-		if scanIdx >= len(s) {
-			rw.appendStrRec(s[loadIdx:])
-			return nil
-		}
-
-		if b := s[scanIdx]; b < utf8.RuneSelf {
-			if !rw.w.escapeControlRuneSet.containsSingleByteRune(b) {
-				scanIdx++
+			i := w.controlRuneSet.indexAnyInBytes(src)
+			if i == -1 {
+				w.recordBuf = append(w.recordBuf, src...)
 				continue
 			}
-			r = rune(b)
-			n = 1
-		} else if r, n = utf8.DecodeRuneInString(s[scanIdx:]); n == 1 {
-			return ErrNonUTF8InRecord
-		} else if !rw.w.escapeControlRuneSet.containsMBRune(r) {
-			scanIdx += n
+
+			w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+			w.loadQF_memclearOff(src, i)
+
+			w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
 			continue
 		}
 
-		//
-		// found a control rune of some kind that must be escaped
-		//
+		// for each decoded rune, check if that rune fails to decode and if so then return an error
+		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+		// continue loading
 
-		rw.appendStrRec(s[loadIdx:scanIdx])
+		var i int
+		for {
+			if i >= len(src) {
+				w.recordBuf = append(w.recordBuf, src...)
+				break
+			}
+			if b := src[i]; b < utf8.RuneSelf {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
+					i++
+					continue
+				}
+			} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
+				return 0, ErrNonUTF8InRecord
+			} else if !w.controlRuneSet.containsMBRune(r) {
+				i += n
+				continue
+			}
 
-		scanIdx += n
-		loadIdx = scanIdx
+			//
+			// found a control rune of some kind
+			//
 
-		if rw.w.quote == r {
-			rw.setRecordBuf(rw.w.escapedQuoteSeq.appendText(rw.recordBuf))
-			continue
+			w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+			err = w.loadQFWithCheckUTF8_memclearOff(src, i)
+			if err != nil {
+				return 0, err
+			}
+
+			w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+			break
 		}
-
-		rw.setRecordBuf(rw.w.escapedEscapeSeq.appendText(rw.recordBuf))
 	}
+
+	w.recordBuf = w.recordSepSeq.appendText(w.recordBuf)
+
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
+	}
+	return n, err
+}
+
+func (w *Writer) writeStrRow_memclearOff(fields []string) (int, error) {
+	// write the first field
+	{
+		s := fields[0]
+		if len(s) == 0 {
+			if len(fields) == 1 {
+				w.recordBuf = w.twoQuotesSeq.appendText(w.recordBuf)
+				w.recordBuf = w.recordSepSeq.appendText(w.recordBuf)
+
+				n, err := w.writer.Write(w.recordBuf)
+				if err != nil {
+					err = writeIOErr{err}
+				}
+				return n, err
+			}
+			goto FIRST_FIELD_WRITTEN
+		}
+
+		//
+		// process src buf
+		//
+
+		if (w.bitFlags & wFlagErrOnNonUTF8) == 0 {
+			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
+
+			var i int
+			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
+				i = w.controlRuneSet.indexAnyInString(s)
+				if i == -1 {
+					w.recordBuf = append(w.recordBuf, s...)
+					goto FIRST_FIELD_WRITTEN
+				}
+			}
+
+			w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+			w.loadStrQF_memclearOff(s, i)
+
+			w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+			goto FIRST_FIELD_WRITTEN
+		}
+
+		// for each decoded rune, check if that rune fails to decode and if so then return an error
+		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+		// continue loading
+
+		var i int
+		if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
+			for {
+				if i >= len(s) {
+					w.recordBuf = append(w.recordBuf, s...)
+					goto FIRST_FIELD_WRITTEN
+				}
+
+				b := s[i]
+				if b < utf8.RuneSelf {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
+						i++
+						continue
+					}
+				} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
+					return 0, ErrNonUTF8InRecord
+				} else if !w.controlRuneSet.containsMBRune(r) {
+					i += n
+					continue
+				}
+
+				break
+			}
+		}
+
+		//
+		// found a control rune of some kind or was forced to quote first field
+		//
+
+		w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+		if err := w.loadStrQFWithCheckUTF8_memclearOff(s, i); err != nil {
+			return 0, err
+		}
+
+		w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+	}
+
+FIRST_FIELD_WRITTEN:
+
+	for i := 1; i < len(fields); i++ {
+		w.recordBuf = w.fieldSepSeq.appendText(w.recordBuf)
+
+		s := fields[i]
+		if len(s) == 0 {
+			continue
+		}
+
+		//
+		// process src buf
+		//
+
+		if (w.bitFlags & wFlagErrOnNonUTF8) == 0 {
+			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
+
+			i := w.controlRuneSet.indexAnyInString(s)
+			if i == -1 {
+				w.recordBuf = append(w.recordBuf, s...)
+				continue
+			}
+
+			w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+			w.loadStrQF_memclearOff(s, i)
+
+			w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+			continue
+		}
+
+		// for each decoded rune, check if that rune fails to decode and if so then return an error
+		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+		// continue loading
+
+		var i int
+		for {
+			if i >= len(s) {
+				w.recordBuf = append(w.recordBuf, s...)
+				break
+			}
+
+			if b := s[i]; b < utf8.RuneSelf {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
+					i++
+					continue
+				}
+			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
+				return 0, ErrNonUTF8InRecord
+			} else if !w.controlRuneSet.containsMBRune(r) {
+				i += n
+				continue
+			}
+
+			//
+			// found a control rune of some kind or was forced to quote first field
+			//
+
+			w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+			if err := w.loadStrQFWithCheckUTF8_memclearOff(s, i); err != nil {
+				return 0, err
+			}
+
+			w.recordBuf = w.quoteSeq.appendText(w.recordBuf)
+
+			break
+		}
+	}
+
+	w.recordBuf = w.recordSepSeq.appendText(w.recordBuf)
+
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
+	}
+	return n, err
+}
+
+func (w *Writer) writeRow_memclearOn(fields []FieldWriter) (int, error) {
+	// write the first field
+	{
+		f := &fields[0]
+
+		var scanForNonUTF8 bool
+		var src []byte
+		var err error
+
+		switch f.kind {
+		case wfkBytes:
+			src = f.bytes
+			if len(src) == 0 {
+				if len(fields) == 1 {
+					w.setRecordBuf(w.twoQuotesSeq.appendText(w.recordBuf))
+					w.setRecordBuf(w.recordSepSeq.appendText(w.recordBuf))
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
+					}
+					return n, err
+				}
+				goto FIRST_FIELD_WRITTEN
+			}
+
+			scanForNonUTF8 = (f._64_bits == 0)
+		case wfkString:
+			s := f.str
+			if len(s) == 0 {
+				if len(fields) == 1 {
+					w.setRecordBuf(w.twoQuotesSeq.appendText(w.recordBuf))
+					w.setRecordBuf(w.recordSepSeq.appendText(w.recordBuf))
+
+					n, err := w.writer.Write(w.recordBuf)
+					if err != nil {
+						err = writeIOErr{err}
+					}
+					return n, err
+				}
+				goto FIRST_FIELD_WRITTEN
+			}
+
+			scanForNonUTF8 = (f._64_bits == 0)
+			src = unsafe.Slice(unsafe.StringData(s), len(s))
+		case wfkRune:
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
+			if err != nil {
+				return 0, err
+			}
+
+			// src is now guaranteed to be a utf8 encoded non-empty byte sequence
+			// so scanForNonUTF8 will remain false here intentionally
+		default:
+			if (w.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
+				src, err = f.AppendText(w.recordBuf)
+				if err != nil {
+					return 0, err
+				}
+
+				w.setRecordBuf(src)
+				goto FIRST_FIELD_WRITTEN
+			}
+
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
+			if err != nil {
+				return 0, err
+			}
+		}
+
+		//
+		// process src buf
+		//
+
+		if !scanForNonUTF8 || (w.bitFlags&wFlagErrOnNonUTF8) == 0 {
+			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
+
+			var i int
+			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
+				i = w.controlRuneSet.indexAnyInBytes(src)
+				if i == -1 {
+					w.appendRec(src)
+					goto FIRST_FIELD_WRITTEN
+				}
+			}
+
+			w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+			w.loadQF_memclearOn(src, i)
+
+			w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+			goto FIRST_FIELD_WRITTEN
+		}
+
+		// for each decoded rune, check if that rune fails to decode and if so then return an error
+		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+		// continue loading
+
+		var i int
+		if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
+			for {
+				if i >= len(src) {
+					w.appendRec(src)
+					goto FIRST_FIELD_WRITTEN
+				}
+
+				b := src[i]
+				if b < utf8.RuneSelf {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
+						i++
+						continue
+					}
+				} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
+					return 0, ErrNonUTF8InRecord
+				} else if !w.controlRuneSet.containsMBRune(r) {
+					i += n
+					continue
+				}
+
+				break
+			}
+		}
+
+		//
+		// found a control rune of some kind or was forced to quote first field
+		//
+
+		w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+		err = w.loadQFWithCheckUTF8_memclearOn(src, i)
+		if err != nil {
+			return 0, err
+		}
+
+		w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+	}
+
+FIRST_FIELD_WRITTEN:
+
+	for i := 1; i < len(fields); i++ {
+		w.setRecordBuf(w.fieldSepSeq.appendText(w.recordBuf))
+
+		f := &fields[i]
+
+		var scanForNonUTF8 bool
+		var src []byte
+		var err error
+
+		switch f.kind {
+		case wfkBytes:
+			src = f.bytes
+			if len(src) == 0 {
+				continue
+			}
+
+			scanForNonUTF8 = (f._64_bits == 0)
+		case wfkString:
+			s := f.str
+			if len(s) == 0 {
+				continue
+			}
+
+			scanForNonUTF8 = (f._64_bits == 0)
+			src = unsafe.Slice(unsafe.StringData(s), len(s))
+		case wfkRune:
+			src, err = f.runeAppendText(w.fieldWriterBuf[:0])
+			if err != nil {
+				return 0, err
+			}
+
+			// src is now guaranteed to be a utf8 encoded non-empty byte sequence
+			// so scanForNonUTF8 will remain false here intentionally
+		default:
+			if (w.bitFlags & wFlagControlRuneOverlap) == 0 {
+				src, err = f.AppendText(w.recordBuf)
+				if err != nil {
+					return 0, err
+				}
+
+				w.setRecordBuf(src)
+				continue
+			}
+
+			src, err = f.AppendText(w.fieldWriterBuf[:0])
+			if err != nil {
+				return 0, err
+			}
+		}
+
+		//
+		// process src buf
+		//
+
+		if !scanForNonUTF8 || (w.bitFlags&wFlagErrOnNonUTF8) == 0 {
+			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
+
+			i := w.controlRuneSet.indexAnyInBytes(src)
+			if i == -1 {
+				w.appendRec(src)
+				continue
+			}
+
+			w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+			w.loadQF_memclearOn(src, i)
+
+			w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+			continue
+		}
+
+		// for each decoded rune, check if that rune fails to decode and if so then return an error
+		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+		// continue loading
+
+		var i int
+		for {
+			if i >= len(src) {
+				w.appendRec(src)
+				break
+			}
+			if b := src[i]; b < utf8.RuneSelf {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
+					i++
+					continue
+				}
+			} else if r, n := utf8.DecodeRune(src[i:]); n == 1 {
+				return 0, ErrNonUTF8InRecord
+			} else if !w.controlRuneSet.containsMBRune(r) {
+				i += n
+				continue
+			}
+
+			//
+			// found a control rune of some kind
+			//
+
+			w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+			err = w.loadQFWithCheckUTF8_memclearOn(src, i)
+			if err != nil {
+				return 0, err
+			}
+
+			w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+			break
+		}
+	}
+
+	w.setRecordBuf(w.recordSepSeq.appendText(w.recordBuf))
+
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
+	}
+	return n, err
+}
+
+func (w *Writer) writeStrRow_memclearOn(fields []string) (int, error) {
+	// write the first field
+	{
+		s := fields[0]
+		if len(s) == 0 {
+			if len(fields) == 1 {
+				w.setRecordBuf(w.twoQuotesSeq.appendText(w.recordBuf))
+				w.setRecordBuf(w.recordSepSeq.appendText(w.recordBuf))
+
+				n, err := w.writer.Write(w.recordBuf)
+				if err != nil {
+					err = writeIOErr{err}
+				}
+				return n, err
+			}
+			goto FIRST_FIELD_WRITTEN
+		}
+
+		//
+		// process src buf
+		//
+
+		if (w.bitFlags & wFlagErrOnNonUTF8) == 0 {
+			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
+
+			var i int
+			if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
+				i = w.controlRuneSet.indexAnyInString(s)
+				if i == -1 {
+					w.appendStrRec(s)
+					goto FIRST_FIELD_WRITTEN
+				}
+			}
+
+			w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+			w.loadStrQF_memclearOn(s, i)
+
+			w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+			goto FIRST_FIELD_WRITTEN
+		}
+
+		// for each decoded rune, check if that rune fails to decode and if so then return an error
+		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+		// continue loading
+
+		var i int
+		if (w.bitFlags & wFlagForceQuoteFirstField) == 0 {
+			for {
+				if i >= len(s) {
+					w.appendStrRec(s)
+					goto FIRST_FIELD_WRITTEN
+				}
+
+				b := s[i]
+				if b < utf8.RuneSelf {
+					if !w.controlRuneSet.containsSingleByteRune(b) {
+						i++
+						continue
+					}
+				} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
+					return 0, ErrNonUTF8InRecord
+				} else if !w.controlRuneSet.containsMBRune(r) {
+					i += n
+					continue
+				}
+
+				break
+			}
+		}
+
+		//
+		// found a control rune of some kind or was forced to quote first field
+		//
+
+		w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+		if err := w.loadStrQFWithCheckUTF8_memclearOn(s, i); err != nil {
+			return 0, err
+		}
+
+		w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+	}
+
+FIRST_FIELD_WRITTEN:
+
+	for i := 1; i < len(fields); i++ {
+		w.setRecordBuf(w.fieldSepSeq.appendText(w.recordBuf))
+
+		s := fields[i]
+		if len(s) == 0 {
+			continue
+		}
+
+		//
+		// process src buf
+		//
+
+		if (w.bitFlags & wFlagErrOnNonUTF8) == 0 {
+			// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
+
+			i := w.controlRuneSet.indexAnyInString(s)
+			if i == -1 {
+				w.appendStrRec(s)
+				continue
+			}
+
+			w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+			w.loadStrQF_memclearOn(s, i)
+
+			w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+			continue
+		}
+
+		// for each decoded rune, check if that rune fails to decode and if so then return an error
+		// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+		// continue loading
+
+		var i int
+		for {
+			if i >= len(s) {
+				w.appendStrRec(s)
+				break
+			}
+
+			if b := s[i]; b < utf8.RuneSelf {
+				if !w.controlRuneSet.containsSingleByteRune(b) {
+					i++
+					continue
+				}
+			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
+				return 0, ErrNonUTF8InRecord
+			} else if !w.controlRuneSet.containsMBRune(r) {
+				i += n
+				continue
+			}
+
+			//
+			// found a control rune of some kind or was forced to quote first field
+			//
+
+			w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+			if err := w.loadStrQFWithCheckUTF8_memclearOn(s, i); err != nil {
+				return 0, err
+			}
+
+			w.setRecordBuf(w.quoteSeq.appendText(w.recordBuf))
+
+			break
+		}
+	}
+
+	w.setRecordBuf(w.recordSepSeq.appendText(w.recordBuf))
+
+	n, err := w.writer.Write(w.recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
+	}
+	return n, err
 }
 
 //
@@ -3810,57 +4316,153 @@ func (rw *RecordWriter) unsafeAppendUTF8FieldBytes_memclearOff(p []byte) {
 	}
 
 	rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
+
 	rw.loadQF_memclearOff(p, i)
+
 	rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
 }
 
-func (rw *RecordWriter) bytes_memclearOff(p []byte) *RecordWriter {
+func (rw *RecordWriter) bytes_memclearOff(p []byte, bitFlags wFlag) *RecordWriter {
 	if !rw.preflightCheck_memclearOff() {
 		return rw
 	}
 
-	if (rw.bitFlags&wFlagErrOnNonUTF8) != 0 && !utf8.Valid(p) {
-		rw.err = ErrNonUTF8InRecord
+	if (bitFlags & wFlagErrOnNonUTF8) == 0 {
+		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
+
+		var i int
+		if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+			i = rw.w.controlRuneSet.indexAnyInBytes(p)
+			if i == -1 {
+				rw.recordBuf = append(rw.recordBuf, p...)
+				return rw
+			}
+		}
+
+		rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
+
+		rw.loadQF_memclearOff(p, i)
+
+		rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
+
 		return rw
 	}
 
+	// for each decoded rune, check if that rune fails to decode and if so then return an error
+	// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+	// continue loading
+
 	var i int
-	if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !bytes.HasPrefix(p, []byte(string(rw.w.comment))) {
-		i = rw.w.controlRuneSet.indexAnyInBytes(p)
-		if i == -1 {
-			rw.recordBuf = append(rw.recordBuf, p...)
-			return rw
+	if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+		for {
+			if i >= len(p) {
+				rw.recordBuf = append(rw.recordBuf, p...)
+				return rw
+			}
+
+			b := p[i]
+			if b < utf8.RuneSelf {
+				if !rw.w.controlRuneSet.containsSingleByteRune(b) {
+					i++
+					continue
+				}
+			} else if r, n := utf8.DecodeRune(p[i:]); n == 1 {
+				rw.err = ErrNonUTF8InRecord
+				return rw
+			} else if !rw.w.controlRuneSet.containsMBRune(r) {
+				i += n
+				continue
+			}
+
+			break
 		}
 	}
 
+	//
+	// found a control rune of some kind or was forced to quote first field
+	//
+
 	rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
-	rw.loadQF_memclearOff(p, i)
+
+	err := rw.loadQFWithCheckUTF8_memclearOff(p, i)
+	if err != nil {
+		rw.err = err
+		return rw
+	}
+
 	rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
 
 	return rw
 }
 
-func (rw *RecordWriter) string_memclearOff(s string) *RecordWriter {
+func (rw *RecordWriter) string_memclearOff(s string, bitFlags wFlag) *RecordWriter {
 	if !rw.preflightCheck_memclearOff() {
 		return rw
 	}
 
-	if (rw.bitFlags&wFlagErrOnNonUTF8) != 0 && !utf8.ValidString(s) {
-		rw.err = ErrNonUTF8InRecord
+	if (bitFlags & wFlagErrOnNonUTF8) == 0 {
+		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
+
+		var i int
+		if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+			i = rw.w.controlRuneSet.indexAnyInString(s)
+			if i == -1 {
+				rw.recordBuf = append(rw.recordBuf, s...)
+				return rw
+			}
+		}
+
+		rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
+
+		rw.loadStrQF_memclearOff(s, i)
+
+		rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
+
 		return rw
 	}
 
+	// for each decoded rune, check if that rune fails to decode and if so then return an error
+	// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+	// continue loading
+
 	var i int
-	if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !strings.HasPrefix(s, string(rw.w.comment)) {
-		i = rw.w.controlRuneSet.indexAnyInString(s)
-		if i == -1 {
-			rw.recordBuf = append(rw.recordBuf, s...)
-			return rw
+	if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+		for {
+			if i >= len(s) {
+				rw.recordBuf = append(rw.recordBuf, s...)
+				return rw
+			}
+
+			b := s[i]
+			if b < utf8.RuneSelf {
+				if !rw.w.controlRuneSet.containsSingleByteRune(b) {
+					i++
+					continue
+				}
+			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
+				rw.err = ErrNonUTF8InRecord
+				return rw
+			} else if !rw.w.controlRuneSet.containsMBRune(r) {
+				i += n
+				continue
+			}
+
+			break
 		}
 	}
 
+	//
+	// found a control rune of some kind or was forced to quote first field
+	//
+
 	rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
-	rw.loadStrQF_memclearOff(s, i)
+
+	err := rw.loadStrQFWithCheckUTF8_memclearOff(s, i)
+	if err != nil {
+		rw.err = err
+		return rw
+	}
+
 	rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
 
 	return rw
@@ -3941,13 +4543,36 @@ func (rw *RecordWriter) float64_memclearOff(f float64) *RecordWriter {
 	return rw
 }
 
-func (rw *RecordWriter) rune_memclearOff(r rune) *RecordWriter {
+func (rw *RecordWriter) rune_withCheckUTF8_memclearOff(r rune) *RecordWriter {
 	if !rw.preflightCheck_memclearOff() {
 		return rw
 	}
 
 	if !utf8.ValidRune(r) {
 		rw.err = ErrInvalidRune
+		return rw
+	}
+
+	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
+		if r < utf8.RuneSelf {
+			if !rw.w.controlRuneSet.containsSingleByteRune(byte(r)) {
+				goto SIMPLE_APPEND
+			}
+		} else if !rw.w.controlRuneSet.containsMBRune(r) {
+			goto SIMPLE_APPEND
+		}
+	}
+
+	rw.unsafeAppendUTF8FieldBytes_memclearOff(utf8.AppendRune(rw.w.fieldWriterBuf[:0], r))
+	return rw
+
+SIMPLE_APPEND:
+	rw.recordBuf = utf8.AppendRune(rw.recordBuf, r)
+	return rw
+}
+
+func (rw *RecordWriter) rune_memclearOff(r rune) *RecordWriter {
+	if !rw.preflightCheck_memclearOff() {
 		return rw
 	}
 
@@ -3991,8 +4616,7 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 			return 0, err
 		}
 		if len(rw.recordBuf) == 0 {
-			rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
-			rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
+			rw.recordBuf = rw.w.twoQuotesSeq.appendText(rw.recordBuf)
 		}
 	default:
 		if numFields := rw.numFields; numFields == -1 {
@@ -4082,57 +4706,153 @@ func (rw *RecordWriter) unsafeAppendUTF8FieldBytes_memclearOn(p []byte) {
 	}
 
 	rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
+
 	rw.loadQF_memclearOn(p, i)
+
 	rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
 }
 
-func (rw *RecordWriter) bytes_memclearOn(p []byte) *RecordWriter {
+func (rw *RecordWriter) bytes_memclearOn(p []byte, bitFlags wFlag) *RecordWriter {
 	if !rw.preflightCheck_memclearOn() {
 		return rw
 	}
 
-	if (rw.bitFlags&wFlagErrOnNonUTF8) != 0 && !utf8.Valid(p) {
-		rw.err = ErrNonUTF8InRecord
+	if (bitFlags & wFlagErrOnNonUTF8) == 0 {
+		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
+
+		var i int
+		if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+			i = rw.w.controlRuneSet.indexAnyInBytes(p)
+			if i == -1 {
+				rw.appendRec(p)
+				return rw
+			}
+		}
+
+		rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
+
+		rw.loadQF_memclearOn(p, i)
+
+		rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
+
 		return rw
 	}
 
+	// for each decoded rune, check if that rune fails to decode and if so then return an error
+	// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+	// continue loading
+
 	var i int
-	if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !bytes.HasPrefix(p, []byte(string(rw.w.comment))) {
-		i = rw.w.controlRuneSet.indexAnyInBytes(p)
-		if i == -1 {
-			rw.appendRec(p)
-			return rw
+	if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+		for {
+			if i >= len(p) {
+				rw.appendRec(p)
+				return rw
+			}
+
+			b := p[i]
+			if b < utf8.RuneSelf {
+				if !rw.w.controlRuneSet.containsSingleByteRune(b) {
+					i++
+					continue
+				}
+			} else if r, n := utf8.DecodeRune(p[i:]); n == 1 {
+				rw.err = ErrNonUTF8InRecord
+				return rw
+			} else if !rw.w.controlRuneSet.containsMBRune(r) {
+				i += n
+				continue
+			}
+
+			break
 		}
 	}
 
+	//
+	// found a control rune of some kind or was forced to quote first field
+	//
+
 	rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
-	rw.loadQF_memclearOn(p, i)
+
+	err := rw.loadQFWithCheckUTF8_memclearOn(p, i)
+	if err != nil {
+		rw.err = err
+		return rw
+	}
+
 	rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
 
 	return rw
 }
 
-func (rw *RecordWriter) string_memclearOn(s string) *RecordWriter {
+func (rw *RecordWriter) string_memclearOn(s string, bitFlags wFlag) *RecordWriter {
 	if !rw.preflightCheck_memclearOn() {
 		return rw
 	}
 
-	if (rw.bitFlags&wFlagErrOnNonUTF8) != 0 && !utf8.ValidString(s) {
-		rw.err = ErrNonUTF8InRecord
+	if (bitFlags & wFlagErrOnNonUTF8) == 0 {
+		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
+
+		var i int
+		if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+			i = rw.w.controlRuneSet.indexAnyInString(s)
+			if i == -1 {
+				rw.appendStrRec(s)
+				return rw
+			}
+		}
+
+		rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
+
+		rw.loadStrQF_memclearOn(s, i)
+
+		rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
+
 		return rw
 	}
 
+	// for each decoded rune, check if that rune fails to decode and if so then return an error
+	// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+	// continue loading
+
 	var i int
-	if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !strings.HasPrefix(s, string(rw.w.comment)) {
-		i = rw.w.controlRuneSet.indexAnyInString(s)
-		if i == -1 {
-			rw.appendStrRec(s)
-			return rw
+	if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+		for {
+			if i >= len(s) {
+				rw.appendStrRec(s)
+				return rw
+			}
+
+			b := s[i]
+			if b < utf8.RuneSelf {
+				if !rw.w.controlRuneSet.containsSingleByteRune(b) {
+					i++
+					continue
+				}
+			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
+				rw.err = ErrNonUTF8InRecord
+				return rw
+			} else if !rw.w.controlRuneSet.containsMBRune(r) {
+				i += n
+				continue
+			}
+
+			break
 		}
 	}
 
+	//
+	// found a control rune of some kind or was forced to quote first field
+	//
+
 	rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
-	rw.loadStrQF_memclearOn(s, i)
+
+	err := rw.loadStrQFWithCheckUTF8_memclearOn(s, i)
+	if err != nil {
+		rw.err = err
+		return rw
+	}
+
 	rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
 
 	return rw
@@ -4213,13 +4933,36 @@ func (rw *RecordWriter) float64_memclearOn(f float64) *RecordWriter {
 	return rw
 }
 
-func (rw *RecordWriter) rune_memclearOn(r rune) *RecordWriter {
+func (rw *RecordWriter) rune_withCheckUTF8_memclearOn(r rune) *RecordWriter {
 	if !rw.preflightCheck_memclearOn() {
 		return rw
 	}
 
 	if !utf8.ValidRune(r) {
 		rw.err = ErrInvalidRune
+		return rw
+	}
+
+	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
+		if r < utf8.RuneSelf {
+			if !rw.w.controlRuneSet.containsSingleByteRune(byte(r)) {
+				goto SIMPLE_APPEND
+			}
+		} else if !rw.w.controlRuneSet.containsMBRune(r) {
+			goto SIMPLE_APPEND
+		}
+	}
+
+	rw.unsafeAppendUTF8FieldBytes_memclearOn(utf8.AppendRune(rw.w.fieldWriterBuf[:0], r))
+	return rw
+
+SIMPLE_APPEND:
+	rw.setRecordBuf(utf8.AppendRune(rw.recordBuf, r))
+	return rw
+}
+
+func (rw *RecordWriter) rune_memclearOn(r rune) *RecordWriter {
+	if !rw.preflightCheck_memclearOn() {
 		return rw
 	}
 
@@ -4263,8 +5006,7 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 			return 0, err
 		}
 		if len(rw.recordBuf) == 0 {
-			rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
-			rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
+			rw.setRecordBuf(rw.w.twoQuotesSeq.appendText(rw.recordBuf))
 		}
 	default:
 		if numFields := rw.numFields; numFields == -1 {
