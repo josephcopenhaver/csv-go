@@ -12,18 +12,6 @@ type writeBuffer struct {
 	quote                rune
 }
 
-// appendRec appends bytes from a slice to the current record buffer
-// and will clear any memory released to the OS
-func (wb *writeBuffer) appendRec(p []byte) {
-	appendAndClear(&wb.recordBuf, p)
-}
-
-// appendStrRec appends bytes from a string to the current record buffer
-// and will clear any memory released to the OS
-func (wb *writeBuffer) appendStrRec(s string) {
-	appendStrAndClear(&wb.recordBuf, s)
-}
-
 // setRecordBuf should only be called when the record buf has been appended to
 // and might have been reallocated as a result and clear mem on free is enabled.
 //
@@ -390,53 +378,72 @@ func (wb *writeBuffer) loadStrQFWithCheckUTF8_memclearOn(s string, scanIdx int) 
 	}
 }
 
+// appendRec appends bytes from a slice to the current record buffer
+// and will clear any memory released to the GC/OS.
+func (wb *writeBuffer) appendRec(p []byte) {
+	appendAndClear(&wb.recordBuf, p)
+}
+
+// appendStrRec appends bytes from a string to the current record buffer
+// and will clear any memory released to the GC/OS.
+func (wb *writeBuffer) appendStrRec(s string) {
+	appendStrAndClear(&wb.recordBuf, s)
+}
+
 //
 // helpers
 //
 
-// appendAndClear should be small enough to always be inlined
-func appendAndClear(dst *[]byte, p []byte) {
+// appendAndClear appends bytes from a slice to a buffer
+// and will clear any memory released to the GC/OS.
+//
+// It should be small and simple enough to always be inlined by the compiler.
+func appendAndClear(dstPtr *[]byte, p []byte) {
 	n := len(p)
 	if n == 0 {
 		return
 	}
 
-	s := *dst
-	sCap := cap(s)
-	sFree := sCap - len(s)
+	dst := *dstPtr
+	dstCap := cap(dst)
+	dstFree := dstCap - len(dst)
 
-	*dst = append(s, p...)
+	*dstPtr = append(dst, p...)
 
-	if sFree >= n {
+	if dstFree >= n {
 		// no reallocation occurred
 		return
 	}
 
 	// a reallocation definitely occurred
-	// clear the old contents within `s`
+	// clear the old contents within `dst`
 
-	clear(s[:sCap])
+	clear(dst[:dstCap])
 }
 
-func appendStrAndClear(dst *[]byte, str string) {
-	n := len(str)
+// appendStrAndClear appends bytes from a string to a buffer
+// and will clear any memory released to the GC/OS.
+//
+// It should be small and simple enough to always be inlined by the compiler.
+func appendStrAndClear(dstPtr *[]byte, s string) {
+	n := len(s)
 	if n == 0 {
 		return
 	}
 
-	s := *dst
-	sCap := cap(s)
-	sFree := sCap - len(s)
+	dst := *dstPtr
+	dstCap := cap(dst)
+	dstFree := dstCap - len(dst)
 
-	*dst = append(s, str...)
+	*dstPtr = append(dst, s...)
 
-	if sFree >= n {
+	if dstFree >= n {
 		// no reallocation occurred
 		return
 	}
 
 	// a reallocation definitely occurred
-	// clear the old contents within `s`
+	// clear the old contents within `dst`
 
-	clear(s[:sCap])
+	clear(dst[:dstCap])
 }

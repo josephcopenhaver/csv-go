@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 	"unsafe"
@@ -4274,33 +4275,38 @@ func leadingOnes8(b byte) uint8 {
 
 func (rw *RecordWriter) preflightCheck_memclearOff() bool {
 	if rw.err != nil {
+		if rw.err == ErrRecordWritten {
+			rw.err = ErrRecordWriterClosed
+		}
 		return false
 	}
 
 	if err := rw.w.err; err != nil {
-		rw.err = err
+		rw.abort(err)
 		return false
 	}
 
-	if rw.nextField != 0 {
-		rw.recordBuf = rw.w.fieldSepSeq.appendText(rw.recordBuf)
-	} else {
-		if (rw.bitFlags & wFlagClosed) != 0 {
-			panic("must not reuse record references after they are written or aborted")
-		}
+	switch rw.nextField {
+	case 0:
 		rw.bitFlags = rw.w.bitFlags
+		if (rw.bitFlags & wFlagClosed) != 0 {
+			rw.bitFlags &= (^wFlagClosed)
+			rw.abort(ErrWriterClosed)
+			return false
+		}
 		rw.numFields = rw.w.numFields
 		rw.recordBuf = rw.recordBuf[:0]
 		if rw.w.comment != invalidControlRune && (rw.bitFlags&wFlagFirstRecordWritten) == 0 {
 			rw.bitFlags |= wFlagForceQuoteFirstField
 		}
+	case 1:
+		rw.bitFlags &= (^wFlagForceQuoteFirstField)
+		fallthrough
+	default:
+		rw.recordBuf = rw.w.fieldSepSeq.appendText(rw.recordBuf)
 	}
 
-	nextField := rw.nextField + 1
-	if nextField <= 0 {
-		panic("too many fields: integer overflow")
-	}
-	rw.nextField = nextField
+	rw.incrementNextField()
 
 	return true
 }
@@ -4322,20 +4328,16 @@ func (rw *RecordWriter) unsafeAppendUTF8FieldBytes_memclearOff(p []byte) {
 	rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
 }
 
-func (rw *RecordWriter) bytes_memclearOff(p []byte, bitFlags wFlag) *RecordWriter {
-	if !rw.preflightCheck_memclearOff() {
-		return rw
-	}
-
-	if (bitFlags & wFlagErrOnNonUTF8) == 0 {
+func (rw *RecordWriter) bytes_memclearOff(p []byte, disableUTF8Check bool) {
+	if disableUTF8Check || (rw.bitFlags&wFlagErrOnNonUTF8) == 0 {
 		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
 		var i int
-		if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+		if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !bytes.HasPrefix(p, []byte(string(rw.w.comment))) {
 			i = rw.w.controlRuneSet.indexAnyInBytes(p)
 			if i == -1 {
 				rw.recordBuf = append(rw.recordBuf, p...)
-				return rw
+				return
 			}
 		}
 
@@ -4345,7 +4347,7 @@ func (rw *RecordWriter) bytes_memclearOff(p []byte, bitFlags wFlag) *RecordWrite
 
 		rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
 
-		return rw
+		return
 	}
 
 	// for each decoded rune, check if that rune fails to decode and if so then return an error
@@ -4353,11 +4355,11 @@ func (rw *RecordWriter) bytes_memclearOff(p []byte, bitFlags wFlag) *RecordWrite
 	// continue loading
 
 	var i int
-	if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+	if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !bytes.HasPrefix(p, []byte(string(rw.w.comment))) {
 		for {
 			if i >= len(p) {
 				rw.recordBuf = append(rw.recordBuf, p...)
-				return rw
+				return
 			}
 
 			b := p[i]
@@ -4367,8 +4369,8 @@ func (rw *RecordWriter) bytes_memclearOff(p []byte, bitFlags wFlag) *RecordWrite
 					continue
 				}
 			} else if r, n := utf8.DecodeRune(p[i:]); n == 1 {
-				rw.err = ErrNonUTF8InRecord
-				return rw
+				rw.abort(ErrNonUTF8InRecord)
+				return
 			} else if !rw.w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
@@ -4386,29 +4388,23 @@ func (rw *RecordWriter) bytes_memclearOff(p []byte, bitFlags wFlag) *RecordWrite
 
 	err := rw.loadQFWithCheckUTF8_memclearOff(p, i)
 	if err != nil {
-		rw.err = err
-		return rw
+		rw.abort(err)
+		return
 	}
 
 	rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
-
-	return rw
 }
 
-func (rw *RecordWriter) string_memclearOff(s string, bitFlags wFlag) *RecordWriter {
-	if !rw.preflightCheck_memclearOff() {
-		return rw
-	}
-
-	if (bitFlags & wFlagErrOnNonUTF8) == 0 {
+func (rw *RecordWriter) string_memclearOff(s string, disableUTF8Check bool) {
+	if disableUTF8Check || (rw.bitFlags&wFlagErrOnNonUTF8) == 0 {
 		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
 		var i int
-		if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+		if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !strings.HasPrefix(s, string(rw.w.comment)) {
 			i = rw.w.controlRuneSet.indexAnyInString(s)
 			if i == -1 {
 				rw.recordBuf = append(rw.recordBuf, s...)
-				return rw
+				return
 			}
 		}
 
@@ -4418,7 +4414,7 @@ func (rw *RecordWriter) string_memclearOff(s string, bitFlags wFlag) *RecordWrit
 
 		rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
 
-		return rw
+		return
 	}
 
 	// for each decoded rune, check if that rune fails to decode and if so then return an error
@@ -4426,11 +4422,11 @@ func (rw *RecordWriter) string_memclearOff(s string, bitFlags wFlag) *RecordWrit
 	// continue loading
 
 	var i int
-	if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+	if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !strings.HasPrefix(s, string(rw.w.comment)) {
 		for {
 			if i >= len(s) {
 				rw.recordBuf = append(rw.recordBuf, s...)
-				return rw
+				return
 			}
 
 			b := s[i]
@@ -4440,8 +4436,8 @@ func (rw *RecordWriter) string_memclearOff(s string, bitFlags wFlag) *RecordWrit
 					continue
 				}
 			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
-				rw.err = ErrNonUTF8InRecord
-				return rw
+				rw.abort(ErrNonUTF8InRecord)
+				return
 			} else if !rw.w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
@@ -4459,98 +4455,70 @@ func (rw *RecordWriter) string_memclearOff(s string, bitFlags wFlag) *RecordWrit
 
 	err := rw.loadStrQFWithCheckUTF8_memclearOff(s, i)
 	if err != nil {
-		rw.err = err
-		return rw
+		rw.abort(err)
+		return
 	}
 
 	rw.recordBuf = rw.w.quoteSeq.appendText(rw.recordBuf)
-
-	return rw
 }
 
-func (rw *RecordWriter) int64_memclearOff(i int64) *RecordWriter {
-	if !rw.preflightCheck_memclearOff() {
-		return rw
-	}
-
+func (rw *RecordWriter) int64_memclearOff(i int64) {
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
 		rw.recordBuf = strconv.AppendInt(rw.recordBuf, i, 10)
-		return rw
+		return
 	}
 
 	rw.unsafeAppendUTF8FieldBytes_memclearOff(strconv.AppendInt(rw.w.fieldWriterBuf[:0], i, 10))
-	return rw
 }
 
-func (rw *RecordWriter) uint64_memclearOff(i uint64) *RecordWriter {
-	if !rw.preflightCheck_memclearOff() {
-		return rw
-	}
-
+func (rw *RecordWriter) uint64_memclearOff(i uint64) {
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
 		rw.recordBuf = strconv.AppendUint(rw.recordBuf, i, 10)
-		return rw
+		return
 	}
 
 	rw.unsafeAppendUTF8FieldBytes_memclearOff(strconv.AppendUint(rw.w.fieldWriterBuf[:0], i, 10))
-	return rw
 }
 
-func (rw *RecordWriter) time_memclearOff(t time.Time) *RecordWriter {
-	if !rw.preflightCheck_memclearOff() {
-		return rw
-	}
-
+func (rw *RecordWriter) time_memclearOff(t time.Time) {
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
 		rw.recordBuf = t.AppendFormat(rw.recordBuf, time.RFC3339Nano)
-		return rw
+		return
 	}
 
 	rw.unsafeAppendUTF8FieldBytes_memclearOff(t.AppendFormat(rw.w.fieldWriterBuf[:0], time.RFC3339Nano))
-	return rw
 }
 
-func (rw *RecordWriter) bool_memclearOff(b bool) *RecordWriter {
-	if !rw.preflightCheck_memclearOff() {
-		return rw
-	}
+func (rw *RecordWriter) bool_memclearOff(b bool) {
 
 	v := byte('0')
 	if b {
 		v += 1
 	}
+
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
 		rw.recordBuf = append(rw.recordBuf, v)
-	} else {
-		rw.w.fieldWriterBuf[0] = v
-		rw.unsafeAppendUTF8FieldBytes_memclearOff(rw.w.fieldWriterBuf[:1])
+		return
 	}
 
-	return rw
+	rw.w.fieldWriterBuf[0] = v
+	rw.unsafeAppendUTF8FieldBytes_memclearOff(rw.w.fieldWriterBuf[:1])
 }
 
-func (rw *RecordWriter) float64_memclearOff(f float64) *RecordWriter {
-	if !rw.preflightCheck_memclearOff() {
-		return rw
-	}
+func (rw *RecordWriter) float64_memclearOff(f float64) {
 
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
 		rw.recordBuf = strconv.AppendFloat(rw.recordBuf, f, 'g', -1, 64)
-	} else {
-		rw.unsafeAppendUTF8FieldBytes_memclearOff(strconv.AppendFloat(rw.w.fieldWriterBuf[:0], f, 'g', -1, 64))
+		return
 	}
 
-	return rw
+	rw.unsafeAppendUTF8FieldBytes_memclearOff(strconv.AppendFloat(rw.w.fieldWriterBuf[:0], f, 'g', -1, 64))
 }
 
-func (rw *RecordWriter) rune_withCheckUTF8_memclearOff(r rune) *RecordWriter {
-	if !rw.preflightCheck_memclearOff() {
-		return rw
-	}
-
+func (rw *RecordWriter) rune_withCheckUTF8_memclearOff(r rune) {
 	if !utf8.ValidRune(r) {
-		rw.err = ErrInvalidRune
-		return rw
+		rw.abort(ErrInvalidRune)
+		return
 	}
 
 	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
@@ -4564,18 +4532,13 @@ func (rw *RecordWriter) rune_withCheckUTF8_memclearOff(r rune) *RecordWriter {
 	}
 
 	rw.unsafeAppendUTF8FieldBytes_memclearOff(utf8.AppendRune(rw.w.fieldWriterBuf[:0], r))
-	return rw
+	return
 
 SIMPLE_APPEND:
 	rw.recordBuf = utf8.AppendRune(rw.recordBuf, r)
-	return rw
 }
 
-func (rw *RecordWriter) rune_memclearOff(r rune) *RecordWriter {
-	if !rw.preflightCheck_memclearOff() {
-		return rw
-	}
-
+func (rw *RecordWriter) rune_memclearOff(r rune) {
 	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
 		if r < utf8.RuneSelf {
 			if !rw.w.controlRuneSet.containsSingleByteRune(byte(r)) {
@@ -4587,11 +4550,10 @@ func (rw *RecordWriter) rune_memclearOff(r rune) *RecordWriter {
 	}
 
 	rw.unsafeAppendUTF8FieldBytes_memclearOff(utf8.AppendRune(rw.w.fieldWriterBuf[:0], r))
-	return rw
+	return
 
 SIMPLE_APPEND:
 	rw.recordBuf = utf8.AppendRune(rw.recordBuf, r)
-	return rw
 }
 
 func (rw *RecordWriter) write_memclearOff() (int, error) {
@@ -4602,17 +4564,18 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 	switch rw.nextField {
 	case 0:
 		if err := rw.w.err; err != nil {
+			rw.abort(err)
 			return 0, err
 		}
 		err := ErrRowNilOrEmpty
-		rw.err = err
+		rw.abort(err)
 		return 0, err
 	case 1:
 		if numFields := rw.numFields; numFields == -1 {
 			rw.w.numFields = 1
 		} else if numFields != 1 {
 			err := ErrInvalidFieldCountInRecord
-			rw.err = err
+			rw.abort(err)
 			return 0, err
 		}
 		if len(rw.recordBuf) == 0 {
@@ -4623,7 +4586,7 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 			rw.w.numFields = rw.nextField
 		} else if numFields != rw.nextField {
 			err := ErrInvalidFieldCountInRecord
-			rw.err = err
+			rw.abort(err)
 			return 0, err
 		}
 	}
@@ -4647,50 +4610,57 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 			clear(rw.w.recordBuf[:cap(rw.w.recordBuf)])
 		}
 		err := ErrWriterClosed
-		rw.err = err
+		rw.abort(err)
 		return 0, err
 	}
 
 	n, err := rw.w.writer.Write(rw.w.recordBuf)
 	if err != nil {
 		err = writeIOErr{err}
-		rw.err = err
 		if rw.w.err == nil {
 			rw.w.setErr(err)
 		}
+		rw.abort(err)
+	} else {
+		rw.err = ErrRecordWritten
 	}
 	return n, err
 }
 
 func (rw *RecordWriter) preflightCheck_memclearOn() bool {
 	if rw.err != nil {
+		if rw.err == ErrRecordWritten {
+			rw.err = ErrRecordWriterClosed
+		}
 		return false
 	}
 
 	if err := rw.w.err; err != nil {
-		rw.err = err
+		rw.abort(err)
 		return false
 	}
 
-	if rw.nextField != 0 {
-		rw.setRecordBuf(rw.w.fieldSepSeq.appendText(rw.recordBuf))
-	} else {
-		if (rw.bitFlags & wFlagClosed) != 0 {
-			panic("must not reuse record references after they are written or aborted")
-		}
+	switch rw.nextField {
+	case 0:
 		rw.bitFlags = rw.w.bitFlags
+		if (rw.bitFlags & wFlagClosed) != 0 {
+			rw.bitFlags &= (^wFlagClosed)
+			rw.abort(ErrWriterClosed)
+			return false
+		}
 		rw.numFields = rw.w.numFields
 		rw.recordBuf = rw.recordBuf[:0]
 		if rw.w.comment != invalidControlRune && (rw.bitFlags&wFlagFirstRecordWritten) == 0 {
 			rw.bitFlags |= wFlagForceQuoteFirstField
 		}
+	case 1:
+		rw.bitFlags &= (^wFlagForceQuoteFirstField)
+		fallthrough
+	default:
+		rw.setRecordBuf(rw.w.fieldSepSeq.appendText(rw.recordBuf))
 	}
 
-	nextField := rw.nextField + 1
-	if nextField <= 0 {
-		panic("too many fields: integer overflow")
-	}
-	rw.nextField = nextField
+	rw.incrementNextField()
 
 	return true
 }
@@ -4712,20 +4682,16 @@ func (rw *RecordWriter) unsafeAppendUTF8FieldBytes_memclearOn(p []byte) {
 	rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
 }
 
-func (rw *RecordWriter) bytes_memclearOn(p []byte, bitFlags wFlag) *RecordWriter {
-	if !rw.preflightCheck_memclearOn() {
-		return rw
-	}
-
-	if (bitFlags & wFlagErrOnNonUTF8) == 0 {
+func (rw *RecordWriter) bytes_memclearOn(p []byte, disableUTF8Check bool) {
+	if disableUTF8Check || (rw.bitFlags&wFlagErrOnNonUTF8) == 0 {
 		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
 		var i int
-		if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+		if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !bytes.HasPrefix(p, []byte(string(rw.w.comment))) {
 			i = rw.w.controlRuneSet.indexAnyInBytes(p)
 			if i == -1 {
 				rw.appendRec(p)
-				return rw
+				return
 			}
 		}
 
@@ -4735,7 +4701,7 @@ func (rw *RecordWriter) bytes_memclearOn(p []byte, bitFlags wFlag) *RecordWriter
 
 		rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
 
-		return rw
+		return
 	}
 
 	// for each decoded rune, check if that rune fails to decode and if so then return an error
@@ -4743,11 +4709,11 @@ func (rw *RecordWriter) bytes_memclearOn(p []byte, bitFlags wFlag) *RecordWriter
 	// continue loading
 
 	var i int
-	if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+	if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !bytes.HasPrefix(p, []byte(string(rw.w.comment))) {
 		for {
 			if i >= len(p) {
 				rw.appendRec(p)
-				return rw
+				return
 			}
 
 			b := p[i]
@@ -4757,8 +4723,8 @@ func (rw *RecordWriter) bytes_memclearOn(p []byte, bitFlags wFlag) *RecordWriter
 					continue
 				}
 			} else if r, n := utf8.DecodeRune(p[i:]); n == 1 {
-				rw.err = ErrNonUTF8InRecord
-				return rw
+				rw.abort(ErrNonUTF8InRecord)
+				return
 			} else if !rw.w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
@@ -4776,29 +4742,23 @@ func (rw *RecordWriter) bytes_memclearOn(p []byte, bitFlags wFlag) *RecordWriter
 
 	err := rw.loadQFWithCheckUTF8_memclearOn(p, i)
 	if err != nil {
-		rw.err = err
-		return rw
+		rw.abort(err)
+		return
 	}
 
 	rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
-
-	return rw
 }
 
-func (rw *RecordWriter) string_memclearOn(s string, bitFlags wFlag) *RecordWriter {
-	if !rw.preflightCheck_memclearOn() {
-		return rw
-	}
-
-	if (bitFlags & wFlagErrOnNonUTF8) == 0 {
+func (rw *RecordWriter) string_memclearOn(s string, disableUTF8Check bool) {
+	if disableUTF8Check || (rw.bitFlags&wFlagErrOnNonUTF8) == 0 {
 		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
 
 		var i int
-		if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+		if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !strings.HasPrefix(s, string(rw.w.comment)) {
 			i = rw.w.controlRuneSet.indexAnyInString(s)
 			if i == -1 {
 				rw.appendStrRec(s)
-				return rw
+				return
 			}
 		}
 
@@ -4808,7 +4768,7 @@ func (rw *RecordWriter) string_memclearOn(s string, bitFlags wFlag) *RecordWrite
 
 		rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
 
-		return rw
+		return
 	}
 
 	// for each decoded rune, check if that rune fails to decode and if so then return an error
@@ -4816,11 +4776,11 @@ func (rw *RecordWriter) string_memclearOn(s string, bitFlags wFlag) *RecordWrite
 	// continue loading
 
 	var i int
-	if (bitFlags & wFlagForceQuoteFirstField) == 0 {
+	if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !strings.HasPrefix(s, string(rw.w.comment)) {
 		for {
 			if i >= len(s) {
 				rw.appendStrRec(s)
-				return rw
+				return
 			}
 
 			b := s[i]
@@ -4830,8 +4790,8 @@ func (rw *RecordWriter) string_memclearOn(s string, bitFlags wFlag) *RecordWrite
 					continue
 				}
 			} else if r, n := utf8.DecodeRuneInString(s[i:]); n == 1 {
-				rw.err = ErrNonUTF8InRecord
-				return rw
+				rw.abort(ErrNonUTF8InRecord)
+				return
 			} else if !rw.w.controlRuneSet.containsMBRune(r) {
 				i += n
 				continue
@@ -4849,98 +4809,70 @@ func (rw *RecordWriter) string_memclearOn(s string, bitFlags wFlag) *RecordWrite
 
 	err := rw.loadStrQFWithCheckUTF8_memclearOn(s, i)
 	if err != nil {
-		rw.err = err
-		return rw
+		rw.abort(err)
+		return
 	}
 
 	rw.setRecordBuf(rw.w.quoteSeq.appendText(rw.recordBuf))
-
-	return rw
 }
 
-func (rw *RecordWriter) int64_memclearOn(i int64) *RecordWriter {
-	if !rw.preflightCheck_memclearOn() {
-		return rw
-	}
-
+func (rw *RecordWriter) int64_memclearOn(i int64) {
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
 		rw.setRecordBuf(strconv.AppendInt(rw.recordBuf, i, 10))
-		return rw
+		return
 	}
 
 	rw.unsafeAppendUTF8FieldBytes_memclearOn(strconv.AppendInt(rw.w.fieldWriterBuf[:0], i, 10))
-	return rw
 }
 
-func (rw *RecordWriter) uint64_memclearOn(i uint64) *RecordWriter {
-	if !rw.preflightCheck_memclearOn() {
-		return rw
-	}
-
+func (rw *RecordWriter) uint64_memclearOn(i uint64) {
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
 		rw.setRecordBuf(strconv.AppendUint(rw.recordBuf, i, 10))
-		return rw
+		return
 	}
 
 	rw.unsafeAppendUTF8FieldBytes_memclearOn(strconv.AppendUint(rw.w.fieldWriterBuf[:0], i, 10))
-	return rw
 }
 
-func (rw *RecordWriter) time_memclearOn(t time.Time) *RecordWriter {
-	if !rw.preflightCheck_memclearOn() {
-		return rw
-	}
-
+func (rw *RecordWriter) time_memclearOn(t time.Time) {
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
 		rw.setRecordBuf(t.AppendFormat(rw.recordBuf, time.RFC3339Nano))
-		return rw
+		return
 	}
 
 	rw.unsafeAppendUTF8FieldBytes_memclearOn(t.AppendFormat(rw.w.fieldWriterBuf[:0], time.RFC3339Nano))
-	return rw
 }
 
-func (rw *RecordWriter) bool_memclearOn(b bool) *RecordWriter {
-	if !rw.preflightCheck_memclearOn() {
-		return rw
-	}
+func (rw *RecordWriter) bool_memclearOn(b bool) {
 
 	v := byte('0')
 	if b {
 		v += 1
 	}
+
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
 		rw.setRecordBuf(append(rw.recordBuf, v))
-	} else {
-		rw.w.fieldWriterBuf[0] = v
-		rw.unsafeAppendUTF8FieldBytes_memclearOn(rw.w.fieldWriterBuf[:1])
+		return
 	}
 
-	return rw
+	rw.w.fieldWriterBuf[0] = v
+	rw.unsafeAppendUTF8FieldBytes_memclearOn(rw.w.fieldWriterBuf[:1])
 }
 
-func (rw *RecordWriter) float64_memclearOn(f float64) *RecordWriter {
-	if !rw.preflightCheck_memclearOn() {
-		return rw
-	}
+func (rw *RecordWriter) float64_memclearOn(f float64) {
 
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
 		rw.setRecordBuf(strconv.AppendFloat(rw.recordBuf, f, 'g', -1, 64))
-	} else {
-		rw.unsafeAppendUTF8FieldBytes_memclearOn(strconv.AppendFloat(rw.w.fieldWriterBuf[:0], f, 'g', -1, 64))
+		return
 	}
 
-	return rw
+	rw.unsafeAppendUTF8FieldBytes_memclearOn(strconv.AppendFloat(rw.w.fieldWriterBuf[:0], f, 'g', -1, 64))
 }
 
-func (rw *RecordWriter) rune_withCheckUTF8_memclearOn(r rune) *RecordWriter {
-	if !rw.preflightCheck_memclearOn() {
-		return rw
-	}
-
+func (rw *RecordWriter) rune_withCheckUTF8_memclearOn(r rune) {
 	if !utf8.ValidRune(r) {
-		rw.err = ErrInvalidRune
-		return rw
+		rw.abort(ErrInvalidRune)
+		return
 	}
 
 	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
@@ -4954,18 +4886,13 @@ func (rw *RecordWriter) rune_withCheckUTF8_memclearOn(r rune) *RecordWriter {
 	}
 
 	rw.unsafeAppendUTF8FieldBytes_memclearOn(utf8.AppendRune(rw.w.fieldWriterBuf[:0], r))
-	return rw
+	return
 
 SIMPLE_APPEND:
 	rw.setRecordBuf(utf8.AppendRune(rw.recordBuf, r))
-	return rw
 }
 
-func (rw *RecordWriter) rune_memclearOn(r rune) *RecordWriter {
-	if !rw.preflightCheck_memclearOn() {
-		return rw
-	}
-
+func (rw *RecordWriter) rune_memclearOn(r rune) {
 	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
 		if r < utf8.RuneSelf {
 			if !rw.w.controlRuneSet.containsSingleByteRune(byte(r)) {
@@ -4977,11 +4904,10 @@ func (rw *RecordWriter) rune_memclearOn(r rune) *RecordWriter {
 	}
 
 	rw.unsafeAppendUTF8FieldBytes_memclearOn(utf8.AppendRune(rw.w.fieldWriterBuf[:0], r))
-	return rw
+	return
 
 SIMPLE_APPEND:
 	rw.setRecordBuf(utf8.AppendRune(rw.recordBuf, r))
-	return rw
 }
 
 func (rw *RecordWriter) write_memclearOn() (int, error) {
@@ -4992,17 +4918,18 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 	switch rw.nextField {
 	case 0:
 		if err := rw.w.err; err != nil {
+			rw.abort(err)
 			return 0, err
 		}
 		err := ErrRowNilOrEmpty
-		rw.err = err
+		rw.abort(err)
 		return 0, err
 	case 1:
 		if numFields := rw.numFields; numFields == -1 {
 			rw.w.numFields = 1
 		} else if numFields != 1 {
 			err := ErrInvalidFieldCountInRecord
-			rw.err = err
+			rw.abort(err)
 			return 0, err
 		}
 		if len(rw.recordBuf) == 0 {
@@ -5013,7 +4940,7 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 			rw.w.numFields = rw.nextField
 		} else if numFields != rw.nextField {
 			err := ErrInvalidFieldCountInRecord
-			rw.err = err
+			rw.abort(err)
 			return 0, err
 		}
 	}
@@ -5037,17 +4964,19 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 			clear(rw.w.recordBuf[:cap(rw.w.recordBuf)])
 		}
 		err := ErrWriterClosed
-		rw.err = err
+		rw.abort(err)
 		return 0, err
 	}
 
 	n, err := rw.w.writer.Write(rw.w.recordBuf)
 	if err != nil {
 		err = writeIOErr{err}
-		rw.err = err
 		if rw.w.err == nil {
 			rw.w.setErr(err)
 		}
+		rw.abort(err)
+	} else {
+		rw.err = ErrRecordWritten
 	}
 	return n, err
 }

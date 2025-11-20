@@ -52,6 +52,28 @@ type functionalWriterTestCase struct {
 	wh                        bool
 	hasNewWriterErr           bool
 	hasWHeaderErr             bool
+	useRecordWriter           bool
+	useRecordWriterBytes      bool
+}
+
+func (tc *functionalWriterTestCase) clone() *functionalWriterTestCase {
+	ctc := *tc
+
+	ctc.newOpts = slices.Clone(tc.newOpts)
+	ctc.whOpts = slices.Clone(tc.whOpts)
+	ctc.newWriterErrAs = slices.Clone(tc.newWriterErrAs)
+	ctc.newWriterErrAsNot = slices.Clone(tc.newWriterErrAsNot)
+	ctc.newWriterErrIs = slices.Clone(tc.newWriterErrIs)
+	ctc.newWriterErrIsNot = slices.Clone(tc.newWriterErrIsNot)
+	ctc.newWriterErrStrMsgAndArgs = slices.Clone(tc.newWriterErrStrMsgAndArgs)
+	ctc.whErrAs = slices.Clone(tc.whErrAs)
+	ctc.whErrAsNot = slices.Clone(tc.whErrAsNot)
+	ctc.whErrIs = slices.Clone(tc.whErrIs)
+	ctc.whErrIsNot = slices.Clone(tc.whErrIsNot)
+	ctc.whErrStrMsgAndArgs = slices.Clone(tc.whErrStrMsgAndArgs)
+	ctc.wrs = slices.Clone(tc.wrs)
+
+	return &ctc
 }
 
 func (tc *functionalWriterTestCase) Run(t *testing.T) {
@@ -59,18 +81,18 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 	t.Helper()
 
 	f := func(options ...func(*functionalWriterTestCase)) func(t *testing.T) {
-		tc_copy := *tc
+		tc := tc.clone()
+
 		for _, f := range options {
-			f(&tc_copy)
+			f(tc)
 		}
-		if f := tc_copy.selfInit; f != nil {
-			f(&tc_copy)
+		if f := tc.selfInit; f != nil {
+			f(tc)
 		}
 
 		return func(t *testing.T) {
 			t.Helper()
 
-			tc := &tc_copy
 			is := assert.New(t)
 			var errWriterInIOErrState error
 			var buf bytes.Buffer
@@ -216,7 +238,41 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 			for _, v := range tc.wrs {
 				var n int
 				var err error
-				if v.fwr == nil {
+				if tc.useRecordWriter {
+					if v.fwr != nil {
+						t.Fatal("record writer requires record slices to write be specified using r => []string")
+					}
+
+					rw := cw.NewRecord()
+
+					if rw.Err() == nil {
+						if tc.useRecordWriterBytes {
+							for _, v := range v.r {
+								v := []byte(v)
+
+								// if the string is empty, then randomly use either nil or empty slice
+								// we should work with both in any case
+								if len(v) == 0 && rand.IntN(2) == 0 {
+									v = nil
+								}
+
+								rw.Bytes(v)
+								if rw.Err() != nil {
+									break
+								}
+							}
+						} else {
+							for _, v := range v.r {
+								rw.String(v)
+								if rw.Err() != nil {
+									break
+								}
+							}
+						}
+					}
+
+					n, err = rw.Write()
+				} else if v.fwr == nil {
 					n, err = cw.WriteRow(v.r...)
 				} else {
 					if v.r != nil {
@@ -345,8 +401,7 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 		t.Helper()
 
 		t.Run(name, f(func(tc *functionalWriterTestCase) {
-			v := slices.Clone(tc.newOpts)
-			tc.newOpts = append(v, csv.WriterOpts().ClearFreedDataMemory(true))
+			tc.newOpts = append(tc.newOpts, csv.WriterOpts().ClearFreedDataMemory(true))
 		}))
 	})
 
@@ -394,8 +449,46 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 					}
 				}
 
-				v := slices.Clone(tc.newOpts)
-				tc.newOpts = append(v, csv.WriterOpts().ClearFreedDataMemory(true))
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().ClearFreedDataMemory(true))
+			}))
+		})
+	}
+
+	if canConvertStrWriteToFluentWrite(tc) {
+
+		t.Run("when str2fluent+ and "+tc.when, func(t *testing.T) {
+			t.Helper()
+
+			t.Run(name, f(func(tc *functionalWriterTestCase) {
+				tc.useRecordWriter = true
+			}))
+		})
+
+		t.Run("when str2fluent+ clearmem+ and "+tc.when, func(t *testing.T) {
+			t.Helper()
+
+			t.Run(name, f(func(tc *functionalWriterTestCase) {
+				tc.useRecordWriter = true
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().ClearFreedDataMemory(true))
+			}))
+		})
+
+		t.Run("when str2fluentBytes+ and "+tc.when, func(t *testing.T) {
+			t.Helper()
+
+			t.Run(name, f(func(tc *functionalWriterTestCase) {
+				tc.useRecordWriter = true
+				tc.useRecordWriterBytes = true
+			}))
+		})
+
+		t.Run("when str2fluentBytes+ clearmem+ and "+tc.when, func(t *testing.T) {
+			t.Helper()
+
+			t.Run(name, f(func(tc *functionalWriterTestCase) {
+				tc.useRecordWriter = true
+				tc.useRecordWriterBytes = true
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().ClearFreedDataMemory(true))
 			}))
 		})
 	}
@@ -406,6 +499,16 @@ func canConvertStrWriteToFieldWrite(tc *functionalWriterTestCase) bool {
 		return false
 	}
 
+	for i := range tc.wrs {
+		if tc.wrs[i].fwr != nil {
+			return false
+		}
+	}
+
+	return true
+}
+
+func canConvertStrWriteToFluentWrite(tc *functionalWriterTestCase) bool {
 	for i := range tc.wrs {
 		if tc.wrs[i].fwr != nil {
 			return false
