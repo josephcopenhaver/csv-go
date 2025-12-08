@@ -15,13 +15,13 @@ func (rw *RecordWriter) preflightCheck_memclearO{{$memClear}}() bool {
 		return false
 	}
 
-	if err := rw.w.err; err != nil {
-		rw.abort(err)
-		return false
-	}
-
 	switch rw.nextField {
 	case 0:
+		if err := rw.w.err; err != nil {
+			rw.abort(err)
+			return false
+		}
+
 		rw.bitFlags = rw.w.bitFlags
 		if (rw.bitFlags&wFlagClosed) != 0 {
 			rw.bitFlags &= (^wFlagClosed)

@@ -4281,13 +4281,13 @@ func (rw *RecordWriter) preflightCheck_memclearOff() bool {
 		return false
 	}
 
-	if err := rw.w.err; err != nil {
-		rw.abort(err)
-		return false
-	}
-
 	switch rw.nextField {
 	case 0:
+		if err := rw.w.err; err != nil {
+			rw.abort(err)
+			return false
+		}
+
 		rw.bitFlags = rw.w.bitFlags
 		if (rw.bitFlags & wFlagClosed) != 0 {
 			rw.bitFlags &= (^wFlagClosed)
@@ -4628,13 +4628,13 @@ func (rw *RecordWriter) preflightCheck_memclearOn() bool {
 		return false
 	}
 
-	if err := rw.w.err; err != nil {
-		rw.abort(err)
-		return false
-	}
-
 	switch rw.nextField {
 	case 0:
+		if err := rw.w.err; err != nil {
+			rw.abort(err)
+			return false
+		}
+
 		rw.bitFlags = rw.w.bitFlags
 		if (rw.bitFlags & wFlagClosed) != 0 {
 			rw.bitFlags &= (^wFlagClosed)
