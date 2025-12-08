@@ -98,14 +98,8 @@ func (rw *RecordWriter) abort(err error) {
 		return
 	}
 
-	rw.w.recordBuf, recordBuf = recordBuf, rw.w.recordBuf
+	rw.w.recordBuf = recordBuf
 	rw.w.bitFlags &= (^wFlagRecordBuffCheckedOut)
-	if recordBuf != nil {
-		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
-			clear(recordBuf)
-		}
-		panic("invalid concurrent access detected during record writer rollback")
-	}
 }
 
 func (rw *RecordWriter) Rollback() {

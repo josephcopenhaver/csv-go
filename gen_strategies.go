@@ -4595,15 +4595,8 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 	rw.recordBuf = nil
 	rw.nextField = 0
 	rw.bitFlags |= wFlagClosed
-	rw.w.recordBuf, recordBuf = recordBuf, rw.w.recordBuf
+	rw.w.recordBuf = recordBuf
 	rw.w.bitFlags = (rw.w.bitFlags & (^wFlagRecordBuffCheckedOut)) | wFlagFirstRecordWritten
-
-	if recordBuf != nil {
-		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
-			clear(recordBuf)
-		}
-		panic("invalid concurrent access detected during write")
-	}
 
 	if (rw.w.bitFlags & wFlagClosed) != 0 {
 		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
@@ -4949,15 +4942,8 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 	rw.recordBuf = nil
 	rw.nextField = 0
 	rw.bitFlags |= wFlagClosed
-	rw.w.recordBuf, recordBuf = recordBuf, rw.w.recordBuf
+	rw.w.recordBuf = recordBuf
 	rw.w.bitFlags = (rw.w.bitFlags & (^wFlagRecordBuffCheckedOut)) | wFlagFirstRecordWritten
-
-	if recordBuf != nil {
-		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
-			clear(recordBuf)
-		}
-		panic("invalid concurrent access detected during write")
-	}
 
 	if (rw.w.bitFlags & wFlagClosed) != 0 {
 		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
