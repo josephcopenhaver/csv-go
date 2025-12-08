@@ -89,7 +89,7 @@ func BenchmarkWritePostInitSmallNegInts(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	fw := csv.FieldWriters()
 
@@ -120,7 +120,7 @@ func BenchmarkWritePostInitLargeNegInts(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	fw := csv.FieldWriters()
 
@@ -152,7 +152,7 @@ func BenchmarkWritePostInitStrings(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	runtime.GC()
 	b.ResetTimer()
@@ -182,7 +182,7 @@ func BenchmarkWritePostInitFieldWriterStrings(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	runtime.GC()
 	b.ResetTimer()
@@ -212,7 +212,7 @@ func BenchmarkWritePostInitFieldWriterAllTypes(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 	now := time.Now()
 
 	fwf := csv.FieldWriters()
@@ -224,7 +224,7 @@ func BenchmarkWritePostInitFieldWriterAllTypes(b *testing.B) {
 			fwf.String("-1"),
 			fwf.Int(-1),
 			fwf.Bool(true),
-			fwf.Bytes([]byte{'a'}),
+			fwf.Bytes([]byte{'a'}), // NOTE: this Bytes writer type leads to allocations - to avoid them entirely switch to using NewRecord() and the returned *RecordWriter.
 			fwf.Duration(time.Second),
 			fwf.Float64(0.0123),
 			fwf.Int64(-1),
@@ -253,7 +253,7 @@ func BenchmarkWritePostInitRecordWriterStrings(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	runtime.GC()
 	b.ResetTimer()
@@ -283,7 +283,7 @@ func BenchmarkWritePostInitRecordWriterAllTypes(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 	now := time.Now()
 
 	runtime.GC()
@@ -293,7 +293,7 @@ func BenchmarkWritePostInitRecordWriterAllTypes(b *testing.B) {
 			String("-1").
 			Int(-1).
 			Bool(true).
-			Bytes([]byte{'a'}). // NOTE: this Bytes writer type leads to allocations - to avoid them entirely switch to using NewRecord() and the returned *RecordWriter.
+			Bytes([]byte{'a'}).
 			Duration(time.Second).
 			Float64(0.0123).
 			Int64(-1).
@@ -346,7 +346,7 @@ func BenchmarkWritePostInitWideStringsWithEncValidation(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	runtime.GC()
 	b.ResetTimer()
@@ -376,7 +376,7 @@ func BenchmarkWritePostInitWideStringsWithoutEncValidation(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	runtime.GC()
 	b.ResetTimer()
@@ -408,7 +408,7 @@ func BenchmarkWriteWithSliceExpansion(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	fw := csv.FieldWriters()
 
@@ -439,7 +439,7 @@ func BenchmarkWriteWithSliceBorrowed(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	fw := csv.FieldWriters()
 	row := []csv.FieldWriter{
@@ -470,7 +470,7 @@ func BenchmarkWriteWithQuotes(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	fw := csv.FieldWriters()
 

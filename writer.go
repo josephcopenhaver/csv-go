@@ -24,6 +24,7 @@ var (
 	ErrHeaderWritten             = errors.New("header already written")
 	ErrInvalidFieldCountInRecord = errors.New("invalid field count in record")
 	ErrInvalidRune               = errors.New("invalid rune")
+	ErrWriterNotReady            = errors.New("writer is currently in use elsewhere")
 )
 
 type wFlag uint8
@@ -928,10 +929,20 @@ func (w *Writer) WriteFieldRowBorrowed(row []FieldWriter) (int, error) {
 	return w.writeRow(row)
 }
 
-func (w *Writer) writeRowPreflightCheck(n int) (_err error) {
+func (w *Writer) writeRowPreflightCheck(n int) error {
 	// check if prior iterations left the writer in an errored state
 	if err := w.err; err != nil {
 		return err
+	}
+
+	// check if the record buffer is checked out
+	if (w.bitFlags & wFlagRecordBuffCheckedOut) != 0 {
+
+		// a row write was attempted so even on the error path we
+		// must not allow another write header attempt in any way
+		w.bitFlags |= wFlagHeaderWritten
+
+		return ErrWriterNotReady
 	}
 
 	// check if the number of fields to write is zero

@@ -4306,7 +4306,7 @@ func (rw *RecordWriter) preflightCheck_memclearOff() bool {
 		rw.recordBuf = rw.w.fieldSepSeq.appendText(rw.recordBuf)
 	}
 
-	rw.incrementNextField()
+	rw.nextField++
 
 	return true
 }
@@ -4600,7 +4600,7 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 
 	if recordBuf != nil {
 		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
-			clear(recordBuf[:cap(recordBuf)])
+			clear(recordBuf)
 		}
 		panic("invalid concurrent access detected during write")
 	}
@@ -4660,7 +4660,7 @@ func (rw *RecordWriter) preflightCheck_memclearOn() bool {
 		rw.setRecordBuf(rw.w.fieldSepSeq.appendText(rw.recordBuf))
 	}
 
-	rw.incrementNextField()
+	rw.nextField++
 
 	return true
 }
@@ -4954,7 +4954,7 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 
 	if recordBuf != nil {
 		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
-			clear(recordBuf[:cap(recordBuf)])
+			clear(recordBuf)
 		}
 		panic("invalid concurrent access detected during write")
 	}

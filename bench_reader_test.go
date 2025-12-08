@@ -59,7 +59,7 @@ func BenchmarkReadPostInit256Rows(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 		b.StartTimer()
 
 		for cr.Scan() {
@@ -119,7 +119,7 @@ func BenchmarkReadPostInit256RowsBorrowRow(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 		b.StartTimer()
 
 		for cr.Scan() {
@@ -153,7 +153,7 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFields(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 		b.StartTimer()
 
 		for cr.Scan() {
@@ -189,7 +189,7 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBuf(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 		b.StartTimer()
 
 		for cr.Scan() {
@@ -225,7 +225,7 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsRecBuf(b *testing.B) {
 		if err != nil {
 			panic(err)
 		}
-		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 		b.StartTimer()
 
 		for cr.Scan() {
@@ -263,7 +263,7 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBufRecBuf(b *testing.B
 		if err != nil {
 			panic(err)
 		}
-		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 		b.StartTimer()
 
 		for cr.Scan() {
@@ -302,7 +302,7 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsReadBufRecBufNumFields(b *
 		if err != nil {
 			panic(err)
 		}
-		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 		b.StartTimer()
 
 		for cr.Scan() {
@@ -339,7 +339,7 @@ func BenchmarkReadPostInit256RowsBorrowRowBorrowFieldsRecBufNumFields(b *testing
 		if err != nil {
 			panic(err)
 		}
-		// defer cr.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+		// defer cr.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 		b.StartTimer()
 
 		for cr.Scan() {

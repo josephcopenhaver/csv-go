@@ -40,7 +40,7 @@ func (rw *RecordWriter) preflightCheck_memclearO{{$memClear}}() bool {
 		{{$setRec0}}rw.w.fieldSepSeq.appendText(rw.recordBuf){{$setRec1}}
 	}
 
-	rw.incrementNextField()
+	rw.nextField++
 
 	return true
 }
@@ -290,7 +290,7 @@ func (rw *RecordWriter) write_memclearO{{$memClear}}() (int, error) {
 
 	if recordBuf != nil {
 		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
-			clear(recordBuf[:cap(recordBuf)])
+			clear(recordBuf)
 		}
 		panic("invalid concurrent access detected during write")
 	}
