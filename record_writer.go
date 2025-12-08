@@ -45,13 +45,16 @@ func (w *Writer) NewRecord() *RecordWriter {
 	err := w.err
 	bitFlags := w.bitFlags
 
-	if (bitFlags & wFlagForceQuoteFirstField) != 0 {
-		panic("improper concurrent access detected on record creation")
+	if (bitFlags & (wFlagForceQuoteFirstField | wFlagRecordBuffCheckedOut)) != 0 {
+		// a pure write lifecycle flag which cannot be set outside of
+		// a write context was set
+		panic("invalid concurrent access detected on record creation")
 	}
 
 	if err == nil && (bitFlags&wFlagClosed) == 0 {
 		wb = w.writeBuffer
 		w.recordBuf = nil
+		w.bitFlags |= wFlagRecordBuffCheckedOut
 	} else {
 		if err == nil {
 			err = ErrWriterClosed
@@ -88,8 +91,8 @@ func (rw *RecordWriter) abort(err error) {
 		return
 	}
 	rw.bitFlags |= wFlagClosed
-
 	recordBuf := rw.recordBuf
+
 	if recordBuf == nil {
 		return
 	}
@@ -107,7 +110,7 @@ func (rw *RecordWriter) abort(err error) {
 		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
 			clear(recordBuf[:cap(recordBuf)])
 		}
-		panic("improper concurrent access detected during record writer rollback")
+		panic("invalid concurrent access detected during record writer rollback")
 	}
 }
 

@@ -41,6 +41,7 @@ const (
 	wFlagHeaderWritten
 	wFlagClosed
 	wFlagClearMemoryAfterFree
+	wFlagRecordBuffCheckedOut
 )
 
 const (
