@@ -24,7 +24,8 @@ var (
 	ErrHeaderWritten             = errors.New("header already written")
 	ErrInvalidFieldCountInRecord = errors.New("invalid field count in record")
 	ErrInvalidRune               = errors.New("invalid rune")
-	ErrWriterNotReady            = errors.New("writer is currently in use elsewhere")
+	// ErrWriterNotReady describes the state when a writer is locked for use by an external writing implement such as a RecordWriter.
+	ErrWriterNotReady = errors.New("writer not ready")
 )
 
 type wFlag uint8

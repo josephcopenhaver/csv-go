@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand/v2"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -145,8 +146,9 @@ type wrErrData struct {
 }
 
 type wrRes struct {
-	s string
-	n int
+	s      string
+	fields []string
+	n      int
 	wrErrData
 }
 
@@ -165,6 +167,7 @@ type functionalRecordWriterTestCase struct {
 	// records         [][]rwf
 	res       wrRes
 	afterTest func(*testing.T)
+	sep       string
 }
 
 func (tc *functionalRecordWriterTestCase) clone() *functionalRecordWriterTestCase {
@@ -195,6 +198,38 @@ func (tc *functionalRecordWriterTestCase) Run(t *testing.T) {
 
 			is := assert.New(t)
 
+			expStr := tc.res.s
+			if fields := tc.res.fields; fields != nil {
+				if expStr != "" {
+					panic("specifying fields and an expected string is invalid")
+				}
+
+				sep := tc.sep
+				if sep == "" {
+					sep = ","
+				}
+
+				var buf []byte
+				for i, v := range fields {
+					if i != 0 {
+						buf = append(buf, sep...)
+					}
+
+					if strings.Contains(v, sep) {
+						buf = append(buf, '"')
+						buf = append(buf, v...)
+						buf = append(buf, '"')
+
+						continue
+					}
+
+					buf = append(buf, v...)
+				}
+				buf = append(buf, "\n"...)
+
+				expStr = string(buf)
+			}
+
 			// var errWriterInIOErrState error
 			var buf bytes.Buffer
 
@@ -207,6 +242,15 @@ func (tc *functionalRecordWriterTestCase) Run(t *testing.T) {
 					opts = append(append(slices.Clone(f()), writerOpt), opts...)
 				} else {
 					opts = append([]csv.WriterOption{writerOpt}, opts...)
+				}
+
+				if sep := tc.sep; sep != "" {
+					r, n := utf8.DecodeRuneInString(sep)
+					if (n == 1 && r == utf8.RuneError) || n != len(sep) {
+						panic("field separator must be one valid utf8 rune")
+					}
+
+					opts = append(opts, csv.WriterOpts().FieldSeparator(r))
 				}
 
 				v, err := csv.NewWriter(opts...)
@@ -310,7 +354,7 @@ func (tc *functionalRecordWriterTestCase) Run(t *testing.T) {
 			if !(tc.res.hasErr || len(tc.res.errAs) > 0 || len(tc.res.errAsNot) > 0 || len(tc.res.errIs) > 0 || len(tc.res.errIsNot) > 0 || tc.res.errStr != "") {
 				expectWriteSuccess = true
 				is.Nil(err, tc.res.errStrMsgAndArgs...)
-				if tc.res.s == "" {
+				if expStr == "" {
 					if tc.res.n != -1 {
 						is.Equal(tc.res.n, n, tc.res.errStrMsgAndArgs...)
 					} else {
@@ -319,7 +363,7 @@ func (tc *functionalRecordWriterTestCase) Run(t *testing.T) {
 						is.Contains([]rune("\x0A\x0B\x0C\u0085\u2028"), r)
 					}
 				} else {
-					is.Equal(tc.res.s, buf.String())
+					is.Equal(expStr, buf.String())
 				}
 			} else {
 				is.NotNil(err, tc.res.errStrMsgAndArgs...)
@@ -345,10 +389,10 @@ func (tc *functionalRecordWriterTestCase) Run(t *testing.T) {
 					is.Equal(tc.res.errStr, err.Error(), tc.res.errStrMsgAndArgs...)
 				}
 
-				if tc.res.s == "" {
+				if expStr == "" {
 					is.Equal(tc.res.n, n, tc.res.errStrMsgAndArgs...)
 				} else {
-					is.Equal(tc.res.s, buf.String())
+					is.Equal(expStr, buf.String())
 				}
 			}
 
@@ -416,7 +460,7 @@ func (tc *functionalRecordWriterTestCase) Run(t *testing.T) {
 			// if a write has happened, then there should never be zero
 			// bytes written to the document, even if there is only one
 			// column
-			if writeSuccess && tc.res.s == "" && buf.Len() == 0 {
+			if writeSuccess && expStr == "" && buf.Len() == 0 {
 				is.NotNil(tc.afterTest)
 			}
 
@@ -465,6 +509,113 @@ func TestRecordWriterOKPaths(t *testing.T) {
 			when:            "writing three random field values",
 			numRandomFields: 3,
 			res:             resOnlyCheckNoErr,
+		},
+		{
+			when: "writing fields without a custom field separator",
+			fields: []rwf{
+				{f: int(1)},
+				{f: int64(1)},
+				{f: uint64(1)},
+				{f: time.Duration(1)},
+				{f: math.NaN()},
+				{f: true},
+				{f: "s1"},
+				{f: uncheckedUTF8String("us2")},
+				{f: []byte("b3")},
+				{f: uncheckedUTF8Bytes("ub4")},
+				{f: rune('r')},
+				{f: uncheckedUTF8Rune('r')},
+				{f: time.Time{}},
+			},
+			res: wrRes{
+				fields: strings.Split("1,1,1,1,NaN,1,s1,us2,b3,ub4,r,r,0001-01-01T00:00:00Z", ","),
+			},
+		},
+		{
+			when: "writing fields with fieldSep=-",
+			sep:  "-",
+			fields: []rwf{
+				{f: int(1)},
+				{f: int64(1)},
+				{f: uint64(1)},
+				{f: time.Duration(1)},
+				{f: math.NaN()},
+				{f: true},
+				{f: "s1"},
+				{f: uncheckedUTF8String("us2")},
+				{f: []byte("b3")},
+				{f: uncheckedUTF8Bytes("ub4")},
+				{f: rune('r')},
+				{f: uncheckedUTF8Rune('r')},
+				{f: time.Time{}},
+			},
+			res: wrRes{
+				fields: strings.Split("1,1,1,1,NaN,1,s1,us2,b3,ub4,r,r,0001-01-01T00:00:00Z", ","),
+			},
+		},
+		{
+			when: "writing a record that starts with a rune field containing a comment",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().CommentRune('#'),
+			},
+			fields: []rwf{
+				{f: rune('#')},
+			},
+			res: wrRes{
+				fields: strings.Split("\"#\"", ","),
+			},
+		},
+		{
+			when: "writing a record that starts with a uncheckedUTF8Rune field containing a comment",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().CommentRune('#'),
+			},
+			fields: []rwf{
+				{f: uncheckedUTF8Rune('#')},
+			},
+			res: wrRes{
+				fields: strings.Split("\"#\"", ","),
+			},
+		},
+		{
+			when: "writing a record that starts with a rune field containing a MB field separator",
+			sep:  "\U0001F600",
+			fields: []rwf{
+				{f: rune('\U0001F600')},
+			},
+			res: wrRes{
+				fields: strings.Split("\U0001F600", ","),
+			},
+		},
+		{
+			when: "writing a record that starts with a uncheckedUTF8Rune field containing a MB field separator",
+			sep:  "\U0001F600",
+			fields: []rwf{
+				{f: uncheckedUTF8Rune('\U0001F600')},
+			},
+			res: wrRes{
+				fields: strings.Split("\U0001F600", ","),
+			},
+		},
+		{
+			when: "writing a record that starts with a MB rune field and fieldSep=-",
+			sep:  "-",
+			fields: []rwf{
+				{f: rune('\U0001F600')},
+			},
+			res: wrRes{
+				fields: strings.Split("\U0001F600", ","),
+			},
+		},
+		{
+			when: "writing a record that starts with a MB uncheckedUTF8Rune field and fieldSep=-",
+			sep:  "-",
+			fields: []rwf{
+				{f: uncheckedUTF8Rune('\U0001F600')},
+			},
+			res: wrRes{
+				fields: strings.Split("\U0001F600", ","),
+			},
 		},
 	}
 

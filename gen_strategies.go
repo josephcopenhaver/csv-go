@@ -4284,13 +4284,16 @@ func (rw *RecordWriter) preflightCheck_memclearOff() bool {
 	switch rw.nextField {
 	case 0:
 		rw.bitFlags = rw.w.bitFlags
-		if (rw.bitFlags & wFlagClosed) != 0 {
-			rw.bitFlags &= (^wFlagClosed)
-			rw.abort(ErrWriterClosed)
-			return false
-		}
-
 		if err := rw.w.err; err != nil {
+			// if the parent writer has the closed bit set
+			// then the err value we just read is guaranteed to be non-nil
+			//
+			// so we ensure it is unset in this context just before we abort
+			// because that close flag reflects the writer state, not the rw
+			// instance state which should be scrubbed in this case.
+			//
+			// if it was not unset then abort would short-circuit early
+			rw.bitFlags &= (^wFlagClosed)
 			rw.abort(err)
 			return false
 		}
@@ -4558,10 +4561,10 @@ SIMPLE_APPEND:
 }
 
 func (rw *RecordWriter) write_memclearOff() (int, error) {
-	writable := ((rw.w.bitFlags&wFlagClosed) == 0 && rw.w.err == nil)
+	wErr := rw.w.err
 
 	if err := rw.err; err != nil {
-		if writable {
+		if wErr == nil {
 			rw.w.bitFlags |= wFlagHeaderWritten
 		}
 
@@ -4570,7 +4573,7 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 
 	switch rw.nextField {
 	case 0:
-		if writable {
+		if wErr == nil {
 			rw.w.bitFlags |= wFlagHeaderWritten
 		}
 
@@ -4581,7 +4584,7 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 		if numFields := rw.numFields; numFields == -1 {
 			rw.w.numFields = 1
 		} else if numFields != 1 {
-			if writable {
+			if wErr == nil {
 				rw.w.bitFlags |= wFlagHeaderWritten
 			}
 
@@ -4596,7 +4599,7 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 		if numFields := rw.numFields; numFields == -1 {
 			rw.w.numFields = rw.nextField
 		} else if numFields != rw.nextField {
-			if writable {
+			if wErr == nil {
 				rw.w.bitFlags |= wFlagHeaderWritten
 			}
 
@@ -4609,15 +4612,9 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 	rw.recordBuf = rw.w.recordSepSeq.appendText(rw.recordBuf)
 	rw.nextField = 0
 
-	if !writable {
-		if err := rw.w.err; err != nil {
-			rw.abort(err)
-			return 0, err
-		}
-
-		err := ErrWriterClosed
-		rw.abort(err)
-		return 0, err
+	if wErr != nil {
+		rw.abort(wErr)
+		return 0, wErr
 	}
 
 	// re-checkin the buffer then flush it to the internal writer
@@ -4657,13 +4654,16 @@ func (rw *RecordWriter) preflightCheck_memclearOn() bool {
 	switch rw.nextField {
 	case 0:
 		rw.bitFlags = rw.w.bitFlags
-		if (rw.bitFlags & wFlagClosed) != 0 {
-			rw.bitFlags &= (^wFlagClosed)
-			rw.abort(ErrWriterClosed)
-			return false
-		}
-
 		if err := rw.w.err; err != nil {
+			// if the parent writer has the closed bit set
+			// then the err value we just read is guaranteed to be non-nil
+			//
+			// so we ensure it is unset in this context just before we abort
+			// because that close flag reflects the writer state, not the rw
+			// instance state which should be scrubbed in this case.
+			//
+			// if it was not unset then abort would short-circuit early
+			rw.bitFlags &= (^wFlagClosed)
 			rw.abort(err)
 			return false
 		}
@@ -4931,10 +4931,10 @@ SIMPLE_APPEND:
 }
 
 func (rw *RecordWriter) write_memclearOn() (int, error) {
-	writable := ((rw.w.bitFlags&wFlagClosed) == 0 && rw.w.err == nil)
+	wErr := rw.w.err
 
 	if err := rw.err; err != nil {
-		if writable {
+		if wErr == nil {
 			rw.w.bitFlags |= wFlagHeaderWritten
 		}
 
@@ -4943,7 +4943,7 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 
 	switch rw.nextField {
 	case 0:
-		if writable {
+		if wErr == nil {
 			rw.w.bitFlags |= wFlagHeaderWritten
 		}
 
@@ -4954,7 +4954,7 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 		if numFields := rw.numFields; numFields == -1 {
 			rw.w.numFields = 1
 		} else if numFields != 1 {
-			if writable {
+			if wErr == nil {
 				rw.w.bitFlags |= wFlagHeaderWritten
 			}
 
@@ -4969,7 +4969,7 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 		if numFields := rw.numFields; numFields == -1 {
 			rw.w.numFields = rw.nextField
 		} else if numFields != rw.nextField {
-			if writable {
+			if wErr == nil {
 				rw.w.bitFlags |= wFlagHeaderWritten
 			}
 
@@ -4982,15 +4982,9 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 	rw.setRecordBuf(rw.w.recordSepSeq.appendText(rw.recordBuf))
 	rw.nextField = 0
 
-	if !writable {
-		if err := rw.w.err; err != nil {
-			rw.abort(err)
-			return 0, err
-		}
-
-		err := ErrWriterClosed
-		rw.abort(err)
-		return 0, err
+	if wErr != nil {
+		rw.abort(wErr)
+		return 0, wErr
 	}
 
 	// re-checkin the buffer then flush it to the internal writer
