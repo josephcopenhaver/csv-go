@@ -53,7 +53,6 @@ func (w *Writer) NewRecord() *RecordWriter {
 
 	if err == nil && (bitFlags&wFlagClosed) == 0 {
 		wb = w.writeBuffer
-		w.recordBuf = nil
 		w.bitFlags |= wFlagRecordBuffCheckedOut
 	} else {
 		if err == nil {
@@ -85,12 +84,6 @@ func (rw *RecordWriter) abort(err error) {
 	rw.bitFlags |= wFlagClosed
 	recordBuf := rw.recordBuf
 
-	if recordBuf == nil {
-		rw.w.bitFlags &= (^wFlagRecordBuffCheckedOut)
-		return
-	}
-	rw.recordBuf = nil
-
 	if rw.w.err != nil {
 		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
 			clear(recordBuf[:cap(recordBuf)])
@@ -102,6 +95,12 @@ func (rw *RecordWriter) abort(err error) {
 	rw.w.bitFlags &= (^wFlagRecordBuffCheckedOut)
 }
 
+// Rollback releases the csv Writer for additional writing through
+// another RecordWriter instance or other means without flushing
+// the record buffer to the io.Writer within the csv Writer
+// instance.
+//
+// This RecordWriter cannot be used again after this call.
 func (rw *RecordWriter) Rollback() {
 	rw.abort(ErrRecordWriterClosed)
 }
@@ -268,9 +267,11 @@ func (rw *RecordWriter) UncheckedUTF8Rune(r rune) *RecordWriter {
 	return rw
 }
 
-// Writer ...
+// Write flushes the record buffer to the io.Writer within the csv Writer
+// instance and releases the csv Writer for additional writing through
+// another RecordWriter instance or other means.
 //
-// The record cannot be used again after this call.
+// This RecordWriter cannot be used again after this call.
 func (rw *RecordWriter) Write() (int, error) {
 	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
 		return rw.write_memclearOff()

@@ -4283,17 +4283,18 @@ func (rw *RecordWriter) preflightCheck_memclearOff() bool {
 
 	switch rw.nextField {
 	case 0:
-		if err := rw.w.err; err != nil {
-			rw.abort(err)
-			return false
-		}
-
 		rw.bitFlags = rw.w.bitFlags
 		if (rw.bitFlags & wFlagClosed) != 0 {
 			rw.bitFlags &= (^wFlagClosed)
 			rw.abort(ErrWriterClosed)
 			return false
 		}
+
+		if err := rw.w.err; err != nil {
+			rw.abort(err)
+			return false
+		}
+
 		rw.numFields = rw.w.numFields
 		rw.recordBuf = rw.recordBuf[:0]
 		if rw.w.comment != invalidControlRune && (rw.bitFlags&wFlagFirstRecordWritten) == 0 {
@@ -4563,10 +4564,6 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 
 	switch rw.nextField {
 	case 0:
-		if err := rw.w.err; err != nil {
-			rw.abort(err)
-			return 0, err
-		}
 		err := ErrRowNilOrEmpty
 		rw.abort(err)
 		return 0, err
@@ -4591,28 +4588,39 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 		}
 	}
 
-	recordBuf := rw.w.recordSepSeq.appendText(rw.recordBuf)
-	rw.recordBuf = nil
+	rw.recordBuf = rw.w.recordSepSeq.appendText(rw.recordBuf)
 	rw.nextField = 0
-	rw.bitFlags |= wFlagClosed
-	rw.w.recordBuf = recordBuf
-	rw.w.bitFlags = (rw.w.bitFlags & (^wFlagRecordBuffCheckedOut)) | wFlagFirstRecordWritten
 
 	if (rw.w.bitFlags & wFlagClosed) != 0 {
-		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
-			clear(rw.w.recordBuf[:cap(rw.w.recordBuf)])
-		}
 		err := ErrWriterClosed
 		rw.abort(err)
 		return 0, err
 	}
 
-	n, err := rw.w.writer.Write(rw.w.recordBuf)
+	if err := rw.w.err; err != nil {
+		rw.abort(err)
+		return 0, err
+	}
+
+	// re-checkin the buffer then flush it to the internal writer
+
+	rw.bitFlags |= wFlagClosed
+	recordBuf := rw.recordBuf
+	rw.w.recordBuf = recordBuf
+	rw.w.bitFlags = (rw.w.bitFlags & (^wFlagRecordBuffCheckedOut)) | wFlagFirstRecordWritten // note: missing wFlagHeaderWritten setting logic
+
+	n, err := rw.w.writer.Write(recordBuf)
 	if err != nil {
 		err = writeIOErr{err}
 		if rw.w.err == nil {
 			rw.w.setErr(err)
 		}
+
+		// no need to re-unset the rw.bitFlags wFlagClosed bit since
+		// the parent writer context now owns the record buffer again
+		//
+		// parent writer will clear it when closed
+
 		rw.abort(err)
 	} else {
 		rw.err = ErrRecordWritten
@@ -4630,17 +4638,18 @@ func (rw *RecordWriter) preflightCheck_memclearOn() bool {
 
 	switch rw.nextField {
 	case 0:
-		if err := rw.w.err; err != nil {
-			rw.abort(err)
-			return false
-		}
-
 		rw.bitFlags = rw.w.bitFlags
 		if (rw.bitFlags & wFlagClosed) != 0 {
 			rw.bitFlags &= (^wFlagClosed)
 			rw.abort(ErrWriterClosed)
 			return false
 		}
+
+		if err := rw.w.err; err != nil {
+			rw.abort(err)
+			return false
+		}
+
 		rw.numFields = rw.w.numFields
 		rw.recordBuf = rw.recordBuf[:0]
 		if rw.w.comment != invalidControlRune && (rw.bitFlags&wFlagFirstRecordWritten) == 0 {
@@ -4910,10 +4919,6 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 
 	switch rw.nextField {
 	case 0:
-		if err := rw.w.err; err != nil {
-			rw.abort(err)
-			return 0, err
-		}
 		err := ErrRowNilOrEmpty
 		rw.abort(err)
 		return 0, err
@@ -4938,28 +4943,39 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 		}
 	}
 
-	recordBuf := rw.w.recordSepSeq.appendText(rw.recordBuf)
-	rw.recordBuf = nil
+	rw.setRecordBuf(rw.w.recordSepSeq.appendText(rw.recordBuf))
 	rw.nextField = 0
-	rw.bitFlags |= wFlagClosed
-	rw.w.recordBuf = recordBuf
-	rw.w.bitFlags = (rw.w.bitFlags & (^wFlagRecordBuffCheckedOut)) | wFlagFirstRecordWritten
 
 	if (rw.w.bitFlags & wFlagClosed) != 0 {
-		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
-			clear(rw.w.recordBuf[:cap(rw.w.recordBuf)])
-		}
 		err := ErrWriterClosed
 		rw.abort(err)
 		return 0, err
 	}
 
-	n, err := rw.w.writer.Write(rw.w.recordBuf)
+	if err := rw.w.err; err != nil {
+		rw.abort(err)
+		return 0, err
+	}
+
+	// re-checkin the buffer then flush it to the internal writer
+
+	rw.bitFlags |= wFlagClosed
+	recordBuf := rw.recordBuf
+	rw.w.recordBuf = recordBuf
+	rw.w.bitFlags = (rw.w.bitFlags & (^wFlagRecordBuffCheckedOut)) | wFlagFirstRecordWritten // note: missing wFlagHeaderWritten setting logic
+
+	n, err := rw.w.writer.Write(recordBuf)
 	if err != nil {
 		err = writeIOErr{err}
 		if rw.w.err == nil {
 			rw.w.setErr(err)
 		}
+
+		// no need to re-unset the rw.bitFlags wFlagClosed bit since
+		// the parent writer context now owns the record buffer again
+		//
+		// parent writer will clear it when closed
+
 		rw.abort(err)
 	} else {
 		rw.err = ErrRecordWritten
