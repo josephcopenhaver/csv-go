@@ -4558,12 +4558,22 @@ SIMPLE_APPEND:
 }
 
 func (rw *RecordWriter) write_memclearOff() (int, error) {
+	writable := ((rw.w.bitFlags&wFlagClosed) == 0 && rw.w.err == nil)
+
 	if err := rw.err; err != nil {
+		if writable {
+			rw.w.bitFlags |= wFlagHeaderWritten
+		}
+
 		return 0, err
 	}
 
 	switch rw.nextField {
 	case 0:
+		if writable {
+			rw.w.bitFlags |= wFlagHeaderWritten
+		}
+
 		err := ErrRowNilOrEmpty
 		rw.abort(err)
 		return 0, err
@@ -4571,6 +4581,10 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 		if numFields := rw.numFields; numFields == -1 {
 			rw.w.numFields = 1
 		} else if numFields != 1 {
+			if writable {
+				rw.w.bitFlags |= wFlagHeaderWritten
+			}
+
 			err := ErrInvalidFieldCountInRecord
 			rw.abort(err)
 			return 0, err
@@ -4582,6 +4596,10 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 		if numFields := rw.numFields; numFields == -1 {
 			rw.w.numFields = rw.nextField
 		} else if numFields != rw.nextField {
+			if writable {
+				rw.w.bitFlags |= wFlagHeaderWritten
+			}
+
 			err := ErrInvalidFieldCountInRecord
 			rw.abort(err)
 			return 0, err
@@ -4591,13 +4609,13 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 	rw.recordBuf = rw.w.recordSepSeq.appendText(rw.recordBuf)
 	rw.nextField = 0
 
-	if (rw.w.bitFlags & wFlagClosed) != 0 {
-		err := ErrWriterClosed
-		rw.abort(err)
-		return 0, err
-	}
+	if !writable {
+		if err := rw.w.err; err != nil {
+			rw.abort(err)
+			return 0, err
+		}
 
-	if err := rw.w.err; err != nil {
+		err := ErrWriterClosed
 		rw.abort(err)
 		return 0, err
 	}
@@ -4607,7 +4625,7 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 	rw.bitFlags |= wFlagClosed
 	recordBuf := rw.recordBuf
 	rw.w.recordBuf = recordBuf
-	rw.w.bitFlags = (rw.w.bitFlags & (^wFlagRecordBuffCheckedOut)) | wFlagFirstRecordWritten // note: missing wFlagHeaderWritten setting logic
+	rw.w.bitFlags = (rw.w.bitFlags & (^wFlagRecordBuffCheckedOut)) | (wFlagFirstRecordWritten | wFlagHeaderWritten)
 
 	n, err := rw.w.writer.Write(recordBuf)
 	if err != nil {
@@ -4913,12 +4931,22 @@ SIMPLE_APPEND:
 }
 
 func (rw *RecordWriter) write_memclearOn() (int, error) {
+	writable := ((rw.w.bitFlags&wFlagClosed) == 0 && rw.w.err == nil)
+
 	if err := rw.err; err != nil {
+		if writable {
+			rw.w.bitFlags |= wFlagHeaderWritten
+		}
+
 		return 0, err
 	}
 
 	switch rw.nextField {
 	case 0:
+		if writable {
+			rw.w.bitFlags |= wFlagHeaderWritten
+		}
+
 		err := ErrRowNilOrEmpty
 		rw.abort(err)
 		return 0, err
@@ -4926,6 +4954,10 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 		if numFields := rw.numFields; numFields == -1 {
 			rw.w.numFields = 1
 		} else if numFields != 1 {
+			if writable {
+				rw.w.bitFlags |= wFlagHeaderWritten
+			}
+
 			err := ErrInvalidFieldCountInRecord
 			rw.abort(err)
 			return 0, err
@@ -4937,6 +4969,10 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 		if numFields := rw.numFields; numFields == -1 {
 			rw.w.numFields = rw.nextField
 		} else if numFields != rw.nextField {
+			if writable {
+				rw.w.bitFlags |= wFlagHeaderWritten
+			}
+
 			err := ErrInvalidFieldCountInRecord
 			rw.abort(err)
 			return 0, err
@@ -4946,13 +4982,13 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 	rw.setRecordBuf(rw.w.recordSepSeq.appendText(rw.recordBuf))
 	rw.nextField = 0
 
-	if (rw.w.bitFlags & wFlagClosed) != 0 {
-		err := ErrWriterClosed
-		rw.abort(err)
-		return 0, err
-	}
+	if !writable {
+		if err := rw.w.err; err != nil {
+			rw.abort(err)
+			return 0, err
+		}
 
-	if err := rw.w.err; err != nil {
+		err := ErrWriterClosed
 		rw.abort(err)
 		return 0, err
 	}
@@ -4962,7 +4998,7 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 	rw.bitFlags |= wFlagClosed
 	recordBuf := rw.recordBuf
 	rw.w.recordBuf = recordBuf
-	rw.w.bitFlags = (rw.w.bitFlags & (^wFlagRecordBuffCheckedOut)) | wFlagFirstRecordWritten // note: missing wFlagHeaderWritten setting logic
+	rw.w.bitFlags = (rw.w.bitFlags & (^wFlagRecordBuffCheckedOut)) | (wFlagFirstRecordWritten | wFlagHeaderWritten)
 
 	n, err := rw.w.writer.Write(recordBuf)
 	if err != nil {

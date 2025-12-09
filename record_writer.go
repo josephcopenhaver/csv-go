@@ -8,7 +8,7 @@ import (
 var (
 	// ErrRecordWriterClosed is returned by a call to Err() or Write() when you attempt to use a record writer that has already completed its lifecycle. A record writer lifecycle is complete when Rollback is called or Write is called.
 	//
-	// Note that ErrRecordWritten is a sub-class of this error.
+	// Note that ErrRecordWritten is a subclass of this error.
 	ErrRecordWriterClosed = errors.New("record writer closed")
 
 	// ErrRecordWritten is returned from the call to Err() after a write succeeds.
