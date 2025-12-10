@@ -14,9 +14,7 @@ func TestNewRecordWriterErrPaths(t *testing.T) {
 		expErr error
 	}
 
-	type R struct {
-		err error
-	}
+	type R struct{}
 
 	type tci interface {
 		RunI(*testing.T, int)
@@ -39,16 +37,15 @@ func TestNewRecordWriterErrPaths(t *testing.T) {
 				is.Nil(err)
 				is.NotNil(tc.w)
 
-				_ = tc.w.NewRecord()
+				_ = tc.w.MustNewRecord()
 			},
 			// when
 			"creating a new record",
 			func(t *testing.T, tc TC) R {
 				is := assert.New(t)
 
-				const exp = "invalid concurrent access detected on record creation"
-				is.PanicsWithValue(exp, func() {
-					_ = tc.w.NewRecord()
+				is.PanicsWithValue(ErrWriterNotReady, func() {
+					_ = tc.w.MustNewRecord()
 				})
 
 				return R{}
@@ -79,21 +76,18 @@ func TestNewRecordWriterErrPaths(t *testing.T) {
 			},
 			// when
 			"creating a new record",
-			func(_ *testing.T, tc TC) R {
-				rw := tc.w.NewRecord()
-
-				return R{
-					err: rw.Err(),
-				}
-			},
-			// then
-			"record writer should be in errored state ErrWriterClosed",
-			func(t *testing.T, tc TC, r R) {
+			func(t *testing.T, tc TC) R {
 				is := assert.New(t)
 
-				is.ErrorIs(r.err, tc.expErr)
-				is.Equal(tc.expErr.Error(), r.err.Error())
+				is.PanicsWithValue(ErrWriterClosed, func() {
+					_ = tc.w.MustNewRecord()
+				})
+
+				return R{}
 			},
+			// then
+			"panics",
+			func(*testing.T, TC, R) {},
 		),
 		tbdd.GWT(
 			TC{
@@ -121,20 +115,18 @@ func TestNewRecordWriterErrPaths(t *testing.T) {
 			},
 			// when
 			"creating a new record",
-			func(_ *testing.T, tc TC) R {
-				rw := tc.w.NewRecord()
+			func(t *testing.T, tc TC) R {
+				is := assert.New(t)
 
-				return R{
-					err: rw.Err(),
-				}
+				is.PanicsWithValue(ErrWriterClosed, func() {
+					_ = tc.w.MustNewRecord()
+				})
+
+				return R{}
 			},
 			// then
-			"record writer should be in errored state ErrWriterClosed",
-			func(t *testing.T, tc TC, r R) {
-				is := assert.New(t)
-				is.ErrorIs(r.err, tc.expErr)
-				is.Equal(tc.expErr.Error(), r.err.Error())
-			},
+			"panics",
+			func(*testing.T, TC, R) {},
 		),
 	}
 

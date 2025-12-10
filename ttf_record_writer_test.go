@@ -294,7 +294,7 @@ func (tc *functionalRecordWriterTestCase) Run(t *testing.T) {
 				}
 			}
 
-			rw := cw.NewRecord()
+			rw := cw.MustNewRecord()
 
 			for range tc.numRandomFields {
 				candidates := fieldValuesByType[fieldType]

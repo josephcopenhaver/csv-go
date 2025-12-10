@@ -39,7 +39,7 @@ func TestRecordWriterErrPaths(t *testing.T) {
 			// when
 			"creating a new record writing an invalid utf8 rune",
 			func(_ *testing.T, tc TC) R {
-				rw := tc.w.NewRecord()
+				rw := tc.w.MustNewRecord()
 				errAfterRuneWrite := rw.Rune(rune(0x7FFFFFFF)).Err()
 				n, err := rw.Write()
 
@@ -68,7 +68,7 @@ func TestRecordWriterErrPaths(t *testing.T) {
 			// when
 			"creating a record writer, writing a rune, closing the parent writer, and writing another string field",
 			func(_ *testing.T, tc TC) R {
-				rw := tc.w.NewRecord()
+				rw := tc.w.MustNewRecord()
 				errAfterRuneWrite := rw.Rune('R').Err()
 				tc.w.Close()
 				errAfterClosedFieldWrite := rw.String("").Err()
@@ -99,7 +99,7 @@ func TestRecordWriterErrPaths(t *testing.T) {
 			// when
 			"creating a record writer, closing the parent writer, writing a rune",
 			func(_ *testing.T, tc TC) R {
-				rw := tc.w.NewRecord()
+				rw := tc.w.MustNewRecord()
 				tc.w.Close()
 				errAfterRuneWrite := rw.Rune('R').Err()
 				n, err := rw.Write()

@@ -113,7 +113,7 @@ func TestFunctionalWriterHeaderErrorPaths(t *testing.T) {
 		{
 			when: "writer is locked by a RecordWriter and attempting to WriteHeader",
 			afterInitWriter: func(_ *testing.T, w *csv.Writer) {
-				_ = w.NewRecord()
+				_ = w.MustNewRecord()
 			},
 			newOpts: []csv.WriterOption{
 				csv.WriterOpts().CommentRune('#'),

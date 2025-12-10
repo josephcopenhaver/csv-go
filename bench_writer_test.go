@@ -224,7 +224,7 @@ func BenchmarkWritePostInitFieldWriterAllTypes(b *testing.B) {
 			fwf.String("-1"),
 			fwf.Int(-1),
 			fwf.Bool(true),
-			fwf.Bytes([]byte{'a'}), // NOTE: this Bytes writer type leads to allocations - to avoid them entirely switch to using NewRecord() and the returned *RecordWriter or use advanced pre-allocated buffer tactics
+			fwf.Bytes([]byte{'a'}), // NOTE: this Bytes writer type leads to allocations - to avoid them entirely switch to using NewRecord() or MustNewRecord() and the returned *RecordWriter or use advanced pre-allocated buffer tactics
 			fwf.Duration(time.Second),
 			fwf.Float64(0.0123),
 			fwf.Int64(-1),
@@ -303,7 +303,7 @@ func BenchmarkWritePostInitRecordWriterStrings(b *testing.B) {
 	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := cw.NewRecord().
+		_, err := cw.MustNewRecord().
 			String("-1").
 			String("-1").
 			Write()
@@ -334,7 +334,7 @@ func BenchmarkWritePostInitRecordWriterAllTypes(b *testing.B) {
 	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := cw.NewRecord().
+		_, err := cw.MustNewRecord().
 			String("-1").
 			Int(-1).
 			Bool(true).
@@ -377,7 +377,7 @@ func BenchmarkWritePostInitRecordWriterAllTypesWithHeapBytes(b *testing.B) {
 	runtime.GC()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := cw.NewRecord().
+		_, err := cw.MustNewRecord().
 			String("-1").
 			Int(-1).
 			Bool(true).

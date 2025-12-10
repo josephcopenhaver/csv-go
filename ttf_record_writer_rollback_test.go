@@ -43,7 +43,7 @@ func TestNewRecordWriterErrPaths(t *testing.T) {
 			// when
 			"creating a new record and rolling back",
 			func(_ *testing.T, tc TC) R {
-				rw := tc.w.NewRecord()
+				rw := tc.w.MustNewRecord()
 				err := rw.Err()
 				rw.Rollback()
 
@@ -69,7 +69,7 @@ func TestNewRecordWriterErrPaths(t *testing.T) {
 			// when
 			"creating a new record, closing the writer, and rolling back",
 			func(_ *testing.T, tc TC) R {
-				rw := tc.w.NewRecord()
+				rw := tc.w.MustNewRecord()
 				err := rw.Err()
 
 				errWClose := tc.w.Close()

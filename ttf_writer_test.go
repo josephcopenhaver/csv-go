@@ -253,7 +253,7 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 						t.Fatal("record writer requires record slices to write be specified using r => []string")
 					}
 
-					rw := cw.NewRecord()
+					rw := cw.MustNewRecord()
 
 					if rw.Err() == nil {
 						if tc.useRecordWriterBytes {

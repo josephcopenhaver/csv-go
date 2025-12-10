@@ -27,9 +27,9 @@ type RecordWriter struct {
 // the parent csv Writer instance.
 //
 // The returned RecordWriter instance must have its lifecycle
-// ended with a call to Write or Rollback.
+// ended with a call to Write and/or Rollback.
 //
-// Concurrent calls to NewRecord will panic and are not supported.
+// Concurrent calls to NewRecord are not supported.
 //
 // If the parent Writer instance is closed, the returned RecordWriter
 // will have its Err() method return ErrWriterClosed.
@@ -37,10 +37,23 @@ type RecordWriter struct {
 // While the RecordWriter is active, the parent Writer instance
 // is locked from additional writing until the RecordWriter's
 // lifecycle is ended with a call to Write or Rollback.
-func (w *Writer) NewRecord() *RecordWriter {
-	var wb writeBuffer
-	err := w.err
+//
+// If another RecordWriter is already active, NewRecord will return
+// a nil RecordWriter and ErrWriterNotReady.
+//
+// If the parent Writer instance is in an error state,
+// NewRecord will return a nil RecordWriter and the existing error.
+func (w *Writer) NewRecord() (*RecordWriter, error) {
 	bitFlags := w.bitFlags
+
+	if err := w.err; err != nil || (bitFlags&wFlagClosed) != 0 {
+		// note that it should be impossible for err to be nil here
+		// while wFlagClosed is also set, but just in case...
+		if err == nil {
+			err = ErrWriterClosed
+		}
+		return nil, err
+	}
 
 	// Checking that the wFlagForceQuoteFirstField flag is not set because
 	// it is a pure write lifecycle flag which cannot be set outside of
@@ -68,27 +81,37 @@ func (w *Writer) NewRecord() *RecordWriter {
 		// RecordWriter is already active
 		//
 		// both conditions indicate invalid concurrent access
-		panic("invalid concurrent access detected on record creation")
+		return nil, ErrWriterNotReady
 	}
-
-	if err == nil && (bitFlags&wFlagClosed) == 0 {
-		wb = w.writeBuffer
-		w.bitFlags |= wFlagRecordBuffCheckedOut
-	} else {
-		// note that it should be impossible for err to be nil here
-		// while wFlagClosed is also set, but just in case...
-		if err == nil {
-			err = ErrWriterClosed
-		}
-		bitFlags |= wFlagClosed
-	}
+	w.bitFlags |= wFlagRecordBuffCheckedOut
 
 	return &RecordWriter{
-		err:         err,
 		bitFlags:    bitFlags,
-		writeBuffer: wb,
+		writeBuffer: w.writeBuffer,
 		w:           w,
+	}, nil
+}
+
+// MustNewRecord is like NewRecord but panics if a RecordWriter cannot be created.
+//
+// It panics in two situations:
+//   - when the Writer is no longer usable because it has already observed an
+//     error or has been closed (I/O or lifecycle error), or
+//   - when a previous RecordWriter is still active and has not been finalized
+//     with Write or Rollback (programmer misuse).
+//
+// This helper is intended for applications that choose to treat such conditions
+// as fatal. Library callers who need to recover from these conditions should use
+// NewRecord and handle its error result instead. Callers of this method take
+// extra care to ensure that when a Write() returns a non-nil error that this
+// method is not called again on the same Writer instance.
+func (w *Writer) MustNewRecord() *RecordWriter {
+	rw, err := w.NewRecord()
+	if err != nil {
+		panic(err)
 	}
+
+	return rw
 }
 
 // Err returns any error that has occurred during the lifecycle

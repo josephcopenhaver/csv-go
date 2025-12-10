@@ -350,7 +350,7 @@ func TestFunctionalWriterErrorPaths(t *testing.T) {
 				t.Helper()
 
 				// leaves the writer locked by the external RecordWriter
-				_ = w.NewRecord()
+				_ = w.MustNewRecord()
 			},
 			wrs: []wr{
 				{r: []string{"hello", "dave"}, errIs: []error{csv.ErrWriterNotReady}, errStr: csv.ErrWriterNotReady.Error()},
