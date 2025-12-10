@@ -1,18 +1,62 @@
 # V3.* Changes[^1]
 
+## v3.3.0 - 2025-12-10
+
+The spicy fluent API release.
+
+The writer can now delegate record assembly and writing to a `RecordWriter` instance returned from `NewRecord()`.
+
+This new write path intentionally trades some of the convenience and safety of var-arg `WriteRow`-style functions for a more hardware and Go-runtime-sympathetic append-streaming model that reduces stack pressure and helps escape analysis. The fluent API (`rw.Bytes(...).Int64(...).String(...)`) keeps ergonomics reasonable and boilerplate low while allowing fields to be streamed directly into the record buffer.
+
+While a `RecordWriter` is active, no other write actions are permitted on the parent `Writer`. Calling `NewRecord()` while one is already open returns an error, and attempts to write headers or record data through other APIs will also fail. If you need to define a header, ensure it is written before creating a `RecordWriter`. Conceptually, `RecordWriter` is a fluent API that streams each field from its non-serialized form directly into a staging buffer, then flushes the assembled CSV record via `RecordWriter.Write()`.
+
+Note: Like `Writer`, `RecordWriter` and `NewRecord()` are not safe for concurrent use.
+
+A `Writer` instance can still be closed even if a `RecordWriter` was never finalized. If `Write()` is called on a `RecordWriter` after the parent `Writer` has encountered an error or been closed, the write will fail.
+
+`RecordWriter.Err()` reports the lifecycle/assembly status of the in-progress record, not the final write outcome. To determine whether a record was successfully written, rely solely on the error returned by `RecordWriter.Write()`.
+
+Use `RecordWriter.Rollback` to short-circuit a record assembly operation and end the lifecycle of a `RecordWriter` instance early without attempting a record write. From there, assuming the parent `Writer` is not closed or errored, you can then create records again via `NewRecord`. This allows calling code to choose how to handle any oddities that manifest with a given record's serialization at any point of record assembly time.
+
+### New Structs
+- RecordWriter
+
+### New Functions
+- `(*Writer) NewRecord() (*RecordWriter, error)`
+- `(*Writer) MustNewRecord() *RecordWriter`
+- `(*RecordWriter) Err() error`
+- `(*RecordWriter) Rollback()`
+- `(*RecordWriter) Write() (int, error)`
+- `(*RecordWriter) Bytes([]byte) *RecordWriter`
+- `(*RecordWriter) UncheckedUTF8Bytes([]byte) *RecordWriter`
+- `(*RecordWriter) String(string) *RecordWriter`
+- `(*RecordWriter) UncheckedUTF8String(string) *RecordWriter`
+- `(*RecordWriter) Int(int) *RecordWriter`
+- `(*RecordWriter) Int64(int64) *RecordWriter`
+- `(*RecordWriter) Uint64(uint64) *RecordWriter`
+- `(*RecordWriter) Duration(time.Duration) *RecordWriter`
+- `(*RecordWriter) Time(time.Time) *RecordWriter`
+- `(*RecordWriter) Bool(bool) *RecordWriter`
+- `(*RecordWriter) Float64(float64) *RecordWriter`
+- `(*RecordWriter) Rune(rune) *RecordWriter`
+
+### New Constants
+- ErrWriterNotReady
+- ErrRecordWriterClosed
+
 ## v3.2.0 - 2025-10-19
 
 The great long-overdue Writer refactor.
 
 
-Deprecated:
+### Deprecated
 - (WriterOptions) InitialFieldBufferSize
 - (WriterOptions) InitialFieldBuffer
 
 The above methods are now deprecated and no longer have any effect on the writing strategy.
 
 
-New Functions:
+### New Functions
 - (WriterOptions) CommentRune(r rune)
 - (FieldWriterFactory) UncheckedUTF8Bytes([]byte)
 - (FieldWriterFactory) UncheckedUTF8String(string)
