@@ -232,24 +232,6 @@ SIMPLE_APPEND:
 	{{$setRec0}}utf8.AppendRune(rw.recordBuf, r){{$setRec1}}
 }
 
-func (rw *RecordWriter) rune_memclearO{{$memClear}}(r rune) {
-	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
-		if r < utf8.RuneSelf {
-			if !rw.w.controlRuneSet.containsSingleByteRune(byte(r)) {
-				goto SIMPLE_APPEND
-			}
-		} else if !rw.w.controlRuneSet.containsMBRune(r) {
-			goto SIMPLE_APPEND
-		}
-	}
-
-	rw.unsafeAppendUTF8FieldBytes_memclearO{{$memClear}}(utf8.AppendRune(rw.w.fieldWriterBuf[:0], r))
-	return
-
-SIMPLE_APPEND:
-	{{$setRec0}}utf8.AppendRune(rw.recordBuf, r){{$setRec1}}
-}
-
 func (rw *RecordWriter) write_memclearO{{$memClear}}() (int, error) {
 	wErr := rw.w.err
 

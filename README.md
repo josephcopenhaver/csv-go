@@ -9,7 +9,7 @@ csv-go
 
 This package is a highly flexible and performant single threaded csv stream reader and writer. It opts for strictness with nearly all options off by default. Using the option functions pattern on Reader and Writer creation ensures extreme flexibility can be offered while configuration can be validated up-front in cold paths. This creates an immutable, clear execution of the csv file/stream parsing strategy. It has been battle tested thoroughly in production contexts for both correctness and speed so feel free to use in any way you like.
 
-Both the reader and writer are [more performant than the standard go csv package](docs/BENCHMARKS.md) when compared in an apples-to-apples configuration between the two. The writer also has several optimizations for non-string type serialization via FieldWriters(). I expect mileage here to vary over time. My primary goal with this lib was to solve my own edge case problems like suspect-encodings/loose-rules and offer something back more aligned with others that think like myself with regard to reducing allocations, GC pause, and increasing efficiency.
+Both the reader and writer are [more performant than the standard go csv package](docs/BENCHMARKS.md) when compared in an apples-to-apples configuration between the two. The writer also has several optimizations for non-string type serialization via the fluent api returned by csv.Writer.NewRecord() and FieldWriters(). I expect mileage here to vary over time. My primary goal with this lib was to solve my own edge case problems like suspect-encodings/loose-rules and offer something back more aligned with others that think like myself with regard to reducing allocations, GC pause, and increasing efficiency.
 
 ```go
 package main
@@ -63,7 +63,11 @@ func main() {
 	}()
 
 	for row := range cr.IntoIter() {
-		if _, err := cw.WriteRow(row...); err != nil {
+		rw := cw.NewRecord()
+		for _, s := range cr.Row() {
+			rw.String(s)
+		}
+		if _, err := rw.Write(); err != nil {
 			panic(err)
 		}
 	}
@@ -101,6 +105,11 @@ See the [Reader](internal/examples/reader/main.go) and [Writer](internal/example
 | Security Limits | *planned* |
 
 Note that the writer also has WriteFieldRow*() functions (WriteFieldRow, WriteFieldRowBorrowed) to reduce allocations when converting non‑string types to human‑readable CSV field values via the FieldWriter generating functions under csv.FieldWriters().
+
+Note that after a number of columns, the WriteFieldRow*() calls flush less efficiently given they can leak to the heap and the cost of staging the non-serialized forms in a slice of wide-structs can add up quickly. To address this case, a fluent API has been added to the csv.Writer instance which can be utilized per some record to write via .NewRecord() which returns a RecordWriter instance. In a single-threaded fashion it locks the writer until Write() or Rollback() is called. Each field can be buffered for writing via the "FieldTypeName()" functions on the RecordWriter instance. Only one RecordWriter instance can be alive at a time for any given Writer.
+
+Performance testing should be utilized to choose which writing methodology is ideal for your case.
+In general choose the method most sympathetic to your hardware and data formats. For most cases, csv.Writer.NewRecord() should achieve a nice balance that scales very high in terms of both utility and efficiency.
 
 ---
 
@@ -199,9 +208,12 @@ func main() {
 
 	// using Scan instead of the iterator sugar to avoid allocation of the iterator closures
 	for cr.Scan() {
-		// if BorrowRow=true or BorrowFields=true then implementation reading rows from the Reader MUST NOT keep the rows alive beyond the next call to cr.Scan()
-		row := cr.Row()
-		if _, err := cw.WriteRow(row...); err != nil {
+		// if BorrowRow=true or BorrowFields=true then implementation reading rows from the Reader MUST NOT keep the rows or byte sub-slices alive beyond the next call to cr.Scan()
+		rw := cw.NewRecord()
+		for _, s := range cr.Row() {
+			rw.String(s)
+		}
+		if _, err := rw.Write(); err != nil {
 			panic(err)
 		}
 	}

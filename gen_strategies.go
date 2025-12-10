@@ -4542,24 +4542,6 @@ SIMPLE_APPEND:
 	rw.recordBuf = utf8.AppendRune(rw.recordBuf, r)
 }
 
-func (rw *RecordWriter) rune_memclearOff(r rune) {
-	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
-		if r < utf8.RuneSelf {
-			if !rw.w.controlRuneSet.containsSingleByteRune(byte(r)) {
-				goto SIMPLE_APPEND
-			}
-		} else if !rw.w.controlRuneSet.containsMBRune(r) {
-			goto SIMPLE_APPEND
-		}
-	}
-
-	rw.unsafeAppendUTF8FieldBytes_memclearOff(utf8.AppendRune(rw.w.fieldWriterBuf[:0], r))
-	return
-
-SIMPLE_APPEND:
-	rw.recordBuf = utf8.AppendRune(rw.recordBuf, r)
-}
-
 func (rw *RecordWriter) write_memclearOff() (int, error) {
 	wErr := rw.w.err
 
@@ -4895,24 +4877,6 @@ func (rw *RecordWriter) rune_withCheckUTF8_memclearOn(r rune) {
 		return
 	}
 
-	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
-		if r < utf8.RuneSelf {
-			if !rw.w.controlRuneSet.containsSingleByteRune(byte(r)) {
-				goto SIMPLE_APPEND
-			}
-		} else if !rw.w.controlRuneSet.containsMBRune(r) {
-			goto SIMPLE_APPEND
-		}
-	}
-
-	rw.unsafeAppendUTF8FieldBytes_memclearOn(utf8.AppendRune(rw.w.fieldWriterBuf[:0], r))
-	return
-
-SIMPLE_APPEND:
-	rw.setRecordBuf(utf8.AppendRune(rw.recordBuf, r))
-}
-
-func (rw *RecordWriter) rune_memclearOn(r rune) {
 	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
 		if r < utf8.RuneSelf {
 			if !rw.w.controlRuneSet.containsSingleByteRune(byte(r)) {
