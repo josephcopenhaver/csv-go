@@ -22,7 +22,9 @@ func TestNewRecordWriterErrPaths(t *testing.T) {
 
 	tcs := []tci{
 		tbdd.GWT(
-			TC{},
+			TC{
+				expErr: ErrWriterNotReady,
+			},
 			// given
 			"a writer and a record is created but never rolled back or written",
 			func(t *testing.T, tc *TC) {
@@ -44,7 +46,7 @@ func TestNewRecordWriterErrPaths(t *testing.T) {
 			func(t *testing.T, tc TC) R {
 				is := assert.New(t)
 
-				is.PanicsWithValue(ErrWriterNotReady, func() {
+				is.PanicsWithValue(tc.expErr, func() {
 					_ = tc.w.MustNewRecord()
 				})
 
@@ -79,7 +81,7 @@ func TestNewRecordWriterErrPaths(t *testing.T) {
 			func(t *testing.T, tc TC) R {
 				is := assert.New(t)
 
-				is.PanicsWithValue(ErrWriterClosed, func() {
+				is.PanicsWithValue(tc.expErr, func() {
 					_ = tc.w.MustNewRecord()
 				})
 
@@ -118,7 +120,7 @@ func TestNewRecordWriterErrPaths(t *testing.T) {
 			func(t *testing.T, tc TC) R {
 				is := assert.New(t)
 
-				is.PanicsWithValue(ErrWriterClosed, func() {
+				is.PanicsWithValue(tc.expErr, func() {
 					_ = tc.w.MustNewRecord()
 				})
 
