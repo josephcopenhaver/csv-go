@@ -700,6 +700,10 @@ func (w *Writer) WriteHeader(options ...WriteHeaderOption) (int, error) {
 		return result, err
 	}
 
+	if (w.bitFlags & wFlagRecordBuffCheckedOut) != 0 {
+		return result, ErrWriterNotReady
+	}
+
 	if (w.bitFlags & wFlagHeaderWritten) != 0 {
 		return result, ErrHeaderWritten
 	}

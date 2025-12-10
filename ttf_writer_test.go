@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 	"unicode/utf8"
 
 	"github.com/josephcopenhaver/csv-go/v3"
@@ -17,7 +16,6 @@ import (
 type wr struct {
 	r                []string
 	fwr              []csv.FieldWriter
-	rwr              []any
 	errAs            []any
 	errAsNot         []any
 	errIs            []error
@@ -236,8 +234,13 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 					is.NotNil(err)
 					if errWriterInIOErrState != nil {
 						is.True(err == errWriterInIOErrState)
-					} else {
+					} else if writeSuccess {
 						is.ErrorIs(err, csv.ErrHeaderWritten)
+					} else {
+						// could have been already written OR the write failed such that ErrWriterNotReady was returned
+						//
+						// all other error types are io level errors.
+						is.True(errors.Is(err, csv.ErrHeaderWritten) || errors.Is(err, csv.ErrWriterNotReady))
 					}
 				}
 			}
@@ -268,45 +271,9 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 									break
 								}
 							}
-						} else if v.r != nil {
+						} else {
 							for _, v := range v.r {
 								rw.String(v)
-								if rw.Err() != nil {
-									break
-								}
-							}
-						} else {
-							for _, v := range v.rwr {
-								switch vt := v.(type) {
-								case []byte:
-									rw.Bytes(vt)
-								case uncheckedUTF8Bytes:
-									rw.UncheckedUTF8Bytes(vt)
-								case string:
-									rw.String(vt)
-								case uncheckedUTF8String:
-									rw.UncheckedUTF8String(string(vt))
-								case int64:
-									rw.Int64(vt)
-								case int:
-									rw.Int(vt)
-								case time.Duration:
-									rw.Duration(vt)
-								case uint64:
-									rw.Uint64(vt)
-								case time.Time:
-									rw.Time(vt)
-								case bool:
-									rw.Bool(vt)
-								case float64:
-									rw.Float64(vt)
-								case rune:
-									rw.Rune(vt)
-								case uncheckedUTF8Rune:
-									rw.UncheckedUTF8Rune(rune(vt))
-								default:
-									panic("not a valid field type")
-								}
 								if rw.Err() != nil {
 									break
 								}
@@ -547,10 +514,6 @@ func canConvertStrWriteToFieldWrite(tc *functionalWriterTestCase) bool {
 		if tc.wrs[i].fwr != nil {
 			return false
 		}
-
-		if tc.wrs[i].rwr != nil {
-			return false
-		}
 	}
 
 	return true
@@ -564,10 +527,6 @@ func canConvertStrWriteToFluentWrite(tc *functionalWriterTestCase) bool {
 	for i := range tc.wrs {
 
 		if tc.wrs[i].fwr != nil {
-			return false
-		}
-
-		if tc.wrs[i].rwr != nil {
 			return false
 		}
 	}

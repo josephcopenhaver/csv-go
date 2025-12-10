@@ -110,6 +110,20 @@ func TestFunctionalWriterHeaderErrorPaths(t *testing.T) {
 			whErrIs:  []error{csv.ErrBadConfig},
 			whErrStr: csv.ErrBadConfig.Error() + "\n" + `comment rune cannot be specified when writing headers while the writer instance already has one specified`,
 		},
+		{
+			when: "writer is locked by a RecordWriter and attempting to WriteHeader",
+			afterInitWriter: func(_ *testing.T, w *csv.Writer) {
+				_ = w.NewRecord()
+			},
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().CommentRune('#'),
+			},
+			whOpts: []csv.WriteHeaderOption{
+				csv.WriteHeaderOpts().CommentLines(`hello`),
+			},
+			whErrIs:  []error{csv.ErrWriterNotReady},
+			whErrStr: csv.ErrWriterNotReady.Error(),
+		},
 	}
 
 	for _, tc := range tcs {

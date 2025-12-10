@@ -164,10 +164,9 @@ type functionalRecordWriterTestCase struct {
 	newOptsF        func() []csv.WriterOption
 	numRandomFields int
 	fields          []rwf
-	// records         [][]rwf
-	res       wrRes
-	afterTest func(*testing.T)
-	sep       string
+	res             wrRes
+	afterTest       func(*testing.T)
+	sep             string
 }
 
 func (tc *functionalRecordWriterTestCase) clone() *functionalRecordWriterTestCase {
