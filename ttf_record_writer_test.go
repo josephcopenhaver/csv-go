@@ -389,22 +389,17 @@ func (tc *functionalRecordWriterTestCase) Run(t *testing.T) {
 			{
 				err := rw.Err()
 				if expectWriteSuccess {
-					is.Equal(csv.ErrRecordWritten, err)
-					is.Equal("record written", err.Error())
-					is.ErrorIs(err, csv.ErrRecordWriterClosed)
-				} else {
-					is.NotErrorIs(err, csv.ErrRecordWritten)
-					is.NotEqual("record written", err.Error())
 					is.Equal(csv.ErrRecordWriterClosed, err)
+				} else {
+					// internal err state could be ErrRecordWriterClosed
+					// or any other non-nil error state
+					is.NotNil(err)
 				}
 
-				// attempting to write a field to a closed writer makes the Err()
-				// return value ErrRecordWriterClosed even if a previous write
-				// was successful
+				// attempting to write a field to a closed writer has no effect
+				// and the Err() return value remains unchanged.
 				rw.Bool(false)
-				err = rw.Err()
-				is.Equal(csv.ErrRecordWriterClosed, err)
-				is.NotErrorIs(err, csv.ErrRecordWritten)
+				is.Equal(err, rw.Err())
 			}
 
 			// once closed, Writes should always return an error

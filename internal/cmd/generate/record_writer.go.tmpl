@@ -9,9 +9,6 @@
 
 func (rw *RecordWriter) preflightCheck_memclearO{{$memClear}}() bool {
 	if rw.err != nil {
-		if rw.err == ErrRecordWritten {
-			rw.err = ErrRecordWriterClosed
-		}
 		return false
 	}
 
@@ -310,7 +307,7 @@ func (rw *RecordWriter) write_memclearO{{$memClear}}() (int, error) {
 
 		rw.abort(err)
 	} else {
-		rw.err = ErrRecordWritten
+		rw.err = ErrRecordWriterClosed
 	}
 	return n, err
 }

@@ -62,7 +62,6 @@ func TestNewRecordWriterErrPaths(t *testing.T) {
 				is.NotNil(r.errAfterRollback)
 				is.ErrorIs(r.errAfterRollback, csv.ErrRecordWriterClosed)
 				is.Equal(csv.ErrRecordWriterClosed.Error(), r.errAfterRollback.Error())
-				is.NotErrorIs(r.errAfterRollback, csv.ErrRecordWritten)
 			},
 		),
 		tbdd.GWT(
@@ -93,7 +92,6 @@ func TestNewRecordWriterErrPaths(t *testing.T) {
 				is.NotNil(r.errAfterRollback)
 				is.ErrorIs(r.errAfterRollback, csv.ErrRecordWriterClosed)
 				is.Equal(csv.ErrRecordWriterClosed.Error(), r.errAfterRollback.Error())
-				is.NotErrorIs(r.errAfterRollback, csv.ErrRecordWritten)
 			},
 		),
 	}

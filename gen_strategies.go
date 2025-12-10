@@ -4275,9 +4275,6 @@ func leadingOnes8(b byte) uint8 {
 
 func (rw *RecordWriter) preflightCheck_memclearOff() bool {
 	if rw.err != nil {
-		if rw.err == ErrRecordWritten {
-			rw.err = ErrRecordWriterClosed
-		}
 		return false
 	}
 
@@ -4620,16 +4617,13 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 
 		rw.abort(err)
 	} else {
-		rw.err = ErrRecordWritten
+		rw.err = ErrRecordWriterClosed
 	}
 	return n, err
 }
 
 func (rw *RecordWriter) preflightCheck_memclearOn() bool {
 	if rw.err != nil {
-		if rw.err == ErrRecordWritten {
-			rw.err = ErrRecordWriterClosed
-		}
 		return false
 	}
 
@@ -4972,7 +4966,7 @@ func (rw *RecordWriter) write_memclearOn() (int, error) {
 
 		rw.abort(err)
 	} else {
-		rw.err = ErrRecordWritten
+		rw.err = ErrRecordWriterClosed
 	}
 	return n, err
 }

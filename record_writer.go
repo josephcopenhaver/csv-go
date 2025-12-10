@@ -6,28 +6,9 @@ import (
 )
 
 var (
-	// ErrRecordWriterClosed is returned by a call to Err() or Write() when you attempt to use a record writer that has already completed its lifecycle. A record writer lifecycle is complete when Rollback is called or Write is called.
-	//
-	// Note that ErrRecordWritten is a subclass of this error.
+	// ErrRecordWriterClosed indicates that the RecordWriter has completed its lifecycle and cannot be used for further writing.
 	ErrRecordWriterClosed = errors.New("record writer closed")
-
-	// ErrRecordWritten is returned from the call to Err() after a write succeeds.
-	//
-	// It is a subclass of the error ErrRecordWriterClosed.
-	//
-	// In general this error should not be used to validate a write - instead use the result of the Write call.
-	ErrRecordWritten = error(&errRecordWritten{})
 )
-
-type errRecordWritten struct{}
-
-func (e *errRecordWritten) Error() string {
-	return "record written"
-}
-
-func (e *errRecordWritten) Is(target error) bool {
-	return target == ErrRecordWritten || errors.Is(ErrRecordWriterClosed, target)
-}
 
 // RecordWriter instances must always have life-cycles
 // that end with calls to Write and/or Rollback.
@@ -61,9 +42,32 @@ func (w *Writer) NewRecord() *RecordWriter {
 	err := w.err
 	bitFlags := w.bitFlags
 
-	if (bitFlags & (wFlagForceQuoteFirstField | wFlagRecordBuffCheckedOut)) != 0 {
+	// Checking that the wFlagForceQuoteFirstField flag is not set because
+	// it is a pure write lifecycle flag which cannot be set outside of
+	// a write context.
+	//
+	// If it is set here, it indicates that another RecordWriter
+	// or write process is active and has not yet been written or rolled
+	// back.
+	//
+	// This is a concurrent access violation.
+	//
+	// In addition, the RecordWriter uses the flag to indicate that the
+	// first field of the first record is being written and under certain
+	// circumstances the field may need to be "force quoted" to ensure
+	// valid CSV file output given additions to the CSV specification such
+	// as header comment lines and properly managing records of one column
+	// length.
+
+	if (bitFlags & (wFlagRecordBuffCheckedOut | wFlagForceQuoteFirstField)) != 0 {
+		// wFlagForceQuoteFirstField indicates that
 		// a pure write lifecycle flag which cannot be set outside of
 		// a write context was set
+		//
+		// wFlagRecordBuffCheckedOut indicates that another
+		// RecordWriter is already active
+		//
+		// both conditions indicate invalid concurrent access
 		panic("invalid concurrent access detected on record creation")
 	}
 
@@ -71,6 +75,8 @@ func (w *Writer) NewRecord() *RecordWriter {
 		wb = w.writeBuffer
 		w.bitFlags |= wFlagRecordBuffCheckedOut
 	} else {
+		// note that it should be impossible for err to be nil here
+		// while wFlagClosed is also set, but just in case...
 		if err == nil {
 			err = ErrWriterClosed
 		}
@@ -88,24 +94,22 @@ func (w *Writer) NewRecord() *RecordWriter {
 // Err returns any error that has occurred during the lifecycle
 // of the RecordWriter instance.
 //
-// If the RecordWriter has been closed through a call to
-// Rollback, Err will return ErrRecordWriterClosed.
-//
-// If the RecordWriter has been successfully written
-// through a call to Write, Err will return ErrRecordWritten
-// which is a subclass of ErrRecordWriterClosed.
-//
-// Attempting to use a RecordWriter after its lifecycle has ended
-// will force the Err method to return ErrRecordWriterClosed when
-// it is next called.
-//
-// After a call to Write or Rollback, the RecordWriter
-// instance cannot be used again for additional writing.
+// Once Rollback or Write has been called, Err will always
+// return a non-nil error value. If no error occurred during
+// the RecordWriter lifecycle, Err will return
+// ErrRecordWriterClosed. ErrRecordWriterClosed does not
+// indicate that a record was successfully written;
+// it only indicates that the RecordWriter instance
+// is no longer usable for writing. For write success status,
+// check the error return value from Write.
 func (rw *RecordWriter) Err() error {
 	return rw.err
 }
 
 func (rw *RecordWriter) abort(err error) {
+	// Ensure that the internal error state is non-nil
+	// from this point forward given the provided err
+	// is never nil.
 	if rw.err == nil {
 		rw.err = err
 	}
@@ -117,11 +121,17 @@ func (rw *RecordWriter) abort(err error) {
 	recordBuf := rw.recordBuf
 
 	if rw.w.err != nil {
+		// the parent writer context is already functionally closed
+		// so just clear the record buffer if needed and return
 		if (rw.bitFlags & wFlagClearMemoryAfterFree) != 0 {
 			clear(recordBuf[:cap(recordBuf)])
 		}
 		return
 	}
+
+	// signal to the parent writer context that it can create
+	// new RecordWriter instances and in general take over writing
+	// duties again
 
 	rw.w.recordBuf = recordBuf
 	rw.w.bitFlags &= (^wFlagRecordBuffCheckedOut)
@@ -132,7 +142,22 @@ func (rw *RecordWriter) abort(err error) {
 // the record buffer to the io.Writer within the csv Writer
 // instance.
 //
-// This RecordWriter cannot be used again after this call.
+// This RecordWriter instance cannot be used for further writing
+// after this call.
+//
+// This function is always safe to call even if the RecordWriter
+// instance is already closed (write success, errored, or skipped),
+// in some error state, or previously rolled back.
+//
+// If a previous Write call was attempted, Rollback will have no
+// meaningful effect of any kind. Same applies if the RecordWriter
+// instance was previously rolled back.
+//
+// Calling rollback will not change any existing error state in the
+// RecordWriter instance should it be non-nil. If the error state
+// is nil prior to calling Rollback, it will be set to
+// ErrRecordWriterClosed. The error state can be retrieved
+// through the Err() method.
 func (rw *RecordWriter) Rollback() {
 	rw.abort(ErrRecordWriterClosed)
 }
@@ -140,7 +165,11 @@ func (rw *RecordWriter) Rollback() {
 // Bytes appends a byte slice field to the current record.
 //
 // The byte slice is treated as UTF-8 encoded data and validated as such before writing
-// unless the Writer was created with the DisableUTF8Validation option set to true.
+// unless the Writer was created with the ErrorOnNonUTF8 option set to false.
+//
+// If the byte slice contains invalid UTF-8 and UTF-8 validation is enabled, the RecordWriter
+// instance will enter an error state retrievable through the Err() method or eventually
+// observable through a terminating Write call.
 func (rw *RecordWriter) Bytes(p []byte) *RecordWriter {
 	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
 		if rw.preflightCheck_memclearOff() {
@@ -180,7 +209,11 @@ func (rw *RecordWriter) UncheckedUTF8Bytes(p []byte) *RecordWriter {
 // String appends a string field to the current record.
 //
 // The string is treated as UTF-8 encoded data and validated as such before writing
-// unless the Writer was created with the DisableUTF8Validation option set to true.
+// unless the Writer was created with the ErrorOnNonUTF8 option set to false.
+//
+// If the string is invalid UTF-8 and UTF-8 validation is enabled, the RecordWriter
+// instance will enter an error state retrievable through the Err() method or eventually
+// observable through a terminating Write call.
 func (rw *RecordWriter) String(s string) *RecordWriter {
 	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
 		if rw.preflightCheck_memclearOff() {
@@ -309,7 +342,11 @@ func (rw *RecordWriter) Float64(f float64) *RecordWriter {
 // Rune appends a rune field to the current record.
 //
 // The rune value is treated as UTF-8 encoded data and validated as such before writing
-// unless the Writer was created with the DisableUTF8Validation option set to true.
+// unless the Writer was created with the ErrorOnNonUTF8 option set to false.
+//
+// If the rune is invalid UTF-8 and UTF-8 validation is enabled, the RecordWriter
+// instance will enter an error state retrievable through the Err() method or eventually
+// observable through a terminating Write call.
 func (rw *RecordWriter) Rune(r rune) *RecordWriter {
 	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
 		if rw.preflightCheck_memclearOff() {
@@ -328,13 +365,12 @@ func (rw *RecordWriter) Rune(r rune) *RecordWriter {
 // instance and releases the csv Writer for additional writing through
 // another RecordWriter instance or other means.
 //
-// This RecordWriter instance cannot be used again after this call.
+// If the write is successful then this function will return a nil error.
+// It is the only opportunity to retrieve such a "write success"
+// status from the RecordWriter instance.
 //
-// If the write is successful then this function will return a nil error,
-// while the Err() method will return ErrRecordWritten.
-//
-// If the write errors, then the underlying error will be returned
-// and the Err() method will return that same error.
+// This RecordWriter instance cannot be used for further writing
+// after this call.
 func (rw *RecordWriter) Write() (int, error) {
 	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
 		return rw.write_memclearOff()

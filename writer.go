@@ -31,7 +31,8 @@ var (
 type wFlag uint8
 
 const (
-	wFlagFirstRecordWritten wFlag = 1 << iota
+	wFlagRecordBuffCheckedOut wFlag = 1 << iota
+	wFlagFirstRecordWritten
 	wFlagErrOnNonUTF8
 	wFlagControlRuneOverlap
 	wFlagForceQuoteFirstField
@@ -43,7 +44,6 @@ const (
 	wFlagHeaderWritten
 	wFlagClosed
 	wFlagClearMemoryAfterFree
-	wFlagRecordBuffCheckedOut
 )
 
 const (

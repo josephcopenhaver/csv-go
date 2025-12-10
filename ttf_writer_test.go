@@ -505,6 +505,10 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 }
 
 func canConvertStrWriteToFieldWrite(tc *functionalWriterTestCase) bool {
+	if tc.afterInitWriter != nil {
+		return false
+	}
+
 	if len(tc.wrs) == 0 {
 		return false
 	}
@@ -521,6 +525,10 @@ func canConvertStrWriteToFieldWrite(tc *functionalWriterTestCase) bool {
 
 func canConvertStrWriteToFluentWrite(tc *functionalWriterTestCase) bool {
 	if tc.afterInitWriter != nil {
+		return false
+	}
+
+	if len(tc.wrs) == 0 {
 		return false
 	}
 
