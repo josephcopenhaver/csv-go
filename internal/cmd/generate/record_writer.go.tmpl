@@ -1,12 +1,26 @@
-{{- $memClear := "" }}
-{{if .Memclear}}{{ $memClear = "n"}}{{else}}{{ $memClear = "ff" }}{{end}}
-{{ $appendBytesRec0 := "" }}{{if .Memclear}}{{ $appendBytesRec0 = "rw.appendRec(" }}{{else}}{{ $appendBytesRec0 = "rw.recordBuf = append(rw.recordBuf, " }}{{end}}
-{{ $appendStrRec0 := "" }}{{if .Memclear}}{{ $appendStrRec0 = "rw.appendStrRec(" }}{{else}}{{ $appendStrRec0 = "rw.recordBuf = append(rw.recordBuf, " }}{{end}}
-{{ $appendRec0 := $appendBytesRec0 }}
-{{ $appendRec1 := "" }}{{if .Memclear}}{{ $appendRec1 = ")" }}{{else}}{{ $appendRec1 = "...)" }}{{end}}
-{{ $setRec0 := "" }}{{if .Memclear}}{{ $setRec0 = "rw.setRecordBuf(" }}{{else}}{{ $setRec0 = "rw.recordBuf = " }}{{end}}
-{{ $setRec1 := "" }}{{if .Memclear}}{{ $setRec1 = ")" }}{{- end}}
+{{ $memClear := "" }}
+{{ $appendBytesRec0 := "" }}
+{{ $appendStrRec0 := "" }}
+{{ $appendRec1 := "" }}
+{{ $setRec0 := "" }}
+{{ $setRec1 := "" }}
 
+{{if .Memclear}}
+{{ $memClear = "n"}}
+{{ $appendBytesRec0 = "rw.appendRec(" }}
+{{ $appendStrRec0 = "rw.appendStrRec(" }}
+{{ $appendRec1 = ")" }}
+{{ $setRec0 = "rw.setRecordBuf(" }}
+{{ $setRec1 = ")" }}
+
+{{else}}
+{{ $memClear = "ff" }}
+{{ $appendBytesRec0 = "rw.recordBuf = append(rw.recordBuf, " }}
+{{ $appendStrRec0 = "rw.recordBuf = append(rw.recordBuf, " }}
+{{ $appendRec1 = "...)" }}
+{{ $setRec0 = "rw.recordBuf = " }}
+
+{{end}}
 func (rw *RecordWriter) preflightCheck_memclearO{{$memClear}}() bool {
 	if rw.err != nil {
 		return false
@@ -51,7 +65,7 @@ func (rw *RecordWriter) unsafeAppendUTF8FieldBytes_memclearO{{$memClear}}(p []by
 	if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !bytes.HasPrefix(p, []byte(string(rw.w.comment))) {
 		i = rw.w.controlRuneSet.indexAnyInBytes(p)
 		if i == -1 {
-			{{$appendRec0}}p{{$appendRec1}}
+			{{$appendBytesRec0}}p{{$appendRec1}}
 			return
 		}
 	}
@@ -65,6 +79,7 @@ func (rw *RecordWriter) unsafeAppendUTF8FieldBytes_memclearO{{$memClear}}(p []by
 
 
 {{range .Methods}}
+{{ $appendRec0 := "" }}
 {{ $methodPrefix := "" }}
 {{ $arg := "" }}
 {{ $params := "" }}

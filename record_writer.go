@@ -100,11 +100,12 @@ func (w *Writer) NewRecord() (*RecordWriter, error) {
 //   - when a previous RecordWriter is still active and has not been finalized
 //     with Write or Rollback (programmer misuse).
 //
-// This helper is intended for applications that choose to treat such conditions
-// as fatal. Library callers who need to recover from these conditions should use
-// NewRecord and handle its error result instead. Callers of this method take
-// extra care to ensure that when a Write() returns a non-nil error that this
-// method is not called again on the same Writer instance.
+// This helper is intended for applications that choose to treat an unusable
+// Writer (closed, already errored, or with an active RecordWriter) as a fatal
+// condition. Callers that need to recover from these states should use
+// NewRecord and handle its error result instead. When using MustNewRecord, the
+// caller is responsible for only invoking it on Writer instances that have not
+// yet observed an error and that do not currently have an active RecordWriter.
 func (w *Writer) MustNewRecord() *RecordWriter {
 	rw, err := w.NewRecord()
 	if err != nil {

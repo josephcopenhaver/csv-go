@@ -63,11 +63,7 @@ func main() {
 	}()
 
 	for row := range cr.IntoIter() {
-		rw := cw.MustNewRecord()
-		for _, s := range cr.Row() {
-			rw.String(s)
-		}
-		if _, err := rw.Write(); err != nil {
+		if _, err := cw.WriteRow(row...); err != nil {
 			panic(err)
 		}
 	}
@@ -209,7 +205,12 @@ func main() {
 	// using Scan instead of the iterator sugar to avoid allocation of the iterator closures
 	for cr.Scan() {
 		// if BorrowRow=true or BorrowFields=true then implementation reading rows from the Reader MUST NOT keep the rows or byte sub-slices alive beyond the next call to cr.Scan()
-		rw := cw.MustNewRecord()
+		rw, err := cw.NewRecord()
+		if err != nil {
+			// note if you are just going to panic, consider calling MustNewRecord()
+			// instead of the NewRecord() function
+			panic(err)
+		}
 		for _, s := range cr.Row() {
 			rw.String(s)
 		}
