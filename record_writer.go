@@ -66,9 +66,6 @@ type RecordWriter struct {
 //
 // Concurrent calls to NewRecord are not supported.
 //
-// If the parent Writer instance is closed, the returned RecordWriter
-// will have its Err() method return ErrWriterClosed.
-//
 // While the RecordWriter is active, the parent Writer instance
 // is locked from additional writing until the RecordWriter's
 // lifecycle is ended with a call to Write or Rollback.
@@ -398,12 +395,14 @@ func (rw *RecordWriter) Float64(f float64) *RecordWriter {
 
 // Rune appends a rune field to the current record.
 //
-// The rune value is treated as UTF-8 encoded data and validated as such before writing
-// unless the Writer was created with the ErrorOnNonUTF8 option set to false.
+// The rune value is treated as UTF-8 encoded data and validated as such before writing.
 //
-// If the rune is invalid UTF-8 and UTF-8 validation is enabled, the RecordWriter
-// instance will enter an error state retrievable through the Err() method or eventually
-// observable through a terminating Write call.
+// Please note that only valid runes can be written and attempting to write anything
+// else will lead to an ErrInvalidRune error state in the RecordWriter instance.
+// The error can be retrieved through the Err() method or eventually observable through
+// a terminating Write call.
+//
+// The Writer option ErrorOnNonUTF8 does not affect this behavior!
 func (rw *RecordWriter) Rune(r rune) *RecordWriter {
 	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
 		if rw.preflightCheck_memclearOff() {
