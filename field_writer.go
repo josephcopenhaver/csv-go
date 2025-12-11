@@ -45,6 +45,27 @@ const (
 	wfkFloat64
 )
 
+// DEV NOTE:
+//
+// Escape analysis is very conservative right now which prohibits me from making the
+// FieldWriter struct smaller without impacting allocation rates per field write.
+//
+// I have tried to coerce each of the fields bytes, time, and str into a reusable form
+// for the union of types only to be met with disappointment. It seems as AppendText
+// gets more complex the more likely escape analysis is to give up. And trying to isolate
+// complexity to helper functions leads to the compiler assuming escapes occur though
+// a strong reader would be able to confirm they would not.
+//
+// In addition safely storing the *time.Location of time is NOT leading to escapes -
+// except when calling a time.Time's `In(<*time.Location>) time.Time` function. Which
+// we turn around and throw away after calling the append text function of time.Time
+// So re-implementing all that logic is not worth it - and hacking together something that
+// uses the current interfaces is more likely to lead to increased latency from the top
+// level perspective of things.
+//
+// To make field writer smaller we'd need to remove supported types. It's more likely that
+// I'd offer a way to stream field writes instead of ever removing anything.
+
 type FieldWriter struct {
 	kind  wFieldKind
 	bytes []byte
@@ -147,7 +168,7 @@ func (w *FieldWriter) MarshalText() ([]byte, error) {
 		input := w._64_bits
 		var signAdjustment int
 		if input&u64signBitMask != 0 {
-			input = uint64(-int64(w._64_bits))
+			input = uint64(-int64(input))
 			signAdjustment = 1
 		}
 		base10ByteLen := decLenU64(input) + signAdjustment
@@ -177,6 +198,12 @@ func (w *FieldWriter) MarshalText() ([]byte, error) {
 
 type FieldWriterFactory struct{}
 
+// Bytes creates a concrete FieldWriter that serializes
+// the provided byte slice as a UTF-8 string.
+//
+// WARNING: This method is likely to lead to additional allocations if the input
+// data is not already on the heap due to how the Go compiler handles escape analysis.
+// (consider using the fluent API on RecordWriter instead to avoid this issue)
 func (FieldWriterFactory) Bytes(p []byte) FieldWriter {
 	return FieldWriter{
 		kind:  wfkBytes,
@@ -190,6 +217,12 @@ func (FieldWriterFactory) Bytes(p []byte) FieldWriter {
 // Please consider this to be a micro optimization and prefer Bytes
 // instead should there be any uncertainty in the encoding of the
 // byte contents.
+//
+// WARNING: Using this method with invalid UTF-8 data will produce invalid CSV output.
+//
+// WARNING: This method is likely to lead to additional allocations if the input
+// data is not already on the heap due to how the Go compiler handles escape analysis.
+// (consider using the fluent API on RecordWriter instead to avoid this issue)
 func (FieldWriterFactory) UncheckedUTF8Bytes(p []byte) FieldWriter {
 	return FieldWriter{
 		kind:     wfkBytes,
@@ -211,6 +244,8 @@ func (FieldWriterFactory) String(s string) FieldWriter {
 // Please consider this to be a micro optimization and prefer String
 // instead should there be any uncertainty in the encoding of the
 // byte contents.
+//
+// WARNING: Using this method with invalid UTF-8 data will produce invalid CSV output.
 func (FieldWriterFactory) UncheckedUTF8String(s string) FieldWriter {
 	return FieldWriter{
 		kind:     wfkString,

@@ -89,7 +89,7 @@ func BenchmarkWritePostInitSmallNegInts(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	fw := csv.FieldWriters()
 
@@ -120,7 +120,7 @@ func BenchmarkWritePostInitLargeNegInts(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	fw := csv.FieldWriters()
 
@@ -152,7 +152,7 @@ func BenchmarkWritePostInitStrings(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	runtime.GC()
 	b.ResetTimer()
@@ -161,6 +161,234 @@ func BenchmarkWritePostInitStrings(b *testing.B) {
 			"-1",
 			"-1",
 		)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// stopping the timer because STD does not have an equivalent purpose Close call
+	b.StopTimer()
+	_ = cw.Close()
+}
+
+func BenchmarkWritePostInitFieldWriterStrings(b *testing.B) {
+	b.ReportAllocs()
+
+	cw, err := csv.NewWriter(
+		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().InitialRecordBufferSize(4096),
+		csv.WriterOpts().ErrorOnNonUTF8(false),
+	)
+	if err != nil {
+		panic(err)
+	}
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := cw.WriteFieldRow(
+			csv.FieldWriters().String("-1"),
+			csv.FieldWriters().String("-1"),
+		)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// stopping the timer because STD does not have an equivalent purpose Close call
+	b.StopTimer()
+	_ = cw.Close()
+}
+
+func BenchmarkWritePostInitFieldWriterAllTypes(b *testing.B) {
+	b.ReportAllocs()
+
+	cw, err := csv.NewWriter(
+		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().InitialRecordBufferSize(4096),
+		csv.WriterOpts().ErrorOnNonUTF8(false),
+	)
+	if err != nil {
+		panic(err)
+	}
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
+	now := time.Now()
+
+	fwf := csv.FieldWriters()
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := cw.WriteFieldRow(
+			fwf.String("-1"),
+			fwf.Int(-1),
+			fwf.Bool(true),
+			fwf.Bytes([]byte{'a'}), // NOTE: this Bytes writer type leads to allocations - to avoid them entirely switch to using NewRecord() or MustNewRecord() and the returned *RecordWriter or use advanced pre-allocated buffer tactics
+			fwf.Duration(time.Second),
+			fwf.Float64(0.0123),
+			fwf.Int64(-1),
+			fwf.Rune('N'),
+			fwf.Time(now),
+			fwf.Uint64(math.MaxUint),
+		)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// stopping the timer because STD does not have an equivalent purpose Close call
+	b.StopTimer()
+	_ = cw.Close()
+}
+
+func BenchmarkWritePostInitFieldWriterAllTypesWithHeapBytes(b *testing.B) {
+	b.ReportAllocs()
+
+	cw, err := csv.NewWriter(
+		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().InitialRecordBufferSize(4096),
+		csv.WriterOpts().ErrorOnNonUTF8(false),
+	)
+	if err != nil {
+		panic(err)
+	}
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
+	now := time.Now()
+
+	fwf := csv.FieldWriters()
+
+	// specifically pre-allocate the bytes type on the heap
+	// if needed and share across each benchmark run.
+	heapBytes := []byte{'a'}
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := cw.WriteFieldRow(
+			fwf.String("-1"),
+			fwf.Int(-1),
+			fwf.Bool(true),
+			fwf.Bytes(heapBytes),
+			fwf.Duration(time.Second),
+			fwf.Float64(0.0123),
+			fwf.Int64(-1),
+			fwf.Rune('N'),
+			fwf.Time(now),
+			fwf.Uint64(math.MaxUint),
+		)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// stopping the timer because STD does not have an equivalent purpose Close call
+	b.StopTimer()
+	_ = cw.Close()
+}
+
+func BenchmarkWritePostInitRecordWriterStrings(b *testing.B) {
+	b.ReportAllocs()
+
+	cw, err := csv.NewWriter(
+		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().InitialRecordBufferSize(4096),
+		csv.WriterOpts().ErrorOnNonUTF8(false),
+	)
+	if err != nil {
+		panic(err)
+	}
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := cw.MustNewRecord().
+			String("-1").
+			String("-1").
+			Write()
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// stopping the timer because STD does not have an equivalent purpose Close call
+	b.StopTimer()
+	_ = cw.Close()
+}
+
+func BenchmarkWritePostInitRecordWriterAllTypes(b *testing.B) {
+	b.ReportAllocs()
+
+	cw, err := csv.NewWriter(
+		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().InitialRecordBufferSize(4096),
+		csv.WriterOpts().ErrorOnNonUTF8(false),
+	)
+	if err != nil {
+		panic(err)
+	}
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
+	now := time.Now()
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := cw.MustNewRecord().
+			String("-1").
+			Int(-1).
+			Bool(true).
+			Bytes([]byte{'a'}).
+			Duration(time.Second).
+			Float64(0.0123).
+			Int64(-1).
+			Rune('N').
+			Time(now).
+			Uint64(math.MaxUint).
+			Write()
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	// stopping the timer because STD does not have an equivalent purpose Close call
+	b.StopTimer()
+	_ = cw.Close()
+}
+
+func BenchmarkWritePostInitRecordWriterAllTypesWithHeapBytes(b *testing.B) {
+	b.ReportAllocs()
+
+	cw, err := csv.NewWriter(
+		csv.WriterOpts().Writer(io.Discard),
+		csv.WriterOpts().InitialRecordBufferSize(4096),
+		csv.WriterOpts().ErrorOnNonUTF8(false),
+	)
+	if err != nil {
+		panic(err)
+	}
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
+	now := time.Now()
+
+	// specifically pre-allocate the bytes type on the heap
+	// if needed and share across each benchmark run.
+	heapBytes := []byte{'a'}
+
+	runtime.GC()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := cw.MustNewRecord().
+			String("-1").
+			Int(-1).
+			Bool(true).
+			Bytes(heapBytes).
+			Duration(time.Second).
+			Float64(0.0123).
+			Int64(-1).
+			Rune('N').
+			Time(now).
+			Uint64(math.MaxUint).
+			Write()
 		if err != nil {
 			panic(err)
 		}
@@ -206,7 +434,7 @@ func BenchmarkWritePostInitWideStringsWithEncValidation(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	runtime.GC()
 	b.ResetTimer()
@@ -236,7 +464,7 @@ func BenchmarkWritePostInitWideStringsWithoutEncValidation(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	runtime.GC()
 	b.ResetTimer()
@@ -268,7 +496,7 @@ func BenchmarkWriteWithSliceExpansion(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	fw := csv.FieldWriters()
 
@@ -299,7 +527,7 @@ func BenchmarkWriteWithSliceBorrowed(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	fw := csv.FieldWriters()
 	row := []csv.FieldWriter{
@@ -330,7 +558,7 @@ func BenchmarkWriteWithQuotes(b *testing.B) {
 	if err != nil {
 		panic(err)
 	}
-	// defer cw.Close() // for the sake of the benchmark, calling explicitly and the end of the loop
+	// defer cw.Close() // for the sake of the benchmark, calling explicitly at the end of the loop
 
 	fw := csv.FieldWriters()
 

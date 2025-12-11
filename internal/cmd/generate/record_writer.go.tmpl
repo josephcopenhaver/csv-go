@@ -1,0 +1,326 @@
+{{ $memClear := "" }}
+{{ $appendBytesRec0 := "" }}
+{{ $appendStrRec0 := "" }}
+{{ $appendRec1 := "" }}
+{{ $setRec0 := "" }}
+{{ $setRec1 := "" }}
+
+{{if .Memclear}}
+{{ $memClear = "n"}}
+{{ $appendBytesRec0 = "rw.w.appendRec(" }}
+{{ $appendStrRec0 = "rw.w.appendStrRec(" }}
+{{ $appendRec1 = ")" }}
+{{ $setRec0 = "rw.w.setRecordBuf(" }}
+{{ $setRec1 = ")" }}
+
+{{else}}
+{{ $memClear = "ff" }}
+{{ $appendBytesRec0 = "rw.w.recordBuf = append(rw.w.recordBuf, " }}
+{{ $appendStrRec0 = "rw.w.recordBuf = append(rw.w.recordBuf, " }}
+{{ $appendRec1 = "...)" }}
+{{ $setRec0 = "rw.w.recordBuf = " }}
+
+{{end}}
+func (rw *RecordWriter) preflightCheck_memclearO{{$memClear}}() bool {
+	if rw.err != nil {
+		return false
+	}
+
+	switch rw.nextField {
+	case 0:
+		rw.bitFlags = rw.w.bitFlags
+		if err := rw.w.err; err != nil {
+			// if the parent writer has the closed bit set
+			// then the err value we just read is guaranteed to be non-nil
+			//
+			// so we ensure it is unset in this context just before we abort
+			// because that close flag reflects the writer state, not the rw
+			// instance state which should be scrubbed in this case.
+			//
+			// if it was not unset then abort would short-circuit early
+			rw.bitFlags &= (^wFlagClosed)
+			rw.abort(err)
+			return false
+		}
+
+		rw.w.recordBuf = rw.w.recordBuf[:0]
+		if rw.w.comment != invalidControlRune && (rw.bitFlags&wFlagFirstRecordWritten) == 0 {
+			rw.bitFlags |= wFlagForceQuoteFirstField
+		}
+	case 1:
+		rw.bitFlags &= (^wFlagForceQuoteFirstField)
+		fallthrough
+	default:
+		{{$setRec0}}rw.w.fieldSepSeq.appendText(rw.w.recordBuf){{$setRec1}}
+	}
+
+	rw.nextField++
+
+	return true
+}
+
+func (rw *RecordWriter) unsafeAppendUTF8FieldBytes_memclearO{{$memClear}}(p []byte) {
+	var i int
+	if (rw.bitFlags&wFlagForceQuoteFirstField) == 0 || !bytes.HasPrefix(p, []byte(string(rw.w.comment))) {
+		i = rw.w.controlRuneSet.indexAnyInBytes(p)
+		if i == -1 {
+			{{$appendBytesRec0}}p{{$appendRec1}}
+			return
+		}
+	}
+
+	{{$setRec0}}rw.w.quoteSeq.appendText(rw.w.recordBuf){{$setRec1}}
+
+	rw.w.loadQF_memclearO{{$memClear}}(p, i)
+
+	{{$setRec0}}rw.w.quoteSeq.appendText(rw.w.recordBuf){{$setRec1}}
+}
+
+
+{{range .Methods}}
+{{ $appendRec0 := "" }}
+{{ $methodPrefix := "" }}
+{{ $arg := "" }}
+{{ $params := "" }}
+{{ $loadQF := "" }}
+
+{{if eq .ArgType "String"}}
+{{ $appendRec0 = $appendStrRec0 }}
+{{ $methodPrefix = "string" }}
+{{ $arg = "s" }}
+{{ $params = printf "%s string" $arg }}
+{{ $loadQF = "loadStrQF" }}
+
+{{else}}
+{{ $appendRec0 = $appendBytesRec0 }}
+{{ $methodPrefix = "bytes" }}
+{{ $arg = "p" }}
+{{ $params = printf "%s []byte" $arg }}
+{{ $loadQF = "loadQF" }}
+
+{{end}}
+func (rw *RecordWriter) {{$methodPrefix}}_memclearO{{$memClear}}({{$params}}, disableUTF8Check bool) {
+	if disableUTF8Check || (rw.bitFlags&wFlagErrOnNonUTF8) == 0 {
+		// so just need to scan for quotes, escapes, fieldSep, CR / LF / maybe all other kinds of newline sequences / recordSep
+
+		var i int
+		if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 || !{{if eq .ArgType "Bytes"}}bytes{{else}}strings{{end}}.HasPrefix({{$arg}}, {{if eq .ArgType "Bytes"}}[]byte({{end}}string(rw.w.comment){{if eq .ArgType "Bytes"}}){{end}}) {
+			i = rw.w.controlRuneSet.indexAnyIn{{.ArgType}}({{$arg}})
+			if i == -1 {
+				{{$appendRec0}}{{$arg}}{{$appendRec1}}
+				return
+			}
+		}
+
+		{{$setRec0}}rw.w.quoteSeq.appendText(rw.w.recordBuf){{$setRec1}}
+
+		rw.w.{{$loadQF}}_memclearO{{$memClear}}({{$arg}}, i)
+
+		{{$setRec0}}rw.w.quoteSeq.appendText(rw.w.recordBuf){{$setRec1}}
+
+		return
+	}
+
+	// for each decoded rune, check if that rune fails to decode and if so then return an error
+	// if the rune is in the set of controlRunes then replace whatever needs to be replaced and
+	// continue loading
+
+	var i int
+	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 || !{{if eq .ArgType "Bytes"}}bytes{{else}}strings{{end}}.HasPrefix({{$arg}}, {{if eq .ArgType "Bytes"}}[]byte({{end}}string(rw.w.comment){{if eq .ArgType "Bytes"}}){{end}}) {
+		for {
+			if i >= len({{$arg}}) {
+				{{$appendRec0}}{{$arg}}{{$appendRec1}}
+				return
+			}
+
+			b := {{$arg}}[i]
+			if b < utf8.RuneSelf {
+				if !rw.w.controlRuneSet.containsSingleByteRune(b) {
+					i++
+					continue
+				}
+			} else if r, n := utf8.DecodeRune{{if eq "String" .ArgType}}InString{{end}}({{$arg}}[i:]); n == 1 {
+				rw.abort(ErrNonUTF8InRecord)
+				return
+			} else if !rw.w.controlRuneSet.containsMBRune(r) {
+				i += n
+				continue
+			}
+
+			break
+		}
+	}
+
+	//
+	// found a control rune of some kind or was forced to quote first field
+	//
+
+	{{$setRec0}}rw.w.quoteSeq.appendText(rw.w.recordBuf){{$setRec1}}
+
+	err := rw.w.{{$loadQF}}WithCheckUTF8_memclearO{{$memClear}}({{$arg}}, i)
+	if err != nil {
+		rw.abort(err)
+		return
+	}
+
+	{{$setRec0}}rw.w.quoteSeq.appendText(rw.w.recordBuf){{$setRec1}}
+}
+{{end}}
+
+func (rw *RecordWriter) int64_memclearO{{$memClear}}(i int64) {
+	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
+		{{$setRec0}}strconv.AppendInt(rw.w.recordBuf, i, 10){{$setRec1}}
+		return
+	}
+
+	rw.unsafeAppendUTF8FieldBytes_memclearO{{$memClear}}(strconv.AppendInt(rw.w.fieldWriterBuf[:0], i, 10))
+}
+
+func (rw *RecordWriter) uint64_memclearO{{$memClear}}(i uint64) {
+	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
+		{{$setRec0}}strconv.AppendUint(rw.w.recordBuf, i, 10){{$setRec1}}
+		return
+	}
+
+	rw.unsafeAppendUTF8FieldBytes_memclearO{{$memClear}}(strconv.AppendUint(rw.w.fieldWriterBuf[:0], i, 10))
+}
+
+func (rw *RecordWriter) time_memclearO{{$memClear}}(t time.Time) {
+	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
+		{{$setRec0}}t.AppendFormat(rw.w.recordBuf, time.RFC3339Nano){{$setRec1}}
+		return
+	}
+
+	rw.unsafeAppendUTF8FieldBytes_memclearO{{$memClear}}(t.AppendFormat(rw.w.fieldWriterBuf[:0], time.RFC3339Nano))
+}
+
+func (rw *RecordWriter) bool_memclearO{{$memClear}}(b bool) {
+
+	v := byte('0')
+	if b {
+		v += 1
+	}
+
+	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
+		{{$setRec0}}append(rw.w.recordBuf, v){{$setRec1}}
+		return
+	}
+
+	rw.w.fieldWriterBuf[0] = v
+	rw.unsafeAppendUTF8FieldBytes_memclearO{{$memClear}}(rw.w.fieldWriterBuf[:1])
+}
+
+func (rw *RecordWriter) float64_memclearO{{$memClear}}(f float64) {
+
+	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
+		{{$setRec0}}strconv.AppendFloat(rw.w.recordBuf, f, 'g', -1, 64){{$setRec1}}
+		return
+	}
+
+	rw.unsafeAppendUTF8FieldBytes_memclearO{{$memClear}}(strconv.AppendFloat(rw.w.fieldWriterBuf[:0], f, 'g', -1, 64))
+}
+
+func (rw *RecordWriter) rune_withCheckUTF8_memclearO{{$memClear}}(r rune) {
+	if !utf8.ValidRune(r) {
+		rw.abort(ErrInvalidRune)
+		return
+	}
+
+	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
+		if r < utf8.RuneSelf {
+			if !rw.w.controlRuneSet.containsSingleByteRune(byte(r)) {
+				goto SIMPLE_APPEND
+			}
+		} else if !rw.w.controlRuneSet.containsMBRune(r) {
+			goto SIMPLE_APPEND
+		}
+	}
+
+	rw.unsafeAppendUTF8FieldBytes_memclearO{{$memClear}}(utf8.AppendRune(rw.w.fieldWriterBuf[:0], r))
+	return
+
+SIMPLE_APPEND:
+	{{$setRec0}}utf8.AppendRune(rw.w.recordBuf, r){{$setRec1}}
+}
+
+func (rw *RecordWriter) write_memclearO{{$memClear}}() (int, error) {
+	wErr := rw.w.err
+
+	if err := rw.err; err != nil {
+		if wErr == nil {
+			rw.w.bitFlags |= wFlagHeaderWritten
+		}
+
+		return 0, err
+	}
+
+	switch rw.nextField {
+	case 0:
+		if wErr == nil {
+			rw.w.bitFlags |= wFlagHeaderWritten
+		}
+
+		err := ErrRowNilOrEmpty
+		rw.abort(err)
+		return 0, err
+	case 1:
+		if numFields := rw.w.numFields; numFields == -1 {
+			rw.w.numFields = 1
+		} else if numFields != 1 {
+			if wErr == nil {
+				rw.w.bitFlags |= wFlagHeaderWritten
+			}
+
+			err := ErrInvalidFieldCountInRecord
+			rw.abort(err)
+			return 0, err
+		}
+		if len(rw.w.recordBuf) == 0 {
+			{{$setRec0}}rw.w.twoQuotesSeq.appendText(rw.w.recordBuf){{$setRec1}}
+		}
+	default:
+		if numFields := rw.w.numFields; numFields == -1 {
+			rw.w.numFields = rw.nextField
+		} else if numFields != rw.nextField {
+			if wErr == nil {
+				rw.w.bitFlags |= wFlagHeaderWritten
+			}
+
+			err := ErrInvalidFieldCountInRecord
+			rw.abort(err)
+			return 0, err
+		}
+	}
+
+	{{$setRec0}}rw.w.recordSepSeq.appendText(rw.w.recordBuf){{$setRec1}}
+	rw.nextField = 0
+
+	if wErr != nil {
+		rw.abort(wErr)
+		return 0, wErr
+	}
+
+	// re-checkin the buffer then flush it to the internal writer
+
+	rw.bitFlags |= wFlagClosed
+	recordBuf := rw.w.recordBuf
+	rw.w.bitFlags = (rw.w.bitFlags & (^wFlagRecordBuffCheckedOut)) | (wFlagFirstRecordWritten | wFlagHeaderWritten)
+
+	n, err := rw.w.writer.Write(recordBuf)
+	if err != nil {
+		err = writeIOErr{err}
+		if rw.w.err == nil {
+			rw.w.setErr(err)
+		}
+
+		// no need to re-unset the rw.bitFlags wFlagClosed bit since
+		// the parent writer context now owns the record buffer again
+		//
+		// parent writer will clear it when closed
+
+		rw.abort(err)
+	} else {
+		rw.err = ErrRecordWriterClosed
+	}
+	return n, err
+}
