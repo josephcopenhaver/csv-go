@@ -159,34 +159,25 @@ func main() {
 	{
 		t := parse(tsRuneSet)
 
-		type methodCfg struct {
-			Name    string
-			ArgType string
-			Returns string
-		}
-
 		type cfg struct {
 			MultiByteSize uint8
 			UsageType     string
 			UsageStruct   string
-			Methods       []methodCfg
+			Names         []string
+			ArgTypes      []string
+		}
+
+		names := []string{"", "RuneLen"}
+		argTypes := []string{
+			"Bytes",
+			"String",
 		}
 
 		render := renderer[cfg](&buf)
 
 		render(t, []cfg{
-			{4, "writing", "Writer", []methodCfg{
-				{"", "Bytes", "int"},
-				{"", "String", "int"},
-				{"RuneLen", "Bytes", "(rune, uint8, int)"},
-				{"RuneLen", "String", "(rune, uint8, int)"},
-			}},
-			{6, "reading", "Reader", []methodCfg{
-				{"", "Bytes", "int"},
-				{"", "String", "int"},
-				{"RuneLen", "Bytes", "(rune, uint8, int)"},
-				{"RuneLen", "String", "(rune, uint8, int)"},
-			}},
+			{4, "writing", "Writer", names, argTypes},
+			{6, "reading", "Reader", names, argTypes},
 		})
 	}
 
