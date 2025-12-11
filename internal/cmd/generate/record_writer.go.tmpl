@@ -7,18 +7,18 @@
 
 {{if .Memclear}}
 {{ $memClear = "n"}}
-{{ $appendBytesRec0 = "rw.appendRec(" }}
-{{ $appendStrRec0 = "rw.appendStrRec(" }}
+{{ $appendBytesRec0 = "rw.w.appendRec(" }}
+{{ $appendStrRec0 = "rw.w.appendStrRec(" }}
 {{ $appendRec1 = ")" }}
-{{ $setRec0 = "rw.setRecordBuf(" }}
+{{ $setRec0 = "rw.w.setRecordBuf(" }}
 {{ $setRec1 = ")" }}
 
 {{else}}
 {{ $memClear = "ff" }}
-{{ $appendBytesRec0 = "rw.recordBuf = append(rw.recordBuf, " }}
-{{ $appendStrRec0 = "rw.recordBuf = append(rw.recordBuf, " }}
+{{ $appendBytesRec0 = "rw.w.recordBuf = append(rw.w.recordBuf, " }}
+{{ $appendStrRec0 = "rw.w.recordBuf = append(rw.w.recordBuf, " }}
 {{ $appendRec1 = "...)" }}
-{{ $setRec0 = "rw.recordBuf = " }}
+{{ $setRec0 = "rw.w.recordBuf = " }}
 
 {{end}}
 func (rw *RecordWriter) preflightCheck_memclearO{{$memClear}}() bool {
@@ -43,8 +43,7 @@ func (rw *RecordWriter) preflightCheck_memclearO{{$memClear}}() bool {
 			return false
 		}
 
-		rw.numFields = rw.w.numFields
-		rw.recordBuf = rw.recordBuf[:0]
+		rw.w.recordBuf = rw.w.recordBuf[:0]
 		if rw.w.comment != invalidControlRune && (rw.bitFlags&wFlagFirstRecordWritten) == 0 {
 			rw.bitFlags |= wFlagForceQuoteFirstField
 		}
@@ -52,7 +51,7 @@ func (rw *RecordWriter) preflightCheck_memclearO{{$memClear}}() bool {
 		rw.bitFlags &= (^wFlagForceQuoteFirstField)
 		fallthrough
 	default:
-		{{$setRec0}}rw.w.fieldSepSeq.appendText(rw.recordBuf){{$setRec1}}
+		{{$setRec0}}rw.w.fieldSepSeq.appendText(rw.w.recordBuf){{$setRec1}}
 	}
 
 	rw.nextField++
@@ -70,11 +69,11 @@ func (rw *RecordWriter) unsafeAppendUTF8FieldBytes_memclearO{{$memClear}}(p []by
 		}
 	}
 
-	{{$setRec0}}rw.w.quoteSeq.appendText(rw.recordBuf){{$setRec1}}
+	{{$setRec0}}rw.w.quoteSeq.appendText(rw.w.recordBuf){{$setRec1}}
 
-	rw.loadQF_memclearO{{$memClear}}(p, i)
+	rw.w.loadQF_memclearO{{$memClear}}(p, i)
 
-	{{$setRec0}}rw.w.quoteSeq.appendText(rw.recordBuf){{$setRec1}}
+	{{$setRec0}}rw.w.quoteSeq.appendText(rw.w.recordBuf){{$setRec1}}
 }
 
 
@@ -113,11 +112,11 @@ func (rw *RecordWriter) {{$methodPrefix}}_memclearO{{$memClear}}({{$params}}, di
 			}
 		}
 
-		{{$setRec0}}rw.w.quoteSeq.appendText(rw.recordBuf){{$setRec1}}
+		{{$setRec0}}rw.w.quoteSeq.appendText(rw.w.recordBuf){{$setRec1}}
 
-		rw.{{$loadQF}}_memclearO{{$memClear}}({{$arg}}, i)
+		rw.w.{{$loadQF}}_memclearO{{$memClear}}({{$arg}}, i)
 
-		{{$setRec0}}rw.w.quoteSeq.appendText(rw.recordBuf){{$setRec1}}
+		{{$setRec0}}rw.w.quoteSeq.appendText(rw.w.recordBuf){{$setRec1}}
 
 		return
 	}
@@ -156,21 +155,21 @@ func (rw *RecordWriter) {{$methodPrefix}}_memclearO{{$memClear}}({{$params}}, di
 	// found a control rune of some kind or was forced to quote first field
 	//
 
-	{{$setRec0}}rw.w.quoteSeq.appendText(rw.recordBuf){{$setRec1}}
+	{{$setRec0}}rw.w.quoteSeq.appendText(rw.w.recordBuf){{$setRec1}}
 
-	err := rw.{{$loadQF}}WithCheckUTF8_memclearO{{$memClear}}({{$arg}}, i)
+	err := rw.w.{{$loadQF}}WithCheckUTF8_memclearO{{$memClear}}({{$arg}}, i)
 	if err != nil {
 		rw.abort(err)
 		return
 	}
 
-	{{$setRec0}}rw.w.quoteSeq.appendText(rw.recordBuf){{$setRec1}}
+	{{$setRec0}}rw.w.quoteSeq.appendText(rw.w.recordBuf){{$setRec1}}
 }
 {{end}}
 
 func (rw *RecordWriter) int64_memclearO{{$memClear}}(i int64) {
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
-		{{$setRec0}}strconv.AppendInt(rw.recordBuf, i, 10){{$setRec1}}
+		{{$setRec0}}strconv.AppendInt(rw.w.recordBuf, i, 10){{$setRec1}}
 		return
 	}
 
@@ -179,7 +178,7 @@ func (rw *RecordWriter) int64_memclearO{{$memClear}}(i int64) {
 
 func (rw *RecordWriter) uint64_memclearO{{$memClear}}(i uint64) {
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
-		{{$setRec0}}strconv.AppendUint(rw.recordBuf, i, 10){{$setRec1}}
+		{{$setRec0}}strconv.AppendUint(rw.w.recordBuf, i, 10){{$setRec1}}
 		return
 	}
 
@@ -188,7 +187,7 @@ func (rw *RecordWriter) uint64_memclearO{{$memClear}}(i uint64) {
 
 func (rw *RecordWriter) time_memclearO{{$memClear}}(t time.Time) {
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
-		{{$setRec0}}t.AppendFormat(rw.recordBuf, time.RFC3339Nano){{$setRec1}}
+		{{$setRec0}}t.AppendFormat(rw.w.recordBuf, time.RFC3339Nano){{$setRec1}}
 		return
 	}
 
@@ -203,7 +202,7 @@ func (rw *RecordWriter) bool_memclearO{{$memClear}}(b bool) {
 	}
 
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
-		{{$setRec0}}append(rw.recordBuf, v){{$setRec1}}
+		{{$setRec0}}append(rw.w.recordBuf, v){{$setRec1}}
 		return
 	}
 
@@ -214,7 +213,7 @@ func (rw *RecordWriter) bool_memclearO{{$memClear}}(b bool) {
 func (rw *RecordWriter) float64_memclearO{{$memClear}}(f float64) {
 
 	if (rw.bitFlags & (wFlagControlRuneOverlap | wFlagForceQuoteFirstField)) == 0 {
-		{{$setRec0}}strconv.AppendFloat(rw.recordBuf, f, 'g', -1, 64){{$setRec1}}
+		{{$setRec0}}strconv.AppendFloat(rw.w.recordBuf, f, 'g', -1, 64){{$setRec1}}
 		return
 	}
 
@@ -241,7 +240,7 @@ func (rw *RecordWriter) rune_withCheckUTF8_memclearO{{$memClear}}(r rune) {
 	return
 
 SIMPLE_APPEND:
-	{{$setRec0}}utf8.AppendRune(rw.recordBuf, r){{$setRec1}}
+	{{$setRec0}}utf8.AppendRune(rw.w.recordBuf, r){{$setRec1}}
 }
 
 func (rw *RecordWriter) write_memclearO{{$memClear}}() (int, error) {
@@ -265,7 +264,7 @@ func (rw *RecordWriter) write_memclearO{{$memClear}}() (int, error) {
 		rw.abort(err)
 		return 0, err
 	case 1:
-		if numFields := rw.numFields; numFields == -1 {
+		if numFields := rw.w.numFields; numFields == -1 {
 			rw.w.numFields = 1
 		} else if numFields != 1 {
 			if wErr == nil {
@@ -276,11 +275,11 @@ func (rw *RecordWriter) write_memclearO{{$memClear}}() (int, error) {
 			rw.abort(err)
 			return 0, err
 		}
-		if len(rw.recordBuf) == 0 {
-			{{$setRec0}}rw.w.twoQuotesSeq.appendText(rw.recordBuf){{$setRec1}}
+		if len(rw.w.recordBuf) == 0 {
+			{{$setRec0}}rw.w.twoQuotesSeq.appendText(rw.w.recordBuf){{$setRec1}}
 		}
 	default:
-		if numFields := rw.numFields; numFields == -1 {
+		if numFields := rw.w.numFields; numFields == -1 {
 			rw.w.numFields = rw.nextField
 		} else if numFields != rw.nextField {
 			if wErr == nil {
@@ -293,7 +292,7 @@ func (rw *RecordWriter) write_memclearO{{$memClear}}() (int, error) {
 		}
 	}
 
-	{{$setRec0}}rw.w.recordSepSeq.appendText(rw.recordBuf){{$setRec1}}
+	{{$setRec0}}rw.w.recordSepSeq.appendText(rw.w.recordBuf){{$setRec1}}
 	rw.nextField = 0
 
 	if wErr != nil {
@@ -304,8 +303,7 @@ func (rw *RecordWriter) write_memclearO{{$memClear}}() (int, error) {
 	// re-checkin the buffer then flush it to the internal writer
 
 	rw.bitFlags |= wFlagClosed
-	recordBuf := rw.recordBuf
-	rw.w.recordBuf = recordBuf
+	recordBuf := rw.w.recordBuf
 	rw.w.bitFlags = (rw.w.bitFlags & (^wFlagRecordBuffCheckedOut)) | (wFlagFirstRecordWritten | wFlagHeaderWritten)
 
 	n, err := rw.w.writer.Write(recordBuf)

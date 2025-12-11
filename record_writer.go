@@ -7,8 +7,45 @@ import (
 
 var (
 	// ErrRecordWriterClosed indicates that the RecordWriter has completed its lifecycle and cannot be used for further writing.
+	// It does not indicate that a record was successfully written or not;
+	// it only indicates that the RecordWriter instance is no longer usable for writing and is ready for garbage collection.
+	//
+	// For write success status, check the error return value from Write.
 	ErrRecordWriterClosed = errors.New("record writer closed")
 )
+
+// A previous iteration of the RecordWriter struct had additional behavior that copied the writeBuffer
+// from the parent Writer instance into the RecordWriter instance to allow for more
+// isolated write operations. The intent was to reduce complexity around managing
+// the writeBuffer state in the parent Writer instance during the RecordWriter lifecycle
+// as well as reuse the behaviors defined on the writeBuffer type.
+//
+// However, the recordBuf attribute was the only part of the writeBuffer that had contents updated
+// and might be reallocated during record assembly. In addition, we were explicitly copying the recordBuf
+// back to the parent Writer instance writeBuffer at the end of the RecordWriter lifecycle. Given that,
+// the additional complexity of managing two writeBuffer instances per active RecordWriter, and the
+// minor decrease in performance it caused on each record write I've opted to no longer try to manage
+// a separate writeBuffer or recordBuf instance.
+//
+// It did operate as a self-documenting mechanism that indicated exactly what parts of writer were being
+// "checked out" and back in during the RecordWriter lifecycle, but that is not sufficient justification
+// when instead an explicit comment block such as this one can be used to explain lifecycle concerns and data flow
+// much more clearly/exhaustively alongside the actual implementation.
+//
+// A RecordWriter is used to assemble and write a single CSV record to an underlying io.Writer managed by the csv.Writer
+// instance. The csv.Writer instance manages the overall CSV writing process including configuration options, buffering,
+// and error handling. The RecordWriter locks the csv.Writer instance for its lifecycle to prevent concurrent writes
+// that could corrupt the output or lead to inconsistent state within the csv.Writer. A RecordWriter technically has full
+// access to the parent csv.Writer instance during its lifecycle, but it will only modify the recordBuf attribute of the
+// writeBuffer within the parent csv.Writer instance and the bitFlags attribute to manage lifecycle state. If the number
+// of columns is being discovered it will also update the numFields attribute when the first record is written. To perform
+// its duties, the RecordWriter provides methods to append various data types as fields to the current record being
+// assembled. Once all desired fields have been appended, the Write method flushes the assembled record to the underlying
+// io.Writer and releases the lock on the parent csv.Writer instance, allowing for additional writing operations to proceed.
+//
+// A RecordWriter requires read access of all the contents of the parent csv.Writer's writeBuffer to properly
+// format and write the CSV record. It will only ever change the Writer's numFields, writeBuffer.recordBuf, and
+// bitFlags attributes.
 
 // RecordWriter instances must always have life-cycles
 // that end with calls to Write and/or Rollback.
@@ -16,11 +53,9 @@ var (
 // Failure to do so will leave the parent writer in a locked state.
 type RecordWriter struct {
 	err       error
-	nextField int
-	numFields int
 	bitFlags  wFlag
-	writeBuffer
-	w *Writer
+	nextField int
+	w         *Writer
 }
 
 // NewRecord creates a new RecordWriter instance associated with
@@ -41,7 +76,7 @@ type RecordWriter struct {
 // If another RecordWriter is already active, NewRecord will return
 // a nil RecordWriter and ErrWriterNotReady.
 //
-// If the parent Writer instance is in an error state,
+// If the parent Writer instance is in an error state or closed,
 // NewRecord will return a nil RecordWriter and the existing error.
 func (w *Writer) NewRecord() (*RecordWriter, error) {
 	bitFlags := w.bitFlags
@@ -86,9 +121,8 @@ func (w *Writer) NewRecord() (*RecordWriter, error) {
 	w.bitFlags |= wFlagRecordBuffCheckedOut
 
 	return &RecordWriter{
-		bitFlags:    bitFlags,
-		writeBuffer: w.writeBuffer,
-		w:           w,
+		bitFlags: bitFlags,
+		w:        w,
 	}, nil
 }
 
@@ -142,7 +176,7 @@ func (rw *RecordWriter) abort(err error) {
 		return
 	}
 	rw.bitFlags |= wFlagClosed
-	recordBuf := rw.recordBuf
+	recordBuf := rw.w.recordBuf
 
 	if rw.w.err != nil {
 		// the parent writer context is already functionally closed
@@ -157,7 +191,6 @@ func (rw *RecordWriter) abort(err error) {
 	// new RecordWriter instances and in general take over writing
 	// duties again
 
-	rw.w.recordBuf = recordBuf
 	rw.w.bitFlags &= (^wFlagRecordBuffCheckedOut)
 }
 
