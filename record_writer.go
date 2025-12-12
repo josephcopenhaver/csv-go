@@ -417,6 +417,25 @@ func (rw *RecordWriter) Rune(r rune) *RecordWriter {
 	return rw
 }
 
+// Empty appends an empty (zero-length) field to the current record.
+//
+// It does not clear or reset the record or RecordWriter; it only appends a new
+// empty field. To abandon the current record, use Rollback.
+//
+// This function is useful when the calling context is implementing a custom
+// serialization scheme and needs to explicitly write empty fields. It is
+// functionally equivalent to writing an empty string field through the String
+// or Bytes methods but faster and more explicit in intent.
+func (rw *RecordWriter) Empty() *RecordWriter {
+	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+		rw.preflightCheck_memclearOff()
+		return rw
+	}
+
+	rw.preflightCheck_memclearOn()
+	return rw
+}
+
 // Write flushes the record buffer to the io.Writer within the csv Writer
 // instance and releases the csv Writer for additional writing through
 // another RecordWriter instance or other means.

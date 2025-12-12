@@ -55,6 +55,7 @@ type functionalWriterTestCase struct {
 	hasWHeaderErr             bool
 	useRecordWriter           bool
 	useRecordWriterBytes      bool
+	useRecordWriterEmpty      bool
 }
 
 func (tc *functionalWriterTestCase) clone() *functionalWriterTestCase {
@@ -273,7 +274,11 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 							}
 						} else {
 							for _, v := range v.r {
-								rw.String(v)
+								if tc.useRecordWriterEmpty && v == "" {
+									rw.Empty()
+								} else {
+									rw.String(v)
+								}
 								if rw.Err() != nil {
 									break
 								}
@@ -499,6 +504,25 @@ func (tc *functionalWriterTestCase) Run(t *testing.T) {
 				tc.useRecordWriter = true
 				tc.useRecordWriterBytes = true
 				tc.newOpts = append(tc.newOpts, csv.WriterOpts().ClearFreedDataMemory(true))
+			}))
+		})
+
+		t.Run("when useRWEmpty+ and "+tc.when, func(t *testing.T) {
+			t.Helper()
+
+			t.Run(name, f(func(tc *functionalWriterTestCase) {
+				tc.useRecordWriter = true
+				tc.useRecordWriterEmpty = true
+			}))
+		})
+
+		t.Run("when clearmem+ useRWEmpty+ and "+tc.when, func(t *testing.T) {
+			t.Helper()
+
+			t.Run(name, f(func(tc *functionalWriterTestCase) {
+				tc.useRecordWriter = true
+				tc.newOpts = append(tc.newOpts, csv.WriterOpts().ClearFreedDataMemory(true))
+				tc.useRecordWriterEmpty = true
 			}))
 		})
 	}
