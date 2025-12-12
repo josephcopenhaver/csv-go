@@ -21,11 +21,13 @@
 {{ $setRec0 = "rw.w.recordBuf = " }}
 
 {{end}}
+// preflightCheck_memclearO{{$memClear}} should be called only after confirming
+// that the RecordWriter instance has no existing error set.
+//
+// it prepares the record buffer for writing a new field and returns true
+// if the field can be written, or false if an error occurred and the write
+// should be skipped.
 func (rw *RecordWriter) preflightCheck_memclearO{{$memClear}}() bool {
-	if rw.err != nil {
-		return false
-	}
-
 	switch rw.nextField {
 	case 0:
 		rw.bitFlags = rw.w.bitFlags
@@ -220,11 +222,7 @@ func (rw *RecordWriter) float64_memclearO{{$memClear}}(f float64) {
 	rw.unsafeAppendUTF8FieldBytes_memclearO{{$memClear}}(strconv.AppendFloat(rw.w.fieldWriterBuf[:0], f, 'g', -1, 64))
 }
 
-func (rw *RecordWriter) rune_withCheckUTF8_memclearO{{$memClear}}(r rune) {
-	if !utf8.ValidRune(r) {
-		rw.abort(ErrInvalidRune)
-		return
-	}
+func (rw *RecordWriter) rune_memclearO{{$memClear}}(r rune) {
 
 	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
 		if r < utf8.RuneSelf {

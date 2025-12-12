@@ -1,5 +1,16 @@
 # V3.* Changes[^1]
 
+## v3.5.0 - 2025-12-12
+
+### New Functions
+- `(*RecordWriter) UncheckedUTF8Rune(rune) *RecordWriter`
+
+UncheckedUTF8Rune appends a rune field to the current record similarly to Rune but skips rune validation.
+
+It will not set an internal error state if a rune cannot be normally encoded to UTF8.
+
+Invalid UTF-8 runes will be encoded as the UTF-8 replacement character.
+
 ## v3.4.0 - 2025-12-12
 
 ### New Functions
