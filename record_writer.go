@@ -3,6 +3,7 @@ package csv
 import (
 	"errors"
 	"time"
+	"unicode/utf8"
 )
 
 var (
@@ -225,15 +226,17 @@ func (rw *RecordWriter) Rollback() {
 // instance will enter an error state retrievable through the Err() method or eventually
 // observable through a terminating Write call.
 func (rw *RecordWriter) Bytes(p []byte) *RecordWriter {
-	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		if rw.preflightCheck_memclearOff() {
-			rw.bytes_memclearOff(p, false)
+	if rw.err == nil {
+		if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+			if rw.preflightCheck_memclearOff() {
+				rw.bytes_memclearOff(p, false)
+			}
+			return rw
 		}
-		return rw
-	}
 
-	if rw.preflightCheck_memclearOn() {
-		rw.bytes_memclearOn(p, false)
+		if rw.preflightCheck_memclearOn() {
+			rw.bytes_memclearOn(p, false)
+		}
 	}
 	return rw
 }
@@ -247,15 +250,17 @@ func (rw *RecordWriter) Bytes(p []byte) *RecordWriter {
 //
 // WARNING: Using this method with invalid UTF-8 data will produce invalid CSV output.
 func (rw *RecordWriter) UncheckedUTF8Bytes(p []byte) *RecordWriter {
-	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		if rw.preflightCheck_memclearOff() {
-			rw.bytes_memclearOff(p, true)
+	if rw.err == nil {
+		if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+			if rw.preflightCheck_memclearOff() {
+				rw.bytes_memclearOff(p, true)
+			}
+			return rw
 		}
-		return rw
-	}
 
-	if rw.preflightCheck_memclearOn() {
-		rw.bytes_memclearOn(p, true)
+		if rw.preflightCheck_memclearOn() {
+			rw.bytes_memclearOn(p, true)
+		}
 	}
 	return rw
 }
@@ -269,15 +274,17 @@ func (rw *RecordWriter) UncheckedUTF8Bytes(p []byte) *RecordWriter {
 // instance will enter an error state retrievable through the Err() method or eventually
 // observable through a terminating Write call.
 func (rw *RecordWriter) String(s string) *RecordWriter {
-	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		if rw.preflightCheck_memclearOff() {
-			rw.string_memclearOff(s, false)
+	if rw.err == nil {
+		if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+			if rw.preflightCheck_memclearOff() {
+				rw.string_memclearOff(s, false)
+			}
+			return rw
 		}
-		return rw
-	}
 
-	if rw.preflightCheck_memclearOn() {
-		rw.string_memclearOn(s, false)
+		if rw.preflightCheck_memclearOn() {
+			rw.string_memclearOn(s, false)
+		}
 	}
 	return rw
 }
@@ -291,30 +298,34 @@ func (rw *RecordWriter) String(s string) *RecordWriter {
 //
 // WARNING: Using this method with invalid UTF-8 data will produce invalid CSV output.
 func (rw *RecordWriter) UncheckedUTF8String(s string) *RecordWriter {
-	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		if rw.preflightCheck_memclearOff() {
-			rw.string_memclearOff(s, true)
+	if rw.err == nil {
+		if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+			if rw.preflightCheck_memclearOff() {
+				rw.string_memclearOff(s, true)
+			}
+			return rw
 		}
-		return rw
-	}
 
-	if rw.preflightCheck_memclearOn() {
-		rw.string_memclearOn(s, true)
+		if rw.preflightCheck_memclearOn() {
+			rw.string_memclearOn(s, true)
+		}
 	}
 	return rw
 }
 
 // Int64 appends a base-10 encoded int64 field to the current record.
 func (rw *RecordWriter) Int64(i int64) *RecordWriter {
-	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		if rw.preflightCheck_memclearOff() {
-			rw.int64_memclearOff(i)
+	if rw.err == nil {
+		if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+			if rw.preflightCheck_memclearOff() {
+				rw.int64_memclearOff(i)
+			}
+			return rw
 		}
-		return rw
-	}
 
-	if rw.preflightCheck_memclearOn() {
-		rw.int64_memclearOn(i)
+		if rw.preflightCheck_memclearOn() {
+			rw.int64_memclearOn(i)
+		}
 	}
 	return rw
 }
@@ -332,15 +343,17 @@ func (rw *RecordWriter) Duration(d time.Duration) *RecordWriter {
 
 // Uint64 appends a base-10 encoded uint64 field to the current record.
 func (rw *RecordWriter) Uint64(i uint64) *RecordWriter {
-	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		if rw.preflightCheck_memclearOff() {
-			rw.uint64_memclearOff(i)
+	if rw.err == nil {
+		if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+			if rw.preflightCheck_memclearOff() {
+				rw.uint64_memclearOff(i)
+			}
+			return rw
 		}
-		return rw
-	}
 
-	if rw.preflightCheck_memclearOn() {
-		rw.uint64_memclearOn(i)
+		if rw.preflightCheck_memclearOn() {
+			rw.uint64_memclearOn(i)
+		}
 	}
 	return rw
 }
@@ -348,15 +361,17 @@ func (rw *RecordWriter) Uint64(i uint64) *RecordWriter {
 // Time appends a time.Time field to the current record
 // as its string representation.
 func (rw *RecordWriter) Time(t time.Time) *RecordWriter {
-	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		if rw.preflightCheck_memclearOff() {
-			rw.time_memclearOff(t)
+	if rw.err == nil {
+		if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+			if rw.preflightCheck_memclearOff() {
+				rw.time_memclearOff(t)
+			}
+			return rw
 		}
-		return rw
-	}
 
-	if rw.preflightCheck_memclearOn() {
-		rw.time_memclearOn(t)
+		if rw.preflightCheck_memclearOn() {
+			rw.time_memclearOn(t)
+		}
 	}
 	return rw
 }
@@ -364,15 +379,17 @@ func (rw *RecordWriter) Time(t time.Time) *RecordWriter {
 // Bool appends a bool field to the current record,
 // where true = 1 and false = 0.
 func (rw *RecordWriter) Bool(b bool) *RecordWriter {
-	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		if rw.preflightCheck_memclearOff() {
-			rw.bool_memclearOff(b)
+	if rw.err == nil {
+		if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+			if rw.preflightCheck_memclearOff() {
+				rw.bool_memclearOff(b)
+			}
+			return rw
 		}
-		return rw
-	}
 
-	if rw.preflightCheck_memclearOn() {
-		rw.bool_memclearOn(b)
+		if rw.preflightCheck_memclearOn() {
+			rw.bool_memclearOn(b)
+		}
 	}
 	return rw
 }
@@ -380,15 +397,17 @@ func (rw *RecordWriter) Bool(b bool) *RecordWriter {
 // Float64 appends a base-10 encoded float64 field to the current record
 // using strconv.FormatFloat with fmt='g'.
 func (rw *RecordWriter) Float64(f float64) *RecordWriter {
-	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		if rw.preflightCheck_memclearOff() {
-			rw.float64_memclearOff(f)
+	if rw.err == nil {
+		if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+			if rw.preflightCheck_memclearOff() {
+				rw.float64_memclearOff(f)
+			}
+			return rw
 		}
-		return rw
-	}
 
-	if rw.preflightCheck_memclearOn() {
-		rw.float64_memclearOn(f)
+		if rw.preflightCheck_memclearOn() {
+			rw.float64_memclearOn(f)
+		}
 	}
 	return rw
 }
@@ -404,15 +423,52 @@ func (rw *RecordWriter) Float64(f float64) *RecordWriter {
 //
 // The Writer option ErrorOnNonUTF8 does not affect this behavior!
 func (rw *RecordWriter) Rune(r rune) *RecordWriter {
-	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		if rw.preflightCheck_memclearOff() {
-			rw.rune_withCheckUTF8_memclearOff(r)
-		}
-		return rw
-	}
+	if rw.err == nil {
+		if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+			if rw.preflightCheck_memclearOff() {
+				if !utf8.ValidRune(r) {
+					rw.abort(ErrInvalidRune)
+					return rw
+				}
 
-	if rw.preflightCheck_memclearOn() {
-		rw.rune_withCheckUTF8_memclearOn(r)
+				rw.rune_memclearOff(r)
+			}
+			return rw
+		}
+
+		if rw.preflightCheck_memclearOn() {
+			if !utf8.ValidRune(r) {
+				rw.abort(ErrInvalidRune)
+				return rw
+			}
+
+			rw.rune_memclearOn(r)
+		}
+	}
+	return rw
+}
+
+// UncheckedUTF8Rune appends a rune field to the current record similarly to Rune but skips rune validation.
+//
+// It will not set an internal error state if a rune cannot be normally encoded to UTF8. Instead, invalid UTF-8 runes will be encoded as the UTF-8 replacement character.
+//
+// Please consider this to be a micro optimization and prefer Rune
+// instead should there be any uncertainty in the rune value being a valid
+// utf8 encodable value.
+//
+// WARNING: Invalid UTF-8 runes will be encoded as the UTF-8 replacement character.
+func (rw *RecordWriter) UncheckedUTF8Rune(r rune) *RecordWriter {
+	if rw.err == nil {
+		if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+			if rw.preflightCheck_memclearOff() {
+				rw.rune_memclearOff(r)
+			}
+			return rw
+		}
+
+		if rw.preflightCheck_memclearOn() {
+			rw.rune_memclearOn(r)
+		}
 	}
 	return rw
 }
@@ -427,12 +483,14 @@ func (rw *RecordWriter) Rune(r rune) *RecordWriter {
 // functionally equivalent to writing an empty string field through the String
 // or Bytes methods but faster and more explicit in intent.
 func (rw *RecordWriter) Empty() *RecordWriter {
-	if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
-		rw.preflightCheck_memclearOff()
-		return rw
-	}
+	if rw.err == nil {
+		if (rw.bitFlags & wFlagClearMemoryAfterFree) == 0 {
+			rw.preflightCheck_memclearOff()
+			return rw
+		}
 
-	rw.preflightCheck_memclearOn()
+		rw.preflightCheck_memclearOn()
+	}
 	return rw
 }
 

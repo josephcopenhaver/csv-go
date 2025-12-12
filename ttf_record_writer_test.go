@@ -21,6 +21,8 @@ const (
 	zeroUncheckedUTF8BytesKey
 	zeroSBRune
 	zeroMBRune
+	zeroSBUncheckedRune
+	zeroMBUncheckedRune
 )
 
 var (
@@ -95,6 +97,7 @@ var fieldValuesByType = func() map[any][]any {
 		rune('z'),
 	}
 	m[zeroSBRune] = sbRunes
+	m[zeroSBUncheckedRune] = sbRunes
 
 	mbRunes := []any{
 		rune('\U0001F600'),
@@ -103,8 +106,12 @@ var fieldValuesByType = func() map[any][]any {
 		rune('\U0001F600' + 3),
 	}
 	m[zeroMBRune] = mbRunes
+	m[zeroMBUncheckedRune] = mbRunes
 
-	m[rune(0)] = append(append([]any(nil), sbRunes...), mbRunes...)
+	unionRunes := append(append([]any(nil), sbRunes...), mbRunes...)
+
+	m[rune(0)] = unionRunes
+	m[uncheckedUTF8Rune(0)] = unionRunes
 
 	m[time.Time{}] = []any{
 		time.Unix(0, 0).UTC(),
@@ -125,6 +132,7 @@ var fieldTypes = func() []any {
 }()
 
 type uncheckedUTF8Bytes []byte
+type uncheckedUTF8Rune rune
 type uncheckedUTF8String string
 
 type wrErrData struct {
@@ -287,6 +295,8 @@ func (tc *functionalRecordWriterTestCase) Run(t *testing.T) {
 					rw.Uint64(v)
 				case uncheckedUTF8Bytes:
 					rw.UncheckedUTF8Bytes(v)
+				case uncheckedUTF8Rune:
+					rw.UncheckedUTF8Rune(rune(v))
 				case uncheckedUTF8String:
 					rw.UncheckedUTF8String(string(v))
 				default:
@@ -508,10 +518,11 @@ func TestRecordWriterOKPaths(t *testing.T) {
 				{f: []byte("b3")},
 				{f: uncheckedUTF8Bytes("ub4")},
 				{f: rune('r')},
+				{f: uncheckedUTF8Rune('r')},
 				{f: time.Time{}},
 			},
 			res: wrRes{
-				fields: strings.Split("1,1,1,1,NaN,1,s1,us2,b3,ub4,r,0001-01-01T00:00:00Z", ","),
+				fields: strings.Split("1,1,1,1,NaN,1,s1,us2,b3,ub4,r,r,0001-01-01T00:00:00Z", ","),
 			},
 		},
 		{
@@ -529,10 +540,11 @@ func TestRecordWriterOKPaths(t *testing.T) {
 				{f: []byte("b3")},
 				{f: uncheckedUTF8Bytes("ub4")},
 				{f: rune('r')},
+				{f: uncheckedUTF8Rune('r')},
 				{f: time.Time{}},
 			},
 			res: wrRes{
-				fields: strings.Split("1,1,1,1,NaN,1,s1,us2,b3,ub4,r,0001-01-01T00:00:00Z", ","),
+				fields: strings.Split("1,1,1,1,NaN,1,s1,us2,b3,ub4,r,r,0001-01-01T00:00:00Z", ","),
 			},
 		},
 		{
@@ -542,6 +554,18 @@ func TestRecordWriterOKPaths(t *testing.T) {
 			},
 			fields: []rwf{
 				{f: rune('#')},
+			},
+			res: wrRes{
+				fields: strings.Split("\"#\"", ","),
+			},
+		},
+		{
+			when: "writing a record that starts with a uncheckedUTF8Rune field containing a comment",
+			newOpts: []csv.WriterOption{
+				csv.WriterOpts().CommentRune('#'),
+			},
+			fields: []rwf{
+				{f: uncheckedUTF8Rune('#')},
 			},
 			res: wrRes{
 				fields: strings.Split("\"#\"", ","),
@@ -558,10 +582,30 @@ func TestRecordWriterOKPaths(t *testing.T) {
 			},
 		},
 		{
+			when: "writing a record that starts with a uncheckedUTF8Rune field containing a MB field separator",
+			sep:  "\U0001F600",
+			fields: []rwf{
+				{f: uncheckedUTF8Rune('\U0001F600')},
+			},
+			res: wrRes{
+				fields: strings.Split("\U0001F600", ","),
+			},
+		},
+		{
 			when: "writing a record that starts with a MB rune field and fieldSep=-",
 			sep:  "-",
 			fields: []rwf{
 				{f: rune('\U0001F600')},
+			},
+			res: wrRes{
+				fields: strings.Split("\U0001F600", ","),
+			},
+		},
+		{
+			when: "writing a record that starts with a MB uncheckedUTF8Rune field and fieldSep=-",
+			sep:  "-",
+			fields: []rwf{
+				{f: uncheckedUTF8Rune('\U0001F600')},
 			},
 			res: wrRes{
 				fields: strings.Split("\U0001F600", ","),

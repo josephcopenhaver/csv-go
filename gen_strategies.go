@@ -4273,11 +4273,13 @@ func leadingOnes8(b byte) uint8 {
 	return len8LeadingOnesTab[b]
 }
 
+// preflightCheck_memclearOff should be called only after confirming
+// that the RecordWriter instance has no existing error set.
+//
+// it prepares the record buffer for writing a new field and returns true
+// if the field can be written, or false if an error occurred and the write
+// should be skipped.
 func (rw *RecordWriter) preflightCheck_memclearOff() bool {
-	if rw.err != nil {
-		return false
-	}
-
 	switch rw.nextField {
 	case 0:
 		rw.bitFlags = rw.w.bitFlags
@@ -4515,11 +4517,7 @@ func (rw *RecordWriter) float64_memclearOff(f float64) {
 	rw.unsafeAppendUTF8FieldBytes_memclearOff(strconv.AppendFloat(rw.w.fieldWriterBuf[:0], f, 'g', -1, 64))
 }
 
-func (rw *RecordWriter) rune_withCheckUTF8_memclearOff(r rune) {
-	if !utf8.ValidRune(r) {
-		rw.abort(ErrInvalidRune)
-		return
-	}
+func (rw *RecordWriter) rune_memclearOff(r rune) {
 
 	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
 		if r < utf8.RuneSelf {
@@ -4620,11 +4618,13 @@ func (rw *RecordWriter) write_memclearOff() (int, error) {
 	return n, err
 }
 
+// preflightCheck_memclearOn should be called only after confirming
+// that the RecordWriter instance has no existing error set.
+//
+// it prepares the record buffer for writing a new field and returns true
+// if the field can be written, or false if an error occurred and the write
+// should be skipped.
 func (rw *RecordWriter) preflightCheck_memclearOn() bool {
-	if rw.err != nil {
-		return false
-	}
-
 	switch rw.nextField {
 	case 0:
 		rw.bitFlags = rw.w.bitFlags
@@ -4862,11 +4862,7 @@ func (rw *RecordWriter) float64_memclearOn(f float64) {
 	rw.unsafeAppendUTF8FieldBytes_memclearOn(strconv.AppendFloat(rw.w.fieldWriterBuf[:0], f, 'g', -1, 64))
 }
 
-func (rw *RecordWriter) rune_withCheckUTF8_memclearOn(r rune) {
-	if !utf8.ValidRune(r) {
-		rw.abort(ErrInvalidRune)
-		return
-	}
+func (rw *RecordWriter) rune_memclearOn(r rune) {
 
 	if (rw.bitFlags & wFlagForceQuoteFirstField) == 0 {
 		if r < utf8.RuneSelf {
