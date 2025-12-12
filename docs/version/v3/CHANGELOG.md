@@ -1,5 +1,14 @@
 # V3.* Changes[^1]
 
+## v3.4.0 - 2025-12-12
+
+### New Functions
+- `(*RecordWriter) Empty() *RecordWriter`
+
+The Empty function appends an empty (zero-length) field to the current record.
+
+This function is useful when the calling context is implementing a custom serialization scheme and needs to explicitly write empty fields. It is functionally equivalent to writing an empty string field through the String or Bytes methods but faster and more explicit in intent.
+
 ## v3.3.0 - 2025-12-10
 
 The spicy fluent API release.
