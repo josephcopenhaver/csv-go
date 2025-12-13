@@ -7,7 +7,7 @@ csv-go
 ![code-coverage](https://img.shields.io/badge/code_coverage-100%25-rgb%2852%2C208%2C88%29)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-This package is a highly flexible and performant single threaded csv stream reader and writer. It opts for strictness with nearly all options off by default. Using the option functions pattern on Reader and Writer creation ensures extreme flexibility can be offered while configuration can be validated up-front in cold paths. This creates an immutable, clear execution of the csv file/stream parsing strategy. It has been battle tested thoroughly in production contexts for both correctness and speed so feel free to use in any way you like.
+This package is a highly flexible and performant single threaded UTF-8 friendly csv stream reader and writer. It opts for strictness with nearly all options off by default. Reader and Writer constructors use functional options to maximize flexibility while validating configuration at initialization rather than at runtime. This keeps exported types behavior-oriented (methods over public fields), avoiding leakage of rigid internal implementation details, and improving coupling/cohesion. Once created, parsing and writing strategies are immutable, allowing maintainers to evolve implementations greatly over time while keeping interface contracts stable. It has been battle tested thoroughly in production contexts for both correctness and speed so feel free to use in any way you like.
 
 Both the reader and writer are [more performant than the standard go csv package](docs/BENCHMARKS.md) when compared in an apples-to-apples configuration between the two. The writer also has several optimizations for non-string type serialization via the fluent api returned by csv.Writer.NewRecord() and FieldWriters(). I expect mileage here to vary over time. My primary goal with this lib was to solve my own edge case problems like suspect-encodings/loose-rules and offer something back more aligned with others that think like myself regarding reducing allocations, GC pause, and increasing efficiency.
 
@@ -207,8 +207,10 @@ func main() {
 		// if BorrowRow=true or BorrowFields=true then implementation reading rows from the Reader MUST NOT keep the rows or byte sub-slices alive beyond the next call to cr.Scan()
 		rw, err := cw.NewRecord()
 		if err != nil {
-			// note if you are just going to panic, consider calling MustNewRecord()
-			// instead of the NewRecord() function
+			// note if you are just going to panic or are certain
+			// the Writer state never errors unexpectedly / becomes
+			// hard-locked, consider MustNewRecord() instead of
+			// NewRecord()
 			panic(err)
 		}
 		for _, s := range cr.Row() {
