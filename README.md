@@ -205,6 +205,14 @@ func main() {
 	// using Scan instead of the iterator sugar to avoid allocation of the iterator closures
 	for cr.Scan() {
 		// if BorrowRow=true or BorrowFields=true then implementation reading rows from the Reader MUST NOT keep the rows or byte sub-slices alive beyond the next call to cr.Scan()
+
+		// I could also use cw.WriteRow here in this example since
+		// the input is a slice of strings, but for most contexts
+		// persons will have varying input data types in which
+		// case NewRecord offers the most utility for a small
+		// overhead cost. If you always have strings already on the
+		// heap or you know they do not escape, then use WriteRow
+		// instead.
 		rw, err := cw.NewRecord()
 		if err != nil {
 			// note if you are just going to panic or are certain
