@@ -77,16 +77,13 @@ type RecordWriter struct {
 // If the parent Writer instance is in an error state or closed,
 // NewRecord will return a nil RecordWriter and the existing error.
 func (w *Writer) NewRecord() (*RecordWriter, error) {
-	bitFlags := w.bitFlags
 
-	if err := w.err; err != nil || (bitFlags&wFlagClosed) != 0 {
-		// note that it should be impossible for err to be nil here
-		// while wFlagClosed is also set, but just in case...
-		if err == nil {
-			err = ErrWriterClosed
-		}
+	// short circuit if the parent writer is already in an error state
+	if err := w.err; err != nil {
 		return nil, err
 	}
+
+	bitFlags := w.bitFlags
 
 	// Checking that the wFlagForceQuoteFirstField flag is not set because
 	// it is a pure write lifecycle flag which cannot be set outside of
@@ -105,7 +102,13 @@ func (w *Writer) NewRecord() (*RecordWriter, error) {
 	// as header comment lines and properly managing records of one column
 	// length.
 
-	if (bitFlags & (wFlagRecordBuffCheckedOut | wFlagForceQuoteFirstField)) != 0 {
+	if (bitFlags & (wFlagRecordBuffCheckedOut | wFlagForceQuoteFirstField | wFlagClosed)) != 0 {
+		// note that it should be impossible for wFlagClosed to be set here
+		// while err is nil, but just in case we're going to check for it
+		// since this is a slow/unlikely path anyways.
+		//
+		// wFlagClosed indicates that the Writer is no longer usable
+		//
 		// wFlagForceQuoteFirstField indicates that
 		// a pure write lifecycle flag which cannot be set outside of
 		// a write context was set
@@ -113,7 +116,10 @@ func (w *Writer) NewRecord() (*RecordWriter, error) {
 		// wFlagRecordBuffCheckedOut indicates that another
 		// RecordWriter is already active
 		//
-		// both conditions indicate invalid concurrent access
+		// both the last two conditions indicate invalid concurrent access
+		if (bitFlags & wFlagClosed) != 0 {
+			return nil, ErrWriterClosed
+		}
 		return nil, ErrWriterNotReady
 	}
 	w.bitFlags |= wFlagRecordBuffCheckedOut
