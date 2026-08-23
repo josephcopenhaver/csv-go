@@ -1160,7 +1160,7 @@ func (r *fastReader) streamParsingErr(err error) {
 	r.parsingErr(err)
 }
 
-func (r *secOpReader) fieldNumOverflowWithMaxCheck(max uint) func() bool {
+func (r *secOpReader) fieldNumOverflowWithMaxCheck(maxNum uint) func() bool {
 	return func() bool {
 		// this block was just copied from fast-reader's fieldNumOverflow implementation
 		if len(r.fieldLengths) == r.numFields {
@@ -1169,7 +1169,7 @@ func (r *secOpReader) fieldNumOverflowWithMaxCheck(max uint) func() bool {
 		}
 
 		// new addition for supporting max:
-		if uint(len(r.fieldLengths)) == max {
+		if uint(len(r.fieldLengths)) == maxNum {
 			r.secOpStreamParsingErr(errTooManyFieldsAboveMax{})
 			return true
 		}
@@ -1508,6 +1508,7 @@ func endsInValidUTF8(p []byte) bool {
 
 type secOpReader struct {
 	*fastReader
+
 	close             func() error
 	prepareRow        func() bool
 	appendRecBuf      func([]byte) bool
@@ -1537,7 +1538,7 @@ func (r *secOpReader) defaultIncRecordIndex() {
 	r.recordIndex++
 }
 
-func (r *secOpReader) incRecordIndexWithMax(max uint64) func() {
+func (r *secOpReader) incRecordIndexWithMax(maxNum uint64) func() {
 	return func() {
 		//
 		// detects when a record separator would exceed the allowed record count
@@ -1549,7 +1550,7 @@ func (r *secOpReader) incRecordIndexWithMax(max uint64) func() {
 		// this statement is reached
 
 		n := r.recordIndex + 1
-		if n == 0 || n > max {
+		if n == 0 || n > maxNum {
 			// impossible
 
 			// this flat out should never happen and may be removed in the future
@@ -1562,7 +1563,7 @@ func (r *secOpReader) incRecordIndexWithMax(max uint64) func() {
 
 		r.recordIndex = n
 
-		if n != max {
+		if n != maxNum {
 			return
 		}
 
@@ -1590,13 +1591,13 @@ func (r *secOpReader) appendRecBufWithMemclear(p []byte) bool {
 	return false
 }
 
-func (r *secOpReader) appendRecBufMaxCheck(max int) func([]byte) bool {
+func (r *secOpReader) appendRecBufMaxCheck(maxNum int) func([]byte) bool {
 	return func(b []byte) bool {
 		// check if addition exceeds max or overflows
-		if len(r.recordBuf)+len(b) > max || len(r.recordBuf)+len(b) < len(r.recordBuf) {
+		if len(r.recordBuf)+len(b) > maxNum || len(r.recordBuf)+len(b) < len(r.recordBuf) {
 			// simulate adding bytes up to the max
 			// note that r.streamErr will make the index a "human" value and add 1
-			r.byteIndex += uint64(max - len(r.recordBuf))
+			r.byteIndex += uint64(maxNum - len(r.recordBuf))
 			r.secOpStreamParsingErr(ErrSecOpRecordByteCountAboveMax)
 			return true
 		}
@@ -1606,13 +1607,13 @@ func (r *secOpReader) appendRecBufMaxCheck(max int) func([]byte) bool {
 	}
 }
 
-func (r *secOpReader) appendRecBufMaxCheckMemClear(max int) func([]byte) bool {
+func (r *secOpReader) appendRecBufMaxCheckMemClear(maxNum int) func([]byte) bool {
 	return func(p []byte) bool {
 		// check if addition exceeds max or overflows
-		if len(r.recordBuf)+len(p) > max || len(r.recordBuf)+len(p) < len(r.recordBuf) {
+		if len(r.recordBuf)+len(p) > maxNum || len(r.recordBuf)+len(p) < len(r.recordBuf) {
 			// simulate adding bytes up to the max
 			// note that r.streamErr will make the index a "human" value and add 1
-			r.byteIndex += uint64(max - len(r.recordBuf))
+			r.byteIndex += uint64(maxNum - len(r.recordBuf))
 			r.secOpStreamParsingErr(ErrSecOpRecordByteCountAboveMax)
 			return true
 		}
