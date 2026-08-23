@@ -1,0 +1,94 @@
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  default: all
+  disable:
+    # deprecated/superseded by another enabled linter
+    - wsl # superseded by wsl_v5
+    - gomodguard # superseded by gomodguard_v2
+
+    # extremely opinionated style linters that conflict with idiomatic
+    # go and/or with each other; left disabled by choice, not oversight
+    - exhaustruct # requires every struct field set at every literal site
+    - ireturn # this package intentionally returns concrete types, kept only as a style rule elsewhere
+    - nlreturn # blank-line-before-return style enforcement
+    - wsl_v5 # whitespace/empty-line style enforcement, overlaps nlreturn/whitespace
+    - varnamelen # flags short idiomatic names (i, r, w, buf, etc.)
+    - godox # would fail on TODO/FIXME comments used for legitimate tracking
+    - depguard # no import allow/deny list maintained for this project
+    - gochecknoglobals
+    - paralleltest # not all tests are safe to parallelize (shared fixtures/benchmarks)
+    - tparallel # same rationale as paralleltest above
+    - testpackage # this project uses in-package tests intentionally
+    - whitespace # nags about blank lines at start/end of blocks (e.g. "unnecessary leading newline")
+    - embeddedstructfieldcheck # nags that "embedded fields should be listed before regular fields"
+    - noinlineerr # bans the idiomatic `if err := foo(); err != nil {` pattern
+    # TODO: revisit wrapcheck. disabled for now because it flags cases like
+    # passing through an io.Writer/io.Reader's own error unchanged, e.g.:
+    #   error returned from interface method should be wrapped: sig: func (io.Writer).Write(p []byte) (n int, err error) (wrapcheck)
+    - wrapcheck
+    # TODO: revisit err113. disabled for now because it flags:
+    #   do not define dynamic errors, use wrapped static errors instead (err113)
+    - err113
+
+  settings:
+    gocyclo:
+      min-complexity: 20
+    cyclop:
+      max-complexity: 20
+    gocognit:
+      min-complexity: 30
+    funlen:
+      lines: 150
+      statements: 80
+    lll:
+      line-length: 160
+    mnd:
+      ignored-numbers:
+        - "2"
+
+  exclusions:
+    generated: lax
+    rules:
+      # revive's default ruleset includes an "exported" check demanding a doc
+      # comment on every exported identifier; too noisy for this project, so
+      # suppress just that rule's messages while keeping revive's other checks.
+      - linters:
+          - revive
+        text: "^exported:"
+      # errname's errXxx convention isn't followed for internal panic-value
+      # sentinels named panicXxx (e.g. panicRecordSepRuneLen) — intentional,
+      # they signal a panic payload, not a returned error.
+      - linters:
+          - errname
+        text: "sentinel error name `panic[A-Z0-9]"
+      - path: _test\.go
+        linters:
+          - funlen
+          - gocyclo
+          - cyclop
+          - gocognit
+          - dupl
+          - mnd
+          - gosec
+          - errcheck
+      - path: internal/.*examples?/
+        linters:
+          - forbidigo
+          - gochecknoinits
+          - errcheck # e.g. "Error return value of `cr.Close` is not checked" — not worth checking in toy examples
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/josephcopenhaver/csv-go
+  exclusions:
+    generated: lax

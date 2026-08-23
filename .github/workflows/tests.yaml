@@ -13,10 +13,10 @@ jobs:
     strategy:
       matrix:
         go:
-          - ver: "1.25"
-            name: "1.25"
-          - ver: ">=1.25"
-            name: "gte-1.25"
+          - ver: "1.26"
+            name: "1.26"
+          - ver: ">=1.26"
+            name: "gte-1.26"
     name: Go ${{ matrix.go.ver }}
     steps:
       - uses: actions/checkout@v4

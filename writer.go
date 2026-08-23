@@ -255,8 +255,8 @@ func (WriterOptions) InitialRecordBuffer(v []byte) WriterOption {
 // size they wish to target / be under and it's generally a better practice
 // to leave these details to the go runtime to coordinate via standard
 // garbage collection.
-func (WriterOptions) InitialFieldBufferSize(v int) WriterOption {
-	return func(cfg *wCfg) {
+func (WriterOptions) InitialFieldBufferSize(_ int) WriterOption {
+	return func(_ *wCfg) {
 	}
 }
 
@@ -275,8 +275,8 @@ func (WriterOptions) InitialFieldBufferSize(v int) WriterOption {
 //
 // Please consider this to be a micro optimization in most circumstances just because is tightens the usage
 // contract of the csv Reader in ways most would not normally consider.
-func (WriterOptions) InitialFieldBuffer(v []byte) WriterOption {
-	return func(cfg *wCfg) {
+func (WriterOptions) InitialFieldBuffer(_ []byte) WriterOption {
+	return func(_ *wCfg) {
 	}
 }
 
@@ -660,13 +660,16 @@ func (cfg *whCfg) validate(w *Writer) error {
 
 		if err := isValidComment(cfg.comment, w.quote, fieldSep, w.escape, w.escape != invalidControlRune); err != nil {
 			return err
-		} else {
-			// note this block is a positive path state-altering action
-			// anything added after this parent if context should similarly
-			// be a positive path action that should never really fail
-
-			w.comment = cfg.comment
 		}
+
+		// note this is intended to be the implicit else block paired to the
+		// above final check but linters insist on collapsing it
+		//
+		// this block is a positive path state-altering action
+		// anything added after this implicit parent if context should
+		// similarly be a positive path action that should never really fail
+
+		w.comment = cfg.comment
 	}
 
 	// positive path remaining actions:
